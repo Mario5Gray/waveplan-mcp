@@ -1,0 +1,77 @@
+# Makefile for Dream Lab test commands
+# Run tests in Docker containers
+
+.PHONY: help test test-build test-build-cuda test-unit test-fast test-coverage test-watch test-clean test-shell test-cuda check-conda-base
+
+PYTHON ?= python
+EXPECTED_CONDA_PREFIX ?= $(HOME)/miniforge3
+
+help: ## Show this help message
+	@echo "Dream Lab Test Commands:"
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+# Build test image
+test-build: ## Build the local-native CPU test Docker image
+	docker compose -f docker-compose.test.yml build test
+
+test-build-cuda: ## Build the amd64 CUDA test image (CI/x86 builder)
+	docker compose -f docker-compose.test.yml build test-cuda
+
+# Run tests
+test: ## Run all tests in Docker
+	docker compose -f docker-compose.test.yml run --rm test
+
+test-cuda: ## Run all tests in the amd64 CUDA test container
+	docker compose -f docker-compose.test.yml run --rm test-cuda
+
+test-unit: ## Run unit tests only
+	docker compose -f docker-compose.test.yml run --rm test-unit
+
+test-fast: ## Run fast tests (skip slow tests)
+	docker compose -f docker-compose.test.yml run --rm test-fast
+
+test-coverage: ## Run tests with coverage report
+	docker compose -f docker-compose.test.yml run --rm test
+	@echo ""
+	@echo "Coverage report generated in htmlcov/"
+	@echo "Open htmlcov/index.html to view"
+
+test-watch: ## Run tests in watch mode (re-run on file changes)
+	docker compose -f docker-compose.test.yml run --rm test-watch
+
+# Utilities
+test-shell: ## Open a shell in the test container
+	docker compose -f docker-compose.test.yml run --rm test /bin/bash
+
+test-clean: ## Clean up test containers and images
+	docker compose -f docker-compose.test.yml down
+	docker rmi harbor.lan/dreamlab-test:latest || true
+	rm -rf htmlcov/ .pytest_cache/ .coverage
+
+test-clean-all: test-clean ## Clean everything including volumes
+	docker compose -f docker-compose.test.yml down -v
+
+# Local testing (without Docker)
+check-conda-base: ## Verify Miniforge base env is active for local Python commands
+	@if [ "$$CONDA_PREFIX" != "$(EXPECTED_CONDA_PREFIX)" ]; then \
+		echo "Expected CONDA_PREFIX=$(EXPECTED_CONDA_PREFIX) but got '$$CONDA_PREFIX'"; \
+		echo "Run: source /Users/darkbit1001/miniforge3/bin/activate base"; \
+		exit 1; \
+	fi
+
+local-test: check-conda-base ## Run tests locally (not in Docker)
+	$(PYTHON) -m pytest tests/ -v
+
+local-test-coverage: check-conda-base ## Run tests locally with coverage
+	$(PYTHON) -m pytest tests/ -v --cov=backends --cov=server --cov-report=html --cov-report=term-missing
+
+# Continuous Integration
+ci-test: test-build-cuda test-cuda ## Build and run the amd64 CUDA test path
+
+# Development
+dev-test: ## Quick test during development
+	docker compose -f docker-compose.test.yml run --rm test pytest tests/ -x -v
+
+dev-test-file: ## Run specific test file (usage: make dev-test-file FILE=test_foo.py)
+	docker compose -f docker-compose.test.yml run --rm test pytest tests/$(FILE) -v
