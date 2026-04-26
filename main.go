@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -17,11 +18,13 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+var gitSha = "unknown"
+
 // WaveplanState represents the state file structure
 type WaveplanState struct {
-	Plan      string                  `json:"plan"`
-	Taken     map[string]TaskEntry    `json:"taken"`
-	Completed map[string]TaskEntry    `json:"completed"`
+	Plan      string               `json:"plan"`
+	Taken     map[string]TaskEntry `json:"taken"`
+	Completed map[string]TaskEntry `json:"completed"`
 }
 
 // TaskEntry represents a task's state entry
@@ -60,15 +63,20 @@ type PlanUnit struct {
 
 // WaveplanServer holds the server state
 type WaveplanServer struct {
-	mu        sync.Mutex
-	planPath  string
-	statePath string
-	plan      *WaveplanPlan
-	state     *WaveplanState
+	mu           sync.Mutex
+	planPath     string
+	statePath    string
+	plan         *WaveplanPlan
+	state        *WaveplanState
+	serverGitSha string
 }
 
 // NewWaveplanServer creates a new server instance
 func NewWaveplanServer(planPath, statePath string) (*WaveplanServer, error) {
+	return newWaveplanServer(planPath, statePath, gitSha)
+}
+
+func newWaveplanServer(planPath, statePath, serverGitSha string) (*WaveplanServer, error) {
 	// Load plan
 	planData, err := os.ReadFile(planPath)
 	if err != nil {
@@ -96,10 +104,11 @@ func NewWaveplanServer(planPath, statePath string) (*WaveplanServer, error) {
 	}
 
 	return &WaveplanServer{
-		planPath:  planPath,
-		statePath: statePath,
-		plan:      &plan,
-		state:     state,
+		planPath:     planPath,
+		statePath:    statePath,
+		plan:         &plan,
+		state:        state,
+		serverGitSha: serverGitSha,
 	}, nil
 }
 
@@ -221,9 +230,15 @@ func (s *WaveplanServer) createTools() []server.ServerTool {
 		{
 			Tool: mcp.NewTool("waveplan_list_plans",
 				mcp.WithDescription("List available execution wave plans"),
-				mcp.WithString("plan_dir", mcp.Description("Directory to search for plans (default: docs/superpowers/plans)")),
+				mcp.WithString("plan_dir", mcp.Description("Directory to search for plans (default: ~/.local/share/waveplanner/plans)")),
 			),
 			Handler: s.handleListPlans,
+		},
+		{
+			Tool: mcp.NewTool("waveplan_version",
+				mcp.WithDescription("Show the version (git SHA) of this server"),
+			),
+			Handler: s.handleVersion,
 		},
 	}
 	return tools
@@ -233,7 +248,7 @@ func (s *WaveplanServer) createTools() []server.ServerTool {
 func (s *WaveplanServer) handlePeek(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	taskID := s.nextAvailableTask()
 	if taskID == "" {
 		return mcp.NewToolResultText(`{"error":"No available tasks."}`), nil
@@ -246,7 +261,7 @@ func (s *WaveplanServer) handlePeek(ctx context.Context, request mcp.CallToolReq
 func (s *WaveplanServer) handlePop(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	agent, err := requiredStringParam(request.Params.Arguments, "agent")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -259,6 +274,7 @@ func (s *WaveplanServer) handlePop(ctx context.Context, request mcp.CallToolRequ
 	s.state.Taken[taskID] = TaskEntry{
 		TakenBy:   agent,
 		StartedAt: ts,
+		GitSha:    s.serverGitSha,
 	}
 	if err := s.saveState(); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to save state: %v", err)), nil
@@ -274,7 +290,7 @@ func (s *WaveplanServer) handlePop(ctx context.Context, request mcp.CallToolRequ
 func (s *WaveplanServer) handleStartReview(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	taskID, err := requiredStringParam(request.Params.Arguments, "task_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -318,7 +334,7 @@ func (s *WaveplanServer) handleStartReview(ctx context.Context, request mcp.Call
 func (s *WaveplanServer) handleEndReview(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	taskID, err := requiredStringParam(request.Params.Arguments, "task_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -348,12 +364,12 @@ func (s *WaveplanServer) handleEndReview(ctx context.Context, request mcp.CallTo
 	}
 	unit := s.plan.Units[taskID]
 	result := map[string]any{
-		"success":           true,
-		"task_id":           taskID,
-		"title":             unit.Title,
-		"reviewer":          taken.Reviewer,
-		"review_ended_at":   ts,
-		"review_note":       reviewNote,
+		"success":         true,
+		"task_id":         taskID,
+		"title":           unit.Title,
+		"reviewer":        taken.Reviewer,
+		"review_ended_at": ts,
+		"review_note":     reviewNote,
 	}
 	data, _ := json.Marshal(result)
 	return mcp.NewToolResultText(string(data)), nil
@@ -362,7 +378,7 @@ func (s *WaveplanServer) handleEndReview(ctx context.Context, request mcp.CallTo
 func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	taskID, err := requiredStringParam(request.Params.Arguments, "task_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -399,7 +415,7 @@ func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequ
 		ReviewEndedAt:   reviewEnded,
 		Reviewer:        taken.Reviewer,
 		ReviewNote:      taken.ReviewNote,
-		GitSha:          gitSha,
+		GitSha:          func() string { if gitSha != "" { return gitSha }; return s.serverGitSha }(),
 		FinishedAt:      ts,
 	}
 	delete(s.state.Taken, taskID)
@@ -407,11 +423,11 @@ func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequ
 		return mcp.NewToolResultError(fmt.Sprintf("failed to save state: %v", err)), nil
 	}
 	result := map[string]any{
-		"success":      true,
-		"task_id":      taskID,
-		"title":        unit.Title,
-		"finished_at":  ts,
-		"git_sha":      gitSha,
+		"success":     true,
+		"task_id":     taskID,
+		"title":       unit.Title,
+		"finished_at": ts,
+		"git_sha":     gitSha,
 	}
 	data, _ := json.Marshal(result)
 	return mcp.NewToolResultText(string(data)), nil
@@ -420,7 +436,7 @@ func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequ
 func (s *WaveplanServer) handleGet(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	mode, _ := optionalStringParam(request.Params.Arguments, "mode")
 	if mode == "" {
 		mode = "all"
@@ -579,6 +595,12 @@ func (s *WaveplanServer) handleListPlans(ctx context.Context, request mcp.CallTo
 		return mcp.NewToolResultError(fmt.Sprintf("failed to list plans: %v", err)), nil
 	}
 	result := map[string]any{"plans": matches}
+	data, _ := json.Marshal(result)
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func (s *WaveplanServer) handleVersion(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	result := map[string]any{"version": gitSha}
 	data, _ := json.Marshal(result)
 	return mcp.NewToolResultText(string(data)), nil
 }
@@ -819,14 +841,35 @@ func defaultPlanDir() string {
 	return filepath.Join(usr.HomeDir, ".local", "share", "waveplan", "plans")
 }
 
-func main() {
-	planPath := os.Getenv("WAVEPLAN_PLAN")
-	statePath := os.Getenv("WAVEPLAN_STATE")
-	if planPath == "" {
-		planPath = defaultPlanPath()
+func resolvePlanPath(path string) string {
+	if filepath.IsAbs(path) {
+		return path
 	}
+	return filepath.Join(defaultPlanDir(), path)
+}
+
+func main() {
+	var planFlag, stateFlag string
+	flag.StringVar(&planFlag, "plan", "", "Plan file path or filename (default: ~/.local/share/waveplan/plans/default-execution-waves.json)")
+	flag.StringVar(&stateFlag, "state", "", "State file path or filename (default: derived from --plan)")
+	flag.Parse()
+
+	planPath := os.Getenv("WAVEPLAN_PLAN")
+	if planPath == "" {
+		if planFlag != "" {
+			planPath = resolvePlanPath(planFlag)
+		} else {
+			planPath = defaultPlanPath()
+		}
+	}
+
+	statePath := os.Getenv("WAVEPLAN_STATE")
 	if statePath == "" {
-		statePath = planPath + ".state.json"
+		if stateFlag != "" {
+			statePath = resolvePlanPath(stateFlag)
+		} else {
+			statePath = planPath + ".state.json"
+		}
 	}
 
 	srv, err := NewWaveplanServer(planPath, statePath)

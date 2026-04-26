@@ -32,6 +32,37 @@ WAVEPLAN_PLAN=/path/to/your-plan.json ./waveplan-mcp
 
 The server listens on stdio for MCP JSON-RPC requests. Set `WAVEPLAN_STATE` to override the state file path (defaults to `<plan>.state.json`).
 
+### MCP Client Config
+
+Configure `waveplan-mcp` in your MCP client config (e.g. Claude Code `claude.json`):
+
+```json
+{
+  "mcpServers": {
+    "waveplan": {
+      "command": "./waveplan-mcp",
+      "args": ["--plan", "2026-04-25-txt2art-amiga-execution-waves.json"],
+      "env": {
+        "WAVEPLAN_PLAN": "/Users/darkbit1001/.local/share/waveplan/plans/2026-04-25-txt2art-amiga-execution-waves.json"
+      }
+    }
+  }
+}
+```
+
+Or with absolute paths:
+
+```json
+{
+  "mcpServers": {
+    "waveplan": {
+      "command": "/Users/darkbit1001/.local/bin/waveplan-mcp",
+      "args": ["--plan", "/Users/darkbit1001/.local/share/waveplan/plans/2026-04-25-txt2art-amiga-execution-waves.json"]
+    }
+  }
+}
+```
+
 ### Example: peek
 
 ```json
