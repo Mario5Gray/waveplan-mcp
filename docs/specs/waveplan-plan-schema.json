@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/darkbit1001/waveplan-mcp/main/docs/specs/waveplan-plan-schema.json",
+  "title": "Waveplan Execution Waves Plan",
+  "description": "Schema for execution wave plan files matching *-execution-waves.json",
+  "type": "object",
+  "required": ["units", "tasks", "doc_index", "fp_index"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "description": "Schema version for forward compatibility",
+      "default": 1
+    },
+    "generated_on": {
+      "type": "string",
+      "format": "date",
+      "description": "Date the plan was generated (YYYY-MM-DD)"
+    },
+    "plan": {
+      "type": "object",
+      "description": "Plan metadata",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique plan identifier"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable plan title"
+        },
+        "plan_doc": {
+          "type": "object",
+          "properties": {
+            "path": {"type": "string"},
+            "line": {"type": "integer"}
+          },
+          "required": ["path", "line"]
+        },
+        "spec_doc": {
+          "type": "object",
+          "properties": {
+            "path": {"type": "string"},
+            "line": {"type": "integer"}
+          },
+          "required": ["path", "line"]
+        },
+        "notes": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "units": {
+      "type": "object",
+      "description": "Execution units grouped by task ID",
+      "patternProperties": {
+        "^[A-Z][0-9]+(\\.[0-9]+)$": {
+          "type": "object",
+          "required": ["task", "title", "kind", "wave", "plan_line", "depends_on"],
+          "properties": {
+            "task": {
+              "type": "string",
+              "description": "Parent task ID (e.g., T1)"
+            },
+            "title": {
+              "type": "string",
+              "description": "Unit title"
+            },
+            "kind": {
+              "type": "string",
+              "enum": ["impl", "test", "verify", "doc", "refactor"],
+              "description": "Unit type"
+            },
+            "wave": {
+              "type": "integer",
+              "description": "Execution wave number"
+            },
+            "plan_line": {
+              "type": "integer",
+              "description": "Line number in the plan document"
+            },
+            "depends_on": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Unit IDs this unit depends on"
+            },
+            "doc_refs": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "References to doc_index entries"
+            },
+            "fp_refs": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "References to fp_index entries"
+            },
+            "notes": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "command": {
+              "type": "string",
+              "description": "Optional verification command"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "tasks": {
+      "type": "object",
+      "description": "Task definitions with plan line references",
+      "patternProperties": {
+        "^[A-Z][0-9]+$": {
+          "type": "object",
+          "required": ["plan_line"],
+          "properties": {
+            "plan_line": {
+              "type": "integer",
+              "description": "Line number in the plan document"
+            },
+            "title": {"type": "string"},
+            "doc_refs": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "files": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "doc_index": {
+      "type": "object",
+      "description": "Index of referenced documents",
+      "patternProperties": {
+        "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+          "type": "object",
+          "required": ["path", "line", "kind"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "File path relative to project root"
+            },
+            "line": {
+              "type": "integer",
+              "description": "Line number in the document"
+            },
+            "kind": {
+              "type": "string",
+              "enum": ["plan", "spec", "code", "test", "doc"],
+              "description": "Document type"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "fp_index": {
+      "type": "object",
+      "description": "Index of Fiberplane issue references",
+      "patternProperties": {
+        "^[A-Z0-9_-]+$": {
+          "type": "string",
+          "description": "URL or identifier for the issue"
+        }
+      },
+      "additionalProperties": false
+    },
+    "waves": {
+      "type": "array",
+      "description": "Wave definitions listing unit IDs per wave",
+      "items": {
+        "type": "object",
+        "required": ["wave", "units"],
+        "properties": {
+          "wave": {
+            "type": "integer",
+            "description": "Wave number"
+          },
+          "units": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Unit IDs in this wave"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

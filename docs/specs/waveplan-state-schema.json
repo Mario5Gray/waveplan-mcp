@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/darkbit1001/waveplan-mcp/main/docs/specs/waveplan-state-schema.json",
+  "title": "Waveplan State File",
+  "description": "Schema for waveplan state files (*.state.json)",
+  "type": "object",
+  "required": ["plan", "taken", "completed"],
+  "properties": {
+    "plan": {
+      "type": "string",
+      "description": "Base name of the plan file this state belongs to"
+    },
+    "taken": {
+      "type": "object",
+      "description": "Currently taken tasks",
+      "patternProperties": {
+        "^[A-Z][0-9]+(\\.[0-9]+)$": {
+          "type": "object",
+          "required": ["taken_by", "started_at"],
+          "properties": {
+            "taken_by": {
+              "type": "string",
+              "description": "Agent name that claimed the task"
+            },
+            "started_at": {
+              "type": "string",
+              "description": "Timestamp when task was taken (YYYY-MM-DD HH:MM)"
+            },
+            "review_entered_at": {
+              "type": "string",
+              "description": "Timestamp when review started (YYYY-MM-DD HH:MM)"
+            },
+            "review_ended_at": {
+              "type": "string",
+              "description": "Timestamp when review ended (YYYY-MM-DD HH:MM)"
+            },
+            "reviewer": {
+              "type": "string",
+              "description": "Agent name that performed the review"
+            },
+            "review_note": {
+              "type": "string",
+              "description": "Optional review note"
+            },
+            "finished_at": {
+              "type": "string",
+              "description": "Timestamp when task was finished (YYYY-MM-DD HH:MM)"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "completed": {
+      "type": "object",
+      "description": "Completed tasks (audit trail)",
+      "patternProperties": {
+        "^[A-Z][0-9]+(\\.[0-9]+)$": {
+          "type": "object",
+          "required": ["taken_by", "started_at", "finished_at"],
+          "properties": {
+            "taken_by": {
+              "type": "string",
+              "description": "Agent name that completed the task"
+            },
+            "started_at": {
+              "type": "string",
+              "description": "Timestamp when task was started (YYYY-MM-DD HH:MM)"
+            },
+            "review_entered_at": {
+              "type": "string",
+              "description": "Timestamp when review started (YYYY-MM-DD HH:MM)"
+            },
+            "review_ended_at": {
+              "type": "string",
+              "description": "Timestamp when review ended (YYYY-MM-DD HH:MM)"
+            },
+            "reviewer": {
+              "type": "string",
+              "description": "Agent name that performed the review"
+            },
+            "review_note": {
+              "type": "string",
+              "description": "Optional review note"
+            },
+            "git_sha": {
+              "type": "string",
+              "description": "Git commit SHA associated with completion"
+            },
+            "finished_at": {
+              "type": "string",
+              "description": "Timestamp when task was finished (YYYY-MM-DD HH:MM)"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

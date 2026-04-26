@@ -6,10 +6,54 @@
 
 It is the Go rewrite of the `scripts/waveplan` CLI, designed specifically for MCP integration.
 
+## Installation
+
+### Prerequisites
+
+- Go 1.21+ toolchain
+- macOS (darwin) or Linux
+
+### Install Script
+
+```bash
+# From the waveplan-mcp worktree
+cd .worktrees/waveplan-mcp
+./install.sh
+
+# Or with custom directories
+WAVEPLAN_INSTALL_DIR=/opt/bin WAVEPLAN_SHARE_DIR=/opt/share/waveplan ./install.sh --force
+```
+
+### What Gets Installed
+
+```
+~/.local/bin/waveplan-mcp          # Binary
+~/.local/share/waveplan/           # Example plans directory
+  ├── 2026-04-25-txt2art-amiga-execution-waves.json
+  └── README.md
+```
+
+### Manual Installation
+
+```bash
+# Build
+cd .worktrees/waveplan-mcp
+go build -o waveplan-mcp .
+
+# Install binary
+mkdir -p ~/.local/bin
+cp waveplan-mcp ~/.local/bin/
+
+# Create share directory with examples
+mkdir -p ~/.local/share/waveplan
+cp ../docs/superpowers/plans/2026-04-25-txt2art-amiga-execution-waves.json ~/.local/share/waveplan/
+```
+
 ## Binary
 
 ```
 .worktrees/waveplan-mcp/waveplan-mcp   # compiled Go binary (darwin/amd64)
+~/.local/bin/waveplan-mcp              # installed location
 ```
 
 ## Configuration
@@ -325,6 +369,55 @@ Tasks are selected by **lowest wave first**, then by task ID (alphabetical).
 | Complete task | `waveplan_fin` | `task_id` |
 | List tasks | `waveplan_get` | `mode` (all/taken/open/complete/task-<id>/<agent>) |
 | List plans | `waveplan_list_plans` | `plan_dir` (optional) |
+
+---
+
+## Example: txt2art Plan
+
+The repo includes an example plan file demonstrating a text-to-ASCII-art project:
+
+```
+docs/superpowers/plans/2026-04-25-txt2art-amiga-execution-waves.json
+```
+
+This plan describes building `txt2art` — a program that converts text input to Amiga-style ASCII art (using block characters ░▒▓█) and outputs `.txt` files.
+
+### Plan Structure
+
+- **4 Tasks**: Character Set, Render Engine, CLI Interface, Output & File Writing
+- **16 Units**: T1.1–T4.4 across 13 waves
+- **Pattern**: test → run → impl → verify for each task
+
+### Using the Example
+
+```bash
+# Peek at next available task
+WAVEPLAN_PLAN=docs/superpowers/plans/2026-04-25-txt2art-amiga-execution-waves.json \
+  waveplan-mcp  # via MCP tool: waveplan_peek
+
+# Claim the first task
+WAVEPLAN_PLAN=docs/superpowers/plans/2026-04-25-txt2art-amiga-execution-waves.json \
+  waveplan-mcp  # via MCP tool: waveplan_pop with agent="psi"
+
+# View dependency tree
+WAVEPLAN_PLAN=docs/superpowers/plans/2026-04-25-txt2art-amiga-execution-waves.json \
+  waveplan-mcp  # via MCP tool: waveplan_deptree
+```
+
+### Expected Output
+
+```
+$ waveplan_peek
+{
+  "task_id": "T1.1",
+  "task": "T1",
+  "title": "Write failing charset tests",
+  "kind": "test",
+  "wave": 1,
+  "depends_on": [],
+  "doc_refs": ["plan", "spec_charset", "test_charset"]
+}
+```
 
 ---
 

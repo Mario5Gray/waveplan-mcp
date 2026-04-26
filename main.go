@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/user"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -571,7 +572,7 @@ func (s *WaveplanServer) handleDeptree(ctx context.Context, request mcp.CallTool
 func (s *WaveplanServer) handleListPlans(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	planDir, _ := optionalStringParam(request.Params.Arguments, "plan_dir")
 	if planDir == "" {
-		planDir = "plans"
+		planDir = defaultPlanDir()
 	}
 	matches, err := filepath.Glob(filepath.Join(planDir, "*-execution-waves.json"))
 	if err != nil {
@@ -802,11 +803,27 @@ func (s *WaveplanServer) topologicalSort() []topoSortResult {
 	return result
 }
 
+func defaultPlanPath() string {
+	usr, err := user.Current()
+	if err != nil {
+		return "plans/default-execution-waves.json"
+	}
+	return filepath.Join(usr.HomeDir, ".local", "share", "waveplan", "plans", "default-execution-waves.json")
+}
+
+func defaultPlanDir() string {
+	usr, err := user.Current()
+	if err != nil {
+		return "plans"
+	}
+	return filepath.Join(usr.HomeDir, ".local", "share", "waveplan", "plans")
+}
+
 func main() {
 	planPath := os.Getenv("WAVEPLAN_PLAN")
 	statePath := os.Getenv("WAVEPLAN_STATE")
 	if planPath == "" {
-		planPath = "plans/default-execution-waves.json"
+		planPath = defaultPlanPath()
 	}
 	if statePath == "" {
 		statePath = planPath + ".state.json"

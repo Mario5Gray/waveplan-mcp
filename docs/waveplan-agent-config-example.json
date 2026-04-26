@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "waveplan": {
+      "command": "waveplan-mcp",
+      "args": [],
+      "env": {
+        "WAVEPLAN_PLAN": "~/.local/share/waveplan/plans/default-execution-waves.json",
+        "WAVEPLAN_STATE": "~/.local/share/waveplan/plans/default-execution-waves.json.state.json"
+      },
+      "workingDirectory": "/path/to/your/project"
+    }
+  }
+}
