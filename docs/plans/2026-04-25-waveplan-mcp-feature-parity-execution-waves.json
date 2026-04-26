@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-04-25",
+  "plan": {
+    "id": "waveplan-mcp-feature-parity",
+    "title": "Waveplan MCP \u2014 Feature Parity with Python CLI",
+    "plan_doc": {
+      "path": "docs/plans/2026-04-25-waveplan-mcp-feature-parity.md",
+      "line": 1
+    },
+    "spec_doc": {
+      "path": "docs/specs/2026-04-25-waveplan-mcp-feature-parity-design.md",
+      "line": 1
+    },
+    "notes": [
+      "Go MCP service at main.go is a rewrite of the Python CLI.",
+      "Goal: JSON output on all tools, deptree mode, review_note on end_review, git_sha on fin.",
+      "State file format unchanged — new fields default to empty strings.",
+      "All work is in this standalone project."
+    ]
+  },
+  "fp_index": {},
+  "doc_index": {
+    "plan": {
+      "path": "docs/plans/2026-04-25-waveplan-mcp-feature-parity.md",
+      "line": 1,
+      "kind": "plan"
+    },
+    "spec": {
+      "path": "docs/specs/2026-04-25-waveplan-mcp-feature-parity-design.md",
+      "line": 1,
+      "kind": "spec"
+    },
+    "cli": {
+      "path": "scripts/waveplan",
+      "line": 1,
+      "kind": "code"
+    },
+    "mcp_main": {
+      "path": "main.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "mcp_go_mod": {
+      "path": "go.mod",
+      "line": 1,
+      "kind": "code"
+    },
+    "mcp_test": {
+      "path": "main_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    "mcp_makefile": {
+      "path": "Makefile.test",
+      "line": 1,
+      "kind": "doc"
+    }
+  },
+  "tasks": {
+    "T1": {
+      "title": "Add ReviewNote and GitSha fields to TaskEntry",
+      "plan_line": 20,
+      "doc_refs": ["spec", "mcp_main"],
+      "files": [".main.go"]
+    },
+    "T2": {
+      "title": "Implement helper functions (findPlanRef, resolveDocRefs, resolveFpRefs, taskInfo, nilIfEmpty, topologicalSort)",
+      "plan_line": 42,
+      "doc_refs": ["spec", "mcp_main", "cli"],
+      "files": [".main.go"]
+    },
+    "T3": {
+      "title": "Convert handlePeek to JSON output",
+      "plan_line": 72,
+      "doc_refs": ["spec", "mcp_main"],
+      "files": [".main.go"]
+    },
+    "T4": {
+      "title": "Convert handlePop to JSON output",
+      "plan_line": 86,
+      "doc_refs": ["spec", "mcp_main"],
+      "files": [".main.go"]
+    },
+    "T5": {
+      "title": "Convert handleStartReview to JSON output",
+      "plan_line": 100,
+      "doc_refs": ["spec", "mcp_main"],
+      "files": [".main.go"]
+    },
+    "T6": {
+      "title": "Convert handleEndReview to JSON + add review_note param",
+      "plan_line": 114,
+      "doc_refs": ["spec", "mcp_main"],
+      "files": [".main.go"]
+    },
+    "T7": {
+      "title": "Convert handleFin to JSON + add git_sha param",
+      "plan_line": 130,
+      "doc_refs": ["spec", "mcp_main"],
+      "files": [".main.go"]
+    },
+    "T8": {
+      "title": "Convert handleGet to JSON + add deptree mode",
+      "plan_line": 148,
+      "doc_refs": ["spec", "mcp_main", "cli"],
+      "files": [".main.go"]
+    },
+    "T9": {
+      "title": "Convert handleListPlans to JSON output",
+      "plan_line": 168,
+      "doc_refs": ["spec", "mcp_main"],
+      "files": [".main.go"]
+    },
+    "T10": {
+      "title": "Write Go tests for helper functions and task info",
+      "plan_line": 180,
+      "doc_refs": ["spec", "mcp_test", "mcp_main"],
+      "files": [".main_test.go", ".main.go"]
+    },
+    "T11": {
+      "title": "End-to-end verification with stdio MCP protocol",
+      "plan_line": 200,
+      "doc_refs": ["spec", "cli", "mcp_main"],
+      "files": [".main.go"]
+    }
+  },
+  "waves": [
+    {"wave": 1, "units": ["T1.1"]},
+    {"wave": 2, "units": ["T2.1"]},
+    {"wave": 3, "units": ["T3.1", "T4.1", "T5.1", "T6.1", "T7.1", "T8.1", "T9.1"]},
+    {"wave": 4, "units": ["T10.1"]},
+    {"wave": 5, "units": ["T11.1"]}
+  ],
+  "units": {
+    "T1.1": {
+      "task": "T1",
+      "title": "Add ReviewNote and GitSha fields to TaskEntry + verify build",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 20,
+      "depends_on": [],
+      "doc_refs": ["spec", "mcp_main"],
+      "notes": ["Add ReviewNote string with omitempty and GitSha string with omitempty to TaskEntry struct (lines 27-34). Verify go build passes."],
+      "command": "cd . && go build"
+    },
+    "T2.1": {
+      "task": "T2",
+      "title": "Implement helper functions + verify build",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 42,
+      "depends_on": ["T1.1"],
+      "doc_refs": ["spec", "mcp_main", "cli"],
+      "notes": ["Add findPlanRef, resolveDocRefs, resolveFpRefs, taskInfo, nilIfEmpty, topologicalSort. Follow CLI logic in scripts/waveplan for reference. Verify go build passes."],
+      "command": "cd . && go build"
+    },
+    "T3.1": {
+      "task": "T3",
+      "title": "Convert handlePeek to JSON output",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 72,
+      "depends_on": ["T2.1"],
+      "doc_refs": ["spec", "mcp_main"],
+      "notes": ["Use taskInfo() to build JSON. Return error JSON for no-available-tasks case. Verify go build passes."],
+      "command": "cd . && go build"
+    },
+    "T4.1": {
+      "task": "T4",
+      "title": "Convert handlePop to JSON output",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 86,
+      "depends_on": ["T2.1"],
+      "doc_refs": ["spec", "mcp_main"],
+      "notes": ["Use taskInfo() + add claimed/taken_by/started_at fields. Verify go build passes."],
+      "command": "cd . && go build"
+    },
+    "T5.1": {
+      "task": "T5",
+      "title": "Convert handleStartReview to JSON output",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 100,
+      "depends_on": ["T2.1"],
+      "doc_refs": ["spec", "mcp_main"],
+      "notes": ["Preserve existing fields (TakenBy, StartedAt, ReviewNote, GitSha) when updating. Return JSON with success/task_id/reviewer/review_entered_at. Verify go build passes."],
+      "command": "cd . && go build"
+    },
+    "T6.1": {
+      "task": "T6",
+      "title": "Convert handleEndReview to JSON + add review_note param",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 114,
+      "depends_on": ["T2.1"],
+      "doc_refs": ["spec", "mcp_main"],
+      "notes": ["Add review_note optional param to tool def. Preserve existing fields. Return JSON with success/task_id/reviewer/review_ended_at/review_note. Verify go build passes."],
+      "command": "cd . && go build"
+    },
+    "T7.1": {
+      "task": "T7",
+      "title": "Convert handleFin to JSON + add git_sha param",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 130,
+      "depends_on": ["T2.1"],
+      "doc_refs": ["spec", "mcp_main"],
+      "notes": ["Add git_sha optional param to tool def. Preserve ReviewNote from taken entry. Return JSON with success/task_id/finished_at/git_sha. Verify go build passes."],
+      "command": "cd . && go build"
+    },
+    "T8.1": {
+      "task": "T8",
+      "title": "Convert handleGet to JSON + add deptree mode",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 148,
+      "depends_on": ["T2.1"],
+      "doc_refs": ["spec", "mcp_main", "cli"],
+      "notes": ["Replace text output with JSON via taskInfo(). Add deptree mode using topologicalSort(). Pre-compute deptreeSorted to avoid double-call. Return {tasks: [...]} JSON. Verify go build passes."],
+      "command": "cd . && go build"
+    },
+    "T9.1": {
+      "task": "T9",
+      "title": "Convert handleListPlans to JSON output",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 168,
+      "depends_on": ["T2.1"],
+      "doc_refs": ["spec", "mcp_main"],
+      "notes": ["Return {plans: [...]} JSON. Verify go build passes."],
+      "command": "cd . && go build"
+    },
+    "T10.1": {
+      "task": "T10",
+      "title": "Write Go tests for helper functions and task info",
+      "kind": "test",
+      "wave": 4,
+      "plan_line": 180,
+      "depends_on": ["T3.1", "T4.1", "T5.1", "T6.1", "T7.1", "T8.1", "T9.1"],
+      "doc_refs": ["spec", "mcp_test", "mcp_main"],
+      "notes": ["Test findPlanRef, topologicalSort, resolveDocRefs, resolveFpRefs, nilIfEmpty, taskInfo. Create main_test.go in worktree. Run go test -v ./..."],
+      "command": "cd . && go test -v ./..."
+    },
+    "T11.1": {
+      "task": "T11",
+      "title": "End-to-end verification with stdio MCP protocol",
+      "kind": "verify",
+      "wave": 5,
+      "plan_line": 200,
+      "depends_on": ["T10.1"],
+      "doc_refs": ["spec", "cli", "mcp_main"],
+      "notes": ["Build binary, test each tool via stdio JSON-RPC, verify state file compatibility with Python CLI. Run go build -o waveplan-mcp, then pipe JSON-RPC requests."],
+      "command": "cd . && go build -o waveplan-mcp && echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"waveplan_peek\",\"arguments\":{}}}' | ./waveplan-mcp 2>/dev/null | python3 -c \"import sys,json; d=json.loads(sys.stdin.read().strip()); print('peek OK' if 'task_id' in d else 'peek FAIL')\""
+    }
+  }
+}
