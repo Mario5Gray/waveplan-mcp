@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""waveplan — thin CLI proxy that calls the waveplan-mcp MCP server over stdio.
+
+Usage is identical to the old Python implementation, but all logic is
+delegated to the Go-based waveplan-mcp binary via its MCP tools/call protocol.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+MCP_PROTOCOL_VERSION = "2024-11-05"
+_SERVER_BIN = os.environ.get("WAVEPLAN_MCP_BIN") or str(Path.home() / ".local" / "bin" / "waveplan-mcp")
+
+# Where the repo keeps its execution-wave plan files.
+_REPO_PLAN_DIR = Path(__file__).resolve().parent.parent / "docs" / "superpowers" / "plans"
+
+
+def _find_auto_plan() -> Path | None:
+    """Find the *-execution-waves.json file in the repo plan directory."""
+    matches = sorted(_REPO_PLAN_DIR.glob("*-execution-waves.json"))
+    if len(matches) == 1:
+        return matches[0]
+    # If multiple exist, prefer the one with a .state.json sibling (active plan).
+    for m in matches:
+        if (m.with_name(m.name + ".state.json")).exists():
+            return m
+    # Fall back to the first one.
+    if matches:
+        return matches[0]
+    return None
+
+
+def _build_env(plan_arg: str | None = None) -> dict:
+    """Build environment for the waveplan-mcp subprocess.
+
+    Auto-detects WAVEPLAN_PLAN from the repo if not already set in the
+    environment or via --plan.
+    """
+    env = {}
+
+    # WAVEPLAN_PLAN: explicit arg > env var > auto-detect from repo.
+    plan_path = plan_arg or os.environ.get("WAVEPLAN_PLAN")
+    if not plan_path:
+        auto = _find_auto_plan()
+        if auto:
+            plan_path = str(auto)
+
+    if plan_path:
+        env["WAVEPLAN_PLAN"] = plan_path
+        # Derive state file path the same way the Go binary does.
+        state_path = plan_path + ".state.json"
+        env["WAVEPLAN_STATE"] = os.environ.get("WAVEPLAN_STATE") or state_path
+
+    # Pass through WAVEPLAN_MCP_BIN if set (for nested use).
+    if os.environ.get("WAVEPLAN_MCP_BIN"):
+        env["WAVEPLAN_MCP_BIN"] = os.environ["WAVEPLAN_MCP_BIN"]
+
+    return env
+
+
+class MCPPhone:
+    """Minimal MCP JSON-RPC 2.0 client over stdio."""
+
+    def __init__(self, server_bin: str, env: dict | None = None):
+        self.server_bin = server_bin
+        self._env = {**os.environ, **(env or {})}
+        self._proc: subprocess.Popen | None = None
+        self._next_id = 1
+
+    def _open(self) -> None:
+        if self._proc is not None:
+            return
+        self._proc = subprocess.Popen(
+            [self.server_bin],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=self._env,
+        )
+
+    def _send(self, method: str, params: dict | None = None, *, notify: bool = False) -> dict | None:
+        """Send a JSON-RPC request or notification.
+
+        For requests (notify=False) returns the result payload dict.
+        For notifications (notify=True) returns None and does not read a response.
+        """
+        self._open()
+        msg: dict = {
+            "jsonrpc": "2.0",
+            "method": method,
+        }
+        if params is not None:
+            msg["params"] = params
+        if not notify:
+            msg["id"] = self._next_id
+            self._next_id += 1
+
+        request = json.dumps(msg) + "\n"
+        self._proc.stdin.write(request.encode())  # type: ignore[union-attr]
+        self._proc.stdin.flush()  # type: ignore[union-attr]
+
+        if notify:
+            return None
+
+        line = self._proc.stdout.readline().decode()  # type: ignore[union-attr]
+        if not line.strip():
+            # Server may have crashed; check stderr.
+            stderr = self._proc.stderr.read().decode()  # type: ignore[union-attr]
+            raise RuntimeError(f"Server died unexpectedly: {stderr.strip()}")
+
+        resp = json.loads(line)
+
+        if "error" in resp:
+            err = resp["error"]
+            raise RuntimeError(f"MCP error [{err.get('code')}]: {err.get('message', resp)}")
+        return resp.get("result", {})
+
+    def call_tool(self, name: str, arguments: dict | None = None) -> dict:
+        """Call an MCP tool and return its result."""
+        raw = self._send("tools/call", {"name": name, "arguments": arguments or {}})
+        # MCP returns content as a list of text blocks; flatten to string.
+        content = raw.get("content", [])
+        if isinstance(content, list):
+            text_parts = []
+            for item in content:
+                if isinstance(item, dict):
+                    text_parts.append(item.get("text", ""))
+                elif isinstance(item, str):
+                    text_parts.append(item)
+            result_str = "\n".join(text_parts).strip()
+        else:
+            result_str = str(content)
+
+        # The waveplan-mcp tools return JSON strings; parse them.
+        try:
+            return json.loads(result_str)
+        except (json.JSONDecodeError, TypeError):
+            return {"raw": result_str}
+
+    def close(self) -> None:
+        if self._proc is not None:
+            # Send shutdown request
+            try:
+                self._send("shutdown")
+            except Exception:
+                pass
+            # Send exit notification (no response expected)
+            try:
+                self._proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/exit"}).encode() + b"\n")  # type: ignore[union-attr]
+                self._proc.stdin.flush()  # type: ignore[union-attr]
+            except Exception:
+                pass
+            try:
+                self._proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+                self._proc.wait()
+            self._proc = None
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="waveplan — MCP proxy for waveplan-mcp")
+    parser.add_argument("--mcp-bin", help="Path to waveplan-mcp binary (default: auto-detect)")
+    parser.add_argument("--plan", help="Path to the *-execution-waves.json file")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("peek", help="Show next available task")
+    pop_p = sub.add_parser("pop", help="Claim next available task: pop <agent>")
+    pop_p.add_argument("agent", help="Agent name claiming the task")
+    rev_start_p = sub.add_parser("start_review", help="Start review: start_review <task_id> <reviewer>")
+    rev_start_p.add_argument("task_id", help="Task ID to review")
+    rev_start_p.add_argument("reviewer", help="Agent name reviewing the task")
+    rev_end_p = sub.add_parser("end_review", help="End review: end_review <task_id> [review_note]")
+    rev_end_p.add_argument("task_id", help="Task ID to end review for")
+    rev_end_p.add_argument("review_note", nargs="?", default="", help="Optional review note")
+    fin_p = sub.add_parser("fin", help="Mark complete: fin <task_id> [git_sha]")
+    fin_p.add_argument("task_id", help="Task ID to complete")
+    fin_p.add_argument("git_sha", nargs="?", default="", help="Optional git SHA of the commit")
+    get_p = sub.add_parser("get", help="Report tasks: get [all|taken|open|complete|deptree|task-<id>|<agent>]")
+    get_p.add_argument("mode", nargs="?", default="all",
+                        help="Filter: all (default), taken, open, complete, deptree, task-<id>, or agent name")
+    get_p.add_argument("--json", action="store_true", help="Output in JSON format")
+    list_p = sub.add_parser("list_plans", help="List available execution wave plans")
+    list_p.add_argument("--plan-dir", dest="plan_dir", nargs="?", default=None,
+                        help="Directory to search for plans")
+    sub.add_parser("deptree", help="Show tasks in dependency order with parallel groups")
+
+    args = parser.parse_args()
+
+    server_bin = args.mcp_bin or _SERVER_BIN
+    if not os.path.isfile(server_bin):
+        print(f"ERROR: waveplan-mcp binary not found at '{server_bin}'. "
+              f"Set WAVEPLAN_MCP_BIN or --mcp-bin.", file=sys.stderr)
+        sys.exit(1)
+
+    env = _build_env(args.plan)
+    client = MCPPhone(server_bin, env)
+    try:
+        # Initialize the MCP session
+        client._send("initialize", {
+            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "capabilities": {},
+        })
+        client._send("notifications/initialized", None, notify=True)
+
+        # Route CLI command -> MCP tool call
+        cmd = args.command
+        if cmd == "peek":
+            result = client.call_tool("waveplan_peek")
+        elif cmd == "pop":
+            result = client.call_tool("waveplan_pop", {"agent": args.agent})
+        elif cmd == "start_review":
+            result = client.call_tool("waveplan_start_review", {
+                "task_id": args.task_id,
+                "reviewer": args.reviewer,
+            })
+        elif cmd == "end_review":
+            result = client.call_tool("waveplan_end_review", {
+                "task_id": args.task_id,
+                "review_note": args.review_note or None,
+            })
+        elif cmd == "fin":
+            result = client.call_tool("waveplan_fin", {
+                "task_id": args.task_id,
+                "git_sha": args.git_sha or None,
+            })
+        elif cmd == "get":
+            result = client.call_tool("waveplan_get", {"mode": args.mode})
+        elif cmd == "list_plans":
+            result = client.call_tool("waveplan_list_plans", {
+                "plan_dir": args.plan_dir or None,
+            })
+        elif cmd == "deptree":
+            result = client.call_tool("waveplan_deptree", {})
+        else:
+            print(f"ERROR: unknown command '{cmd}'", file=sys.stderr)
+            sys.exit(1)
+
+        # Pretty-print the JSON result
+        print(json.dumps(result, indent=2))
+
+    except RuntimeError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        client.close()
+
+
+if __name__ == "__main__":
+    main()
