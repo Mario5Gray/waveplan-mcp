@@ -14,18 +14,18 @@ Go MCP service for managing execution waves from `*-execution-waves.json` plan f
 
 The recommended toolchain combines these four components into a cohesive agent-first development workflow:
 
-1. **Fiberplane** — observability and API layer
-2. **Drift** — infrastructure state management and drift detection
-3. **Waveplan** — execution wave planning and task orchestration
-4. **Superpowers** — agent skills for disciplined development practices
+1. **Fiberplane** — Agent Task/Project Management.
+2. **Drift** — Bind Specs/Document <-> Code management.
+3. **Waveplan** — Execution Orchestration
+4. **Superpowers** — Agent skills for disciplined development practices
 
-Together they form a complete stack: plan execution with Waveplan, orchestrate infrastructure with Drift, observe and operate via Fiberplane, and guide agent behavior with Superpowers skills.
+Together they form a complete stack: Plan with Fibreplane; break problem into issues and collaborate. Drift for Documentation Spec to Code Integrity. Waveplan turns specs and plans into code steps for execution with DAG ordering.  Superpowers keeps Agents disciplined and predictable.
 
 For a detailed guide on how to use this stack together, see [planstack.md](planstack.md).
 
 ## Overview
 
-`waveplan-mcp` is a standalone Go implementation of the [waveplan CLI](https://github.com/your-org/waveplan) as an MCP (Model Context Protocol) server. It provides the same task management workflow — `peek`, `pop`, `start_review`, `end_review`, `fin`, `get`, `deptree`, `list_plans` — but exposes each command as an MCP tool with structured JSON output.
+`waveplan-mcp` is a standalone Go implementation of a 'waveplan' as an MCP (Model Context Protocol) server. It provides a code-implementation management workflow — `peek`, `pop`, `start_review`, `end_review`, `fin`, `get`, `deptree`, `list_plans` — but exposes each command as an MCP tool with structured JSON output.
 
 ### Features
 
