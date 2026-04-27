@@ -2,6 +2,27 @@
 
 Go MCP service for managing execution waves from `*-execution-waves.json` plan files.
 
+## Superpowers
+
+[Superpowers](https://github.com/obra/superpowers) is a framework of agent skills that enhance coding agents with structured workflows — brainstorming, planning, debugging, test-driven development, code review, and more. Skills are invoked contextually to guide agents through disciplined development practices.
+
+## Fiberplane
+
+[Fiberplane](https://fiberplane.com) provides developer tooling for observability, API development, and agent workflows. It includes [Drift](https://fiberplane.com), a tool for managing infrastructure state and drift detection, enabling reliable infrastructure-as-code workflows.
+
+## The Optimal Stack
+
+The recommended toolchain combines these four components into a cohesive agent-first development workflow:
+
+1. **Fiberplane** — observability and API layer
+2. **Drift** — infrastructure state management and drift detection
+3. **Waveplan** — execution wave planning and task orchestration
+4. **Superpowers** — agent skills for disciplined development practices
+
+Together they form a complete stack: plan execution with Waveplan, orchestrate infrastructure with Drift, observe and operate via Fiberplane, and guide agent behavior with Superpowers skills.
+
+For a detailed guide on how to use this stack together, see [planstack.md](planstack.md).
+
 ## Overview
 
 `waveplan-mcp` is a standalone Go implementation of the [waveplan CLI](https://github.com/your-org/waveplan) as an MCP (Model Context Protocol) server. It provides the same task management workflow — `peek`, `pop`, `start_review`, `end_review`, `fin`, `get`, `deptree`, `list_plans` — but exposes each command as an MCP tool with structured JSON output.
@@ -75,6 +96,23 @@ Response:
 ```json
 {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"{\"task_id\":\"T1.1\",\"task\":\"T1\",\"title\":\"...\",\"kind\":\"impl\",\"wave\":1,\"plan_line\":20,\"plan_ref\":{\"path\":\"...\",\"line\":20},\"depends_on\":[],\"doc_refs\":[],\"fp_refs\":[],\"notes\":[]}"}]}}
 ```
+
+## CLI Interface
+
+`waveplan-cli` is a Python CLI that proxies commands to the `waveplan-mcp` server over stdio. It provides the same interface as the original Python CLI while all logic is delegated to the Go-based MCP server.
+
+```bash
+python waveplan-cli peek
+python waveplan-cli pop <agent>
+python waveplan-cli start_review <task_id> <reviewer>
+python waveplan-cli end_review <task_id> [review_note]
+python waveplan-cli fin <task_id> [git_sha]
+python waveplan-cli get [all|taken|open|complete|deptree|task-<id>|<agent>] [--json]
+python waveplan-cli deptree
+python waveplan-cli list_plans [--plan-dir <dir>]
+```
+
+Configure the server binary path via `--mcp-bin`, `WAVEPLAN_MCP_BIN` env var, or it auto-detects `~/.local/bin/waveplan-mcp`. Set `--plan` or `WAVEPLAN_PLAN` to specify the plan file; otherwise it auto-detects from `docs/superpowers/plans/`.
 
 ## Tools
 
