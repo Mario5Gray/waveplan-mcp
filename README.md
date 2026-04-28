@@ -1,7 +1,11 @@
 # waveplan-mcp
 
-Go MCP service for managing execution waves from `*-execution-waves.json` plan files. To work, you must digest a plan, converting it to the execution-waves.json schema. That
-tool is forthcoming. But in practice, one can create a soncrete plan based on any text plan as long as your point an (relatively powerful) agent at the schema, and direct it to produce the output executable in waveplan.
+A MCP (implemented in Go-lang) service for managing execution waves from `*-execution-waves.json` plan files, which are strucutred objects containing tasks or units of work to accomplish in some (not any) order.
+
+Motivation: mostly because I am learning agentic workflows. I found that orchestrating multiple agents means having to keep state on who what and where at ALL phases of plan->execution, even small deviations can SERIOUSLY derail your project! Waveplan does not attempt to genreate a plan document; it simply executes it. to achieve slightly higher efficiency, I decided to give it a try on multiple agents on a rather long task (over 50 tasks, 4 parallel groups). The (emergent) inner-loop: pop task-> execute task-> review execution -> sign_off_review -> finish is what waveplan is based on.
+
+I set out by makeing this VERY simple. Currently, the main orchestrator IS YOU! There are not enough checks and gates to in waveplan to make full automation happen.
+To provide full automation, a seperate project is being worked on now and it's private ATM [dagdir](https://github.com/mario5gray/dagdir).
 
 ## Superpowers
 
@@ -31,12 +35,12 @@ For a detailed guide on how to use this stack together, see [planstack.md](plans
 ### Features
 
 - **JSON output** on all tools — no plain-text parsing needed
-- **Full feature parity** with the Python CLI: all filter modes, review workflow, dependency tracking
-- **`deptree` mode** — topological sort with parallel group numbers
+- **`deptree`** — topological sort with parallel group numbers
 - **`review_note`** on `end_review` and **`git_sha`** on `fin`
 - **Deterministic output** — sorted task lists, stable ordering across runs
 - **State file compatibility** — reads and writes the same `.state.json` sidecar as the Python CLI
-- **15 unit tests** covering helpers, ordering, and parity
+- safe parallel read/write ordering via a Queue with lock.
+- **unit tests** covering helpers, ordering, and parity
 
 ## Quick Start
 
@@ -65,7 +69,7 @@ Configure `waveplan-mcp` in your MCP client config (e.g. Claude Code `claude.jso
       "command": "./waveplan-mcp",
       "args": ["--plan", "2026-04-25-txt2art-amiga-execution-waves.json"],
       "env": {
-        "WAVEPLAN_PLAN": "/Users/darkbit1001/.local/share/waveplan/plans/2026-04-25-txt2art-amiga-execution-waves.json"
+        "WAVEPLAN_PLAN": "~/.local/share/waveplan/plans/2026-04-25-txt2art-amiga-execution-waves.json"
       }
     }
   }
@@ -78,8 +82,8 @@ Or with absolute paths:
 {
   "mcpServers": {
     "waveplan": {
-      "command": "/Users/darkbit1001/.local/bin/waveplan-mcp",
-      "args": ["--plan", "/Users/darkbit1001/.local/share/waveplan/plans/2026-04-25-txt2art-amiga-execution-waves.json"]
+      "command": "~/.local/bin/waveplan-mcp",
+      "args": ["--plan", "~/.local/share/waveplan/plans/2026-04-25-txt2art-amiga-execution-waves.json"]
     }
   }
 }
