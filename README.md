@@ -7,7 +7,7 @@ tool is forthcoming. But in practice, one can create a soncrete plan based on an
 
 [Superpowers](https://github.com/obra/superpowers) is a framework of agent skills that enhance coding agents with structured workflows — brainstorming, planning, debugging, test-driven development, code review, and more. Skills are invoked contextually to guide agents through disciplined development practices.
 
-## Fiberplane
+## Fiberplane & Drift
 
 [Fiberplane](https://fiberplane.com) provides developer tooling for observability, API development, and agent workflows. It includes [Drift](https://fiberplane.com), a tool for managing documentation to code state drift.
 
