@@ -7,7 +7,7 @@ Motivation: mostly because I am learning agentic workflows. I found that orchest
 Notice there is no 'return' loop semantic for re-writes - thats intentional - as I want to remain in control of the deeper inner-processes. Currently, this is coarse-graned as all in-between tasks get rolled up to a waveplan phase (pop, exec, review, sign_off, fin), meaning waveplan is HUMAN optimized.
 
 I set out by makeing this VERY simple. Currently, the main orchestrator IS YOU! There are not enough checks and gates to in waveplan to make full automation happen.
-To provide full automation, a seperate project is being worked on now and it's private ATM [dagdir](https://github.com/mario5gray/dagdir).
+To provide full automation, a seperate project is being worked on now and it's private ATM [dagdir](https://github.com/mario5gray/neuraloops).
 
 ## Superpowers
 
