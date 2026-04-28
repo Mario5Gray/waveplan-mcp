@@ -274,7 +274,7 @@ Topological sort with parallel groups.
 
 List available plan files.
 
-**Args:** `plan_dir` (string, optional, default: "docs/plans")
+**Args:** `plan_dir` (string, optional, default: "docs/superpowers/plans")
 
 **Success JSON:**
 ```json

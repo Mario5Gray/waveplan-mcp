@@ -1,0 +1,116 @@
+{
+  "plan": "2026-04-25-waveplan-mcp-feature-parity-execution-waves.json",
+  "taken": {},
+  "completed": {
+    "T1.1": {
+      "started_at": "2026-04-25 22:01",
+      "taken_by": "psi",
+      "review_entered_at": "2026-04-25 22:01",
+      "review_ended_at": "2026-04-25 22:01",
+      "reviewer": "psi",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": "2026-04-25 22:01"
+    },
+    "T2.1": {
+      "started_at": "2026-04-25 22:01",
+      "taken_by": "psi",
+      "review_entered_at": "2026-04-25 22:03",
+      "review_ended_at": "2026-04-25 22:03",
+      "reviewer": "psi",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": "2026-04-25 22:03"
+    },
+    "T3.1": {
+      "started_at": "2026-04-25 22:03",
+      "taken_by": "psi",
+      "review_entered_at": "2026-04-25 22:03",
+      "review_ended_at": "2026-04-25 22:03",
+      "reviewer": "psi",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": "2026-04-25 22:03"
+    },
+    "T4.1": {
+      "started_at": "2026-04-25 22:04",
+      "taken_by": "psi",
+      "review_entered_at": "2026-04-25 22:04",
+      "review_ended_at": "2026-04-25 22:04",
+      "reviewer": "psi",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": "2026-04-25 22:04"
+    },
+    "T5.1": {
+      "started_at": "2026-04-25 22:04",
+      "taken_by": "psi",
+      "review_entered_at": "2026-04-25 22:04",
+      "review_ended_at": "2026-04-25 22:04",
+      "reviewer": "psi",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": "2026-04-25 22:04"
+    },
+    "T6.1": {
+      "started_at": "2026-04-25 22:05",
+      "taken_by": "psi",
+      "review_entered_at": "2026-04-25 22:05",
+      "review_ended_at": "2026-04-25 22:05",
+      "reviewer": "psi",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": "2026-04-25 22:05"
+    },
+    "T7.1": {
+      "started_at": "2026-04-25 22:06",
+      "taken_by": "psi",
+      "review_entered_at": "2026-04-25 22:06",
+      "review_ended_at": "2026-04-25 22:06",
+      "reviewer": "psi",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": "2026-04-25 22:06"
+    },
+    "T8.1": {
+      "started_at": "2026-04-25 22:07",
+      "taken_by": "psi",
+      "review_entered_at": "2026-04-25 22:07",
+      "review_ended_at": "2026-04-25 22:07",
+      "reviewer": "psi",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": "2026-04-25 22:07"
+    },
+    "T9.1": {
+      "started_at": "2026-04-25 22:08",
+      "taken_by": "psi",
+      "review_entered_at": "2026-04-25 22:08",
+      "review_ended_at": "2026-04-25 22:08",
+      "reviewer": "psi",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": "2026-04-25 22:08"
+    },
+    "T10.1": {
+      "started_at": "2026-04-25 22:08",
+      "taken_by": "psi",
+      "review_entered_at": "2026-04-25 22:09",
+      "review_ended_at": "2026-04-25 22:09",
+      "reviewer": "psi",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": "2026-04-25 22:09"
+    },
+    "T11.1": {
+      "started_at": "2026-04-25 22:10",
+      "taken_by": "psi",
+      "review_entered_at": "2026-04-25 22:21",
+      "review_ended_at": "2026-04-25 22:21",
+      "reviewer": "psi",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": "2026-04-25 22:21"
+    }
+  }
+}

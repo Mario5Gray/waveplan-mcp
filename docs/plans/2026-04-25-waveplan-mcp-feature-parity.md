@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Bring the Go MCP service (`waveplan-mcp/main.go`) to feature parity with the Python CLI (`../scripts/waveplan`).
+**Goal:** Bring the Go MCP service (`waveplan-mcp/main.go`) to feature parity with the Python CLI (`scripts/waveplan`).
 
 **Architecture:** Single Go file (`main.go`) — expand data structures, add helper functions, convert all handlers to return protocol-native structured MCP results, add `deptree` mode, add `git_sha`/`review_note` parameters.
 
@@ -16,15 +16,15 @@
 
 | File | Responsibility |
 |------|----------------|
-| `.main.go` | All changes — data structures, helpers, handlers, tools |
-| `.main_test.go` | New test file for helper functions and handler logic |
+| `.worktrees/waveplan-mcp/main.go` | All changes — data structures, helpers, handlers, tools |
+| `.worktrees/waveplan-mcp/main_test.go` | New test file for helper functions and handler logic |
 
 ---
 
 ### Task 1: Add new fields to `TaskEntry`
 
 **Files:**
-- Modify: `.main.go:27-34`
+- Modify: `.worktrees/waveplan-mcp/main.go:27-34`
 
 - [ ] **Step 1: Add `ReviewNote` and `GitSha` fields to `TaskEntry`**
 
@@ -46,13 +46,13 @@ type TaskEntry struct {
 
 - [ ] **Step 2: Verify compilation**
 
-Run: `cd . && go build`
+Run: `cd .worktrees/waveplan-mcp && go build`
 Expected: clean build, no errors.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cd .
+cd .worktrees/waveplan-mcp
 git add main.go
 git commit -m "feat(waveplan-mcp): add ReviewNote and GitSha fields to TaskEntry"
 ```
@@ -62,7 +62,7 @@ git commit -m "feat(waveplan-mcp): add ReviewNote and GitSha fields to TaskEntry
 ### Task 2: Implement helper functions
 
 **Files:**
-- Modify: `.main.go` (add after `nextAvailableTask`, before `createTools`)
+- Modify: `.worktrees/waveplan-mcp/main.go` (add after `nextAvailableTask`, before `createTools`)
 
 - [ ] **Step 1: Add `findPlanRef` helper**
 
@@ -327,13 +327,13 @@ func (s *WaveplanServer) topologicalSort() []map[string]any {
 
 - [ ] **Step 3: Verify compilation**
 
-Run: `cd . && go build`
+Run: `cd .worktrees/waveplan-mcp && go build`
 Expected: clean build.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-cd .
+cd .worktrees/waveplan-mcp
 git add main.go
 git commit -m "feat(waveplan-mcp): add helper functions for JSON output and topological sort"
 ```
@@ -343,7 +343,7 @@ git commit -m "feat(waveplan-mcp): add helper functions for JSON output and topo
 ### Task 3: Convert `handlePeek` to JSON output
 
 **Files:**
-- Modify: `.main.go:222-238`
+- Modify: `.worktrees/waveplan-mcp/main.go:222-238`
 
 - [ ] **Step 1: Replace `handlePeek` handler**
 
@@ -368,13 +368,13 @@ func (s *WaveplanServer) handlePeek(ctx context.Context, request mcp.CallToolReq
 
 - [ ] **Step 2: Verify compilation**
 
-Run: `cd . && go build`
+Run: `cd .worktrees/waveplan-mcp && go build`
 Expected: clean build.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cd .
+cd .worktrees/waveplan-mcp
 git add main.go
 git commit -m "feat(waveplan-mcp): convert handlePeek to return JSON"
 ```
@@ -384,7 +384,7 @@ git commit -m "feat(waveplan-mcp): convert handlePeek to return JSON"
 ### Task 4: Convert `handlePop` to JSON output
 
 **Files:**
-- Modify: `.main.go:240-268`
+- Modify: `.worktrees/waveplan-mcp/main.go:240-268`
 
 - [ ] **Step 1: Replace `handlePop` handler**
 
@@ -424,13 +424,13 @@ func (s *WaveplanServer) handlePop(ctx context.Context, request mcp.CallToolRequ
 
 - [ ] **Step 2: Verify compilation**
 
-Run: `cd . && go build`
+Run: `cd .worktrees/waveplan-mcp && go build`
 Expected: clean build.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cd .
+cd .worktrees/waveplan-mcp
 git add main.go
 git commit -m "feat(waveplan-mcp): convert handlePop to return JSON"
 ```
@@ -440,7 +440,7 @@ git commit -m "feat(waveplan-mcp): convert handlePop to return JSON"
 ### Task 5: Convert `handleStartReview` to JSON output
 
 **Files:**
-- Modify: `.main.go:270-304`
+- Modify: `.worktrees/waveplan-mcp/main.go:270-304`
 
 - [ ] **Step 1: Replace `handleStartReview` handler**
 
@@ -494,13 +494,13 @@ func (s *WaveplanServer) handleStartReview(ctx context.Context, request mcp.Call
 
 - [ ] **Step 2: Verify compilation**
 
-Run: `cd . && go build`
+Run: `cd .worktrees/waveplan-mcp && go build`
 Expected: clean build.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cd .
+cd .worktrees/waveplan-mcp
 git add main.go
 git commit -m "feat(waveplan-mcp): convert handleStartReview to return JSON"
 ```
@@ -510,7 +510,7 @@ git commit -m "feat(waveplan-mcp): convert handleStartReview to return JSON"
 ### Task 6: Convert `handleEndReview` to JSON output + add `review_note` parameter
 
 **Files:**
-- Modify: `.main.go:306-337`
+- Modify: `.worktrees/waveplan-mcp/main.go:306-337`
 
 - [ ] **Step 1: Update tool definition for `waveplan_end_review`**
 
@@ -580,13 +580,13 @@ func (s *WaveplanServer) handleEndReview(ctx context.Context, request mcp.CallTo
 
 - [ ] **Step 3: Verify compilation**
 
-Run: `cd . && go build`
+Run: `cd .worktrees/waveplan-mcp && go build`
 Expected: clean build.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-cd .
+cd .worktrees/waveplan-mcp
 git add main.go
 git commit -m "feat(waveplan-mcp): convert handleEndReview to JSON, add review_note param"
 ```
@@ -596,7 +596,7 @@ git commit -m "feat(waveplan-mcp): convert handleEndReview to JSON, add review_n
 ### Task 7: Convert `handleFin` to JSON output + add `git_sha` parameter
 
 **Files:**
-- Modify: `.main.go:196-202` (tool def) and 339-379 (handler)
+- Modify: `.worktrees/waveplan-mcp/main.go:196-202` (tool def) and 339-379 (handler)
 
 - [ ] **Step 1: Update tool definition for `waveplan_fin`**
 
@@ -675,13 +675,13 @@ func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequ
 
 - [ ] **Step 3: Verify compilation**
 
-Run: `cd . && go build`
+Run: `cd .worktrees/waveplan-mcp && go build`
 Expected: clean build.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-cd .
+cd .worktrees/waveplan-mcp
 git add main.go
 git commit -m "feat(waveplan-mcp): convert handleFin to JSON, add git_sha param"
 ```
@@ -691,7 +691,7 @@ git commit -m "feat(waveplan-mcp): convert handleFin to JSON, add git_sha param"
 ### Task 8: Convert `handleGet` to JSON output + add `deptree` mode
 
 **Files:**
-- Modify: `.main.go:381-500`
+- Modify: `.worktrees/waveplan-mcp/main.go:381-500`
 
 - [ ] **Step 1: Replace `handleGet` handler**
 
@@ -795,13 +795,13 @@ func (s *WaveplanServer) handleGet(ctx context.Context, request mcp.CallToolRequ
 
 - [ ] **Step 2: Verify compilation**
 
-Run: `cd . && go build`
+Run: `cd .worktrees/waveplan-mcp && go build`
 Expected: clean build.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cd .
+cd .worktrees/waveplan-mcp
 git add main.go
 git commit -m "feat(waveplan-mcp): convert handleGet to JSON, add deptree mode"
 ```
@@ -811,7 +811,7 @@ git commit -m "feat(waveplan-mcp): convert handleGet to JSON, add deptree mode"
 ### Task 9: Convert `handleListPlans` to JSON output
 
 **Files:**
-- Modify: `.main.go:502-519`
+- Modify: `.worktrees/waveplan-mcp/main.go:502-519`
 
 - [ ] **Step 1: Replace `handleListPlans` handler**
 
@@ -821,7 +821,7 @@ Replace lines 502-519:
 func (s *WaveplanServer) handleListPlans(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	planDir, _ := optionalStringParam(request.Params.Arguments, "plan_dir")
 	if planDir == "" {
-		planDir = "docs/plans"
+		planDir = "docs/superpowers/plans"
 	}
 	matches, err := filepath.Glob(filepath.Join(planDir, "*-execution-waves.json"))
 	if err != nil {
@@ -834,13 +834,13 @@ func (s *WaveplanServer) handleListPlans(ctx context.Context, request mcp.CallTo
 
 - [ ] **Step 2: Verify compilation**
 
-Run: `cd . && go build`
+Run: `cd .worktrees/waveplan-mcp && go build`
 Expected: clean build.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cd .
+cd .worktrees/waveplan-mcp
 git add main.go
 git commit -m "feat(waveplan-mcp): convert handleListPlans to return JSON"
 ```
@@ -850,7 +850,7 @@ git commit -m "feat(waveplan-mcp): convert handleListPlans to return JSON"
 ### Task 10: Write tests
 
 **Files:**
-- Create: `.main_test.go`
+- Create: `.worktrees/waveplan-mcp/main_test.go`
 
 - [ ] **Step 1: Create test file with helper function tests**
 
@@ -1134,13 +1134,13 @@ func TestHandleFinStoresGitSha(t *testing.T) {
 
 - [ ] **Step 2: Run tests**
 
-Run: `cd . && go test -v ./...`
+Run: `cd .worktrees/waveplan-mcp && go test -v ./...`
 Expected: all tests pass.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cd .
+cd .worktrees/waveplan-mcp
 git add main_test.go
 git commit -m "test(waveplan-mcp): add helper and handler parity tests"
 ```
@@ -1150,11 +1150,11 @@ git commit -m "test(waveplan-mcp): add helper and handler parity tests"
 ### Task 11: End-to-end verification
 
 **Files:**
-- Use: `.main.go`
+- Use: `.worktrees/waveplan-mcp/main.go`
 
 - [ ] **Step 1: Build the binary**
 
-Run: `cd . && go build -o waveplan-mcp`
+Run: `cd .worktrees/waveplan-mcp && go build -o waveplan-mcp`
 Expected: binary created.
 
 - [ ] **Step 2: Verify MCP envelope + structured payloads using an isolated temp plan/state**
@@ -1162,9 +1162,9 @@ Expected: binary created.
 Do **not** point the verification run at the real repo state file. The probes below are stateful (`pop`, `start_review`, `end_review`, `fin`) and must run against temporary copies.
 
 ```bash
-cd .
+cd .worktrees/waveplan-mcp
 tmpdir="$(mktemp -d)"
-cp docs/plans/2026-04-22-controlnet-track-3-backend-execution-waves.json "$tmpdir/plan.json"
+cp docs/superpowers/plans/2026-04-22-controlnet-track-3-backend-execution-waves.json "$tmpdir/plan.json"
 printf '{"plan":"plan.json","taken":{},"completed":{}}\n' > "$tmpdir/plan.json.state.json"
 export WAVEPLAN_PLAN="$tmpdir/plan.json"
 export WAVEPLAN_STATE="$tmpdir/plan.json.state.json"
@@ -1228,8 +1228,8 @@ printf '%s\n' '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"w
 - [ ] **Step 3: Verify state-file compatibility against the same temp state**
 
 ```bash
-cd .
-python3 ../scripts/waveplan --plan "$WAVEPLAN_PLAN" --state "$WAVEPLAN_STATE" get task-T1.1 --json
+cd .worktrees/waveplan-mcp
+python3 scripts/waveplan --plan "$WAVEPLAN_PLAN" --state "$WAVEPLAN_STATE" get task-T1.1 --json
 ```
 
 Expected: the Python CLI reads the MCP-written temp state without errors and shows `review_note` / `git_sha` fields for `T1.1`.

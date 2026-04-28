@@ -23,7 +23,7 @@ func makeTestServer(t *testing.T, planJSON []byte) *WaveplanServer {
 		plan:     &plan,
 		state:    state,
 		planPath: "test-plan.json",
-		statePath: "test-plan.json.state.json",
+		statePath: "",
 	}
 }
 

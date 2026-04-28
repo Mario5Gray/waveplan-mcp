@@ -112,8 +112,48 @@ func newWaveplanServer(planPath, statePath, serverGitSha string) (*WaveplanServe
 	}, nil
 }
 
-// saveState writes the current state to disk
+// reloadState re-reads the state file from disk and merges it into the current state.
+// This ensures changes made by other processes (e.g., CLI subprocesses) are visible
+// to a long-running server instance before we write our own changes back.
+func (s *WaveplanServer) reloadState() error {
+	if s.statePath == "" {
+		return nil
+	}
+	data, err := os.ReadFile(s.statePath)
+	if err != nil {
+		// File doesn't exist yet or can't be read — nothing to merge.
+		return nil
+	}
+	var fileState WaveplanState
+	if err := json.Unmarshal(data, &fileState); err != nil {
+		return fmt.Errorf("failed to parse state file for reload: %w", err)
+	}
+	// Merge: bring in Taken and Completed entries from disk that we don't have in memory.
+	for k, v := range fileState.Taken {
+		if _, ok := s.state.Taken[k]; !ok {
+			if s.state.Taken == nil {
+				s.state.Taken = make(map[string]TaskEntry)
+			}
+			s.state.Taken[k] = v
+		}
+	}
+	for k, v := range fileState.Completed {
+		if _, ok := s.state.Completed[k]; !ok {
+			if s.state.Completed == nil {
+				s.state.Completed = make(map[string]TaskEntry)
+			}
+			s.state.Completed[k] = v
+		}
+	}
+	return nil
+}
+
+// saveState writes the current state to disk.
+// If statePath is empty, this is a no-op (useful for in-memory tests).
 func (s *WaveplanServer) saveState() error {
+	if s.statePath == "" {
+		return nil
+	}
 	data, err := json.MarshalIndent(s.state, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
@@ -249,6 +289,10 @@ func (s *WaveplanServer) handlePeek(ctx context.Context, request mcp.CallToolReq
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if err := s.reloadState(); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to reload state: %v", err)), nil
+	}
+
 	taskID := s.nextAvailableTask()
 	if taskID == "" {
 		return mcp.NewToolResultText(`{"error":"No available tasks."}`), nil
@@ -261,6 +305,10 @@ func (s *WaveplanServer) handlePeek(ctx context.Context, request mcp.CallToolReq
 func (s *WaveplanServer) handlePop(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if err := s.reloadState(); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to reload state: %v", err)), nil
+	}
 
 	agent, err := requiredStringParam(request.Params.Arguments, "agent")
 	if err != nil {
@@ -290,6 +338,10 @@ func (s *WaveplanServer) handlePop(ctx context.Context, request mcp.CallToolRequ
 func (s *WaveplanServer) handleStartReview(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if err := s.reloadState(); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to reload state: %v", err)), nil
+	}
 
 	taskID, err := requiredStringParam(request.Params.Arguments, "task_id")
 	if err != nil {
@@ -334,6 +386,10 @@ func (s *WaveplanServer) handleStartReview(ctx context.Context, request mcp.Call
 func (s *WaveplanServer) handleEndReview(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if err := s.reloadState(); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to reload state: %v", err)), nil
+	}
 
 	taskID, err := requiredStringParam(request.Params.Arguments, "task_id")
 	if err != nil {
@@ -436,6 +492,10 @@ func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequ
 func (s *WaveplanServer) handleGet(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if err := s.reloadState(); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to reload state: %v", err)), nil
+	}
 
 	mode, _ := optionalStringParam(request.Params.Arguments, "mode")
 	if mode == "" {
@@ -582,6 +642,10 @@ func (s *WaveplanServer) doDeptree() *mcp.CallToolResult {
 func (s *WaveplanServer) handleDeptree(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if err := s.reloadState(); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to reload state: %v", err)), nil
+	}
 	return s.doDeptree(), nil
 }
 
