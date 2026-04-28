@@ -9,7 +9,7 @@ tool is forthcoming. But in practice, one can create a soncrete plan based on an
 
 ## Fiberplane
 
-[Fiberplane](https://fiberplane.com) provides developer tooling for observability, API development, and agent workflows. It includes [Drift](https://fiberplane.com), a tool for managing infrastructure state and drift detection, enabling reliable infrastructure-as-code workflows.
+[Fiberplane](https://fiberplane.com) provides developer tooling for observability, API development, and agent workflows. It includes [Drift](https://fiberplane.com), a tool for managing documentation to code state drift.
 
 ## The Optimal Stack
 
