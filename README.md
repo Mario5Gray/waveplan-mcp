@@ -1,41 +1,48 @@
 # waveplan-mcp
 
-Go MCP service for managing execution waves from `*-execution-waves.json` plan files.
+A MCP (implemented in Go-lang) service for managing execution waves from `*-execution-waves.json` plan files, which are human-optimized, strucutred objects containing coarse or (but not likely) fine-grain tasks or units of work to accomplish in some (not any) order.
+
+Motivation: mostly because I am learning agentic workflows. I found that orchestrating multiple agents means having to keep state on who what and where at ALL phases of plan->execution, even small deviations can SERIOUSLY derail your project! Waveplan does not attempt to genreate a plan document; it simply executes it. The emergent inner-loop: pop task-> execute task-> review execution -> sign_off_review -> finish is what waveplan is based on.
+
+Notice there is no 'return' loop semantic for re-writes - thats intentional - as I want to remain in control of the deeper inner-processes. Currently, this is coarse-graned as all in-between tasks get rolled up to a waveplan phase (pop, exec, review, sign_off, fin), meaning waveplan is HUMAN optimized.
+
+I set out by makeing this VERY simple. Currently, the main orchestrator IS YOU! There are not enough checks and gates to in waveplan to make full automation happen.
+To provide full automation, a seperate project is being worked on now and it's private ATM [dagdir](https://github.com/mario5gray/neuraloops).
 
 ## Superpowers
 
 [Superpowers](https://github.com/obra/superpowers) is a framework of agent skills that enhance coding agents with structured workflows — brainstorming, planning, debugging, test-driven development, code review, and more. Skills are invoked contextually to guide agents through disciplined development practices.
 
-## Fiberplane
+## Fiberplane & Drift
 
-[Fiberplane](https://fiberplane.com) provides developer tooling for observability, API development, and agent workflows. It includes [Drift](https://fiberplane.com), a tool for managing infrastructure state and drift detection, enabling reliable infrastructure-as-code workflows.
+[Fiberplane](https://fiberplane.com) provides developer tooling for observability, API development, and agent workflows. It includes [Drift](https://fiberplane.com), a tool for managing documentation to code state drift.
 
 ## The Optimal Stack
 
 The recommended toolchain combines these four components into a cohesive agent-first development workflow:
 
-1. **Fiberplane** — observability and API layer
-2. **Drift** — infrastructure state management and drift detection
-3. **Waveplan** — execution wave planning and task orchestration
-4. **Superpowers** — agent skills for disciplined development practices
+1. **Superpowers** — Agent skills for disciplined development practices.
+2. **Fiberplane** — Agent Task/Project Management.
+3. **Drift** — Bind Specs/Document <-> Code management.
+4. **Waveplan** — Implementation step execution.
 
-Together they form a complete stack: plan execution with Waveplan, orchestrate infrastructure with Drift, observe and operate via Fiberplane, and guide agent behavior with Superpowers skills.
+Together they form a complete stack: Superpowers keeps Agents disciplined and predictable. Plan with Fibreplane; break problem into issues and collaborate. Drift for Documentation Spec to Code Integrity. Waveplan turns specs and plans into code steps for execution with DAG ordering.  
 
 For a detailed guide on how to use this stack together, see [planstack.md](planstack.md).
 
 ## Overview
 
-`waveplan-mcp` is a standalone Go implementation of the [waveplan CLI](https://github.com/your-org/waveplan) as an MCP (Model Context Protocol) server. It provides the same task management workflow — `peek`, `pop`, `start_review`, `end_review`, `fin`, `get`, `deptree`, `list_plans` — but exposes each command as an MCP tool with structured JSON output.
+`waveplan-mcp` is a standalone Go implementation of a 'waveplan' as an MCP (Model Context Protocol) server. It provides a code-implementation management workflow — `peek`, `pop`, `start_review`, `end_review`, `fin`, `get`, `deptree`, `list_plans` — but exposes each command as an MCP tool with structured JSON output.
 
 ### Features
 
 - **JSON output** on all tools — no plain-text parsing needed
-- **Full feature parity** with the Python CLI: all filter modes, review workflow, dependency tracking
-- **`deptree` mode** — topological sort with parallel group numbers
+- **`deptree`** — topological sort with parallel group numbers
 - **`review_note`** on `end_review` and **`git_sha`** on `fin`
 - **Deterministic output** — sorted task lists, stable ordering across runs
 - **State file compatibility** — reads and writes the same `.state.json` sidecar as the Python CLI
-- **15 unit tests** covering helpers, ordering, and parity
+- safe parallel read/write ordering via a Queue with lock.
+- **unit tests** covering helpers, ordering, and parity
 
 ## Quick Start
 
@@ -64,7 +71,7 @@ Configure `waveplan-mcp` in your MCP client config (e.g. Claude Code `claude.jso
       "command": "./waveplan-mcp",
       "args": ["--plan", "2026-04-25-txt2art-amiga-execution-waves.json"],
       "env": {
-        "WAVEPLAN_PLAN": "/Users/darkbit1001/.local/share/waveplan/plans/2026-04-25-txt2art-amiga-execution-waves.json"
+        "WAVEPLAN_PLAN": "~/.local/share/waveplan/plans/2026-04-25-txt2art-amiga-execution-waves.json"
       }
     }
   }
@@ -77,8 +84,8 @@ Or with absolute paths:
 {
   "mcpServers": {
     "waveplan": {
-      "command": "/Users/darkbit1001/.local/bin/waveplan-mcp",
-      "args": ["--plan", "/Users/darkbit1001/.local/share/waveplan/plans/2026-04-25-txt2art-amiga-execution-waves.json"]
+      "command": "~/.local/bin/waveplan-mcp",
+      "args": ["--plan", "~/.local/share/waveplan/plans/2026-04-25-txt2art-amiga-execution-waves.json"]
     }
   }
 }
