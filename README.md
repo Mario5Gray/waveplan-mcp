@@ -1,8 +1,10 @@
 # waveplan-mcp
 
-A MCP (implemented in Go-lang) service for managing execution waves from `*-execution-waves.json` plan files, which are strucutred objects containing tasks or units of work to accomplish in some (not any) order.
+A MCP (implemented in Go-lang) service for managing execution waves from `*-execution-waves.json` plan files, which are human-optimized, strucutred objects containing coarse or (but not likely) fine-grain tasks or units of work to accomplish in some (not any) order.
 
-Motivation: mostly because I am learning agentic workflows. I found that orchestrating multiple agents means having to keep state on who what and where at ALL phases of plan->execution, even small deviations can SERIOUSLY derail your project! Waveplan does not attempt to genreate a plan document; it simply executes it. to achieve slightly higher efficiency, I decided to give it a try on multiple agents on a rather long task (over 50 tasks, 4 parallel groups). The (emergent) inner-loop: pop task-> execute task-> review execution -> sign_off_review -> finish is what waveplan is based on.
+Motivation: mostly because I am learning agentic workflows. I found that orchestrating multiple agents means having to keep state on who what and where at ALL phases of plan->execution, even small deviations can SERIOUSLY derail your project! Waveplan does not attempt to genreate a plan document; it simply executes it. The emergent inner-loop: pop task-> execute task-> review execution -> sign_off_review -> finish is what waveplan is based on.
+
+Notice there is no 'return' loop semantic for re-writes - thats intentional - as I want to remain in control of the deeper inner-processes. Currently, this is coarse-graned as all in-between tasks get rolled up to a waveplan phase (pop, exec, review, sign_off, fin), meaning waveplan is HUMAN optimized.
 
 I set out by makeing this VERY simple. Currently, the main orchestrator IS YOU! There are not enough checks and gates to in waveplan to make full automation happen.
 To provide full automation, a seperate project is being worked on now and it's private ATM [dagdir](https://github.com/mario5gray/dagdir).
