@@ -1,6 +1,7 @@
 # waveplan-mcp
 
-Go MCP service for managing execution waves from `*-execution-waves.json` plan files.
+Go MCP service for managing execution waves from `*-execution-waves.json` plan files. To work, you must digest a plan, converting it to the execution-waves.json schema. That
+tool is forthcoming. But in practice, one can create a soncrete plan based on any text plan as long as your point an (relatively powerful) agent at the schema, and direct it to produce the output executable in waveplan.
 
 ## Superpowers
 
@@ -14,12 +15,12 @@ Go MCP service for managing execution waves from `*-execution-waves.json` plan f
 
 The recommended toolchain combines these four components into a cohesive agent-first development workflow:
 
-1. **Fiberplane** — Agent Task/Project Management.
-2. **Drift** — Bind Specs/Document <-> Code management.
-3. **Waveplan** — Execution Orchestration
-4. **Superpowers** — Agent skills for disciplined development practices
+1. **Superpowers** — Agent skills for disciplined development practices.
+2. **Fiberplane** — Agent Task/Project Management.
+3. **Drift** — Bind Specs/Document <-> Code management.
+4. **Waveplan** — Implementation step execution.
 
-Together they form a complete stack: Plan with Fibreplane; break problem into issues and collaborate. Drift for Documentation Spec to Code Integrity. Waveplan turns specs and plans into code steps for execution with DAG ordering.  Superpowers keeps Agents disciplined and predictable.
+Together they form a complete stack: Superpowers keeps Agents disciplined and predictable. Plan with Fibreplane; break problem into issues and collaborate. Drift for Documentation Spec to Code Integrity. Waveplan turns specs and plans into code steps for execution with DAG ordering.  
 
 For a detailed guide on how to use this stack together, see [planstack.md](planstack.md).
 
