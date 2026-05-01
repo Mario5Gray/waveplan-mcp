@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-04-30",
+  "plan_version": 1,
+  "plan_generation": "2026-04-30T00:00:00Z",
+  "plan": {
+    "id": "plan-state-dashboard-objective",
+    "title": "Plan vs State Dashboard — Coarse Objective Waves",
+    "plan_doc": {
+      "path": "docs/plans/2026-04-29-plan-state-dashboard.md",
+      "line": 1
+    },
+    "spec_doc": {
+      "path": "docs/specs/2026-04-28-plan-state-dashboard-design.md",
+      "line": 1
+    },
+    "notes": [
+      "Coarse-grained objective tree. One unit per parent task (TN.1) representing the full phase.",
+      "Sub-decomposition (TN.1, TN.2, ...) lands in a follow-up plan after this tree is approved.",
+      "Wave ordering reflects compile-time dependencies; T1 and T2 are independent and parallelizable."
+    ]
+  },
+  "fp_index": {},
+  "doc_index": {
+    "plan": {
+      "path": "docs/plans/2026-04-29-plan-state-dashboard.md",
+      "line": 1,
+      "kind": "plan"
+    },
+    "spec": {
+      "path": "docs/specs/2026-04-28-plan-state-dashboard-design.md",
+      "line": 1,
+      "kind": "spec"
+    },
+    "plan_schema": {
+      "path": "docs/specs/waveplan-plan-schema.json",
+      "line": 1,
+      "kind": "code"
+    },
+    "state_schema": {
+      "path": "docs/specs/waveplan-state-schema.json",
+      "line": 1,
+      "kind": "code"
+    },
+    "dashboard_root": {
+      "path": "dashboard/",
+      "line": 1,
+      "kind": "code"
+    }
+  },
+  "tasks": {
+    "T1": {
+      "title": "Schema extensions and sample fixtures",
+      "plan_line": 60,
+      "doc_refs": ["spec", "plan_schema", "state_schema"],
+      "files": [
+        "docs/specs/waveplan-plan-schema.json",
+        "docs/specs/waveplan-state-schema.json",
+        "dashboard/public/sample/plan.json",
+        "dashboard/public/sample/state.json"
+      ]
+    },
+    "T2": {
+      "title": "Project scaffold, color tokens, typography",
+      "plan_line": 240,
+      "doc_refs": ["plan", "spec"],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/vite.config.ts",
+        "dashboard/tsconfig.json",
+        "dashboard/src/main.tsx",
+        "dashboard/src/App.tsx",
+        "dashboard/src/styles/tokens.css",
+        "dashboard/src/styles/global.css"
+      ]
+    },
+    "T3": {
+      "title": "Compare layer (types, parseTimestamp, loadPlan, loadState, deriveStatus, computeDrift, compare with frame contract)",
+      "plan_line": 380,
+      "doc_refs": ["plan", "spec"],
+      "files": [
+        "dashboard/src/types.ts",
+        "dashboard/src/compare/parseTimestamp.ts",
+        "dashboard/src/compare/loadPlan.ts",
+        "dashboard/src/compare/loadState.ts",
+        "dashboard/src/compare/deriveStatus.ts",
+        "dashboard/src/compare/computeDrift.ts",
+        "dashboard/src/compare/compare.ts"
+      ]
+    },
+    "T4": {
+      "title": "Zustand store and polling hook",
+      "plan_line": 1020,
+      "doc_refs": ["plan", "spec"],
+      "files": [
+        "dashboard/src/store.ts",
+        "dashboard/src/hooks/usePolling.ts"
+      ]
+    },
+    "T5": {
+      "title": "Visual primitives (StatusIcon, TaskNodeCard adaptive tiers, orthogonal DepEdge)",
+      "plan_line": 1110,
+      "doc_refs": ["plan", "spec"],
+      "files": [
+        "dashboard/src/components/StatusIcon.tsx",
+        "dashboard/src/components/TaskNodeCard.tsx",
+        "dashboard/src/components/TaskNodeCard.css",
+        "dashboard/src/components/DepEdge.tsx"
+      ]
+    },
+    "T6": {
+      "title": "Layout panels (Swimlanes, SummaryBar, PipelineStrip, ActiveTaskDrawer, DriftSections, VerificationPanel, HeartbeatStrip, FilterToolbar)",
+      "plan_line": 1390,
+      "doc_refs": ["plan", "spec"],
+      "files": [
+        "dashboard/src/components/Swimlanes.tsx",
+        "dashboard/src/components/Swimlanes.css",
+        "dashboard/src/components/SummaryBar.tsx",
+        "dashboard/src/components/SummaryBar.css",
+        "dashboard/src/components/PipelineStrip.tsx",
+        "dashboard/src/components/PipelineStrip.css",
+        "dashboard/src/components/ActiveTaskDrawer.tsx",
+        "dashboard/src/components/ActiveTaskDrawer.css",
+        "dashboard/src/components/DriftSections.tsx",
+        "dashboard/src/components/DriftSections.css",
+        "dashboard/src/components/VerificationPanel.tsx",
+        "dashboard/src/components/VerificationPanel.css",
+        "dashboard/src/components/HeartbeatStrip.tsx",
+        "dashboard/src/components/HeartbeatStrip.css",
+        "dashboard/src/components/FilterToolbar.tsx",
+        "dashboard/src/components/FilterToolbar.css"
+      ]
+    },
+    "T7": {
+      "title": "App shell, banners, Spotlight and Diff modes, truth-degraded",
+      "plan_line": 2700,
+      "doc_refs": ["plan", "spec"],
+      "files": [
+        "dashboard/src/App.tsx",
+        "dashboard/src/App.css",
+        "dashboard/src/components/Swimlanes.tsx"
+      ]
+    },
+    "T8": {
+      "title": "Acceptance pass against all 19 spec criteria",
+      "plan_line": 2870,
+      "doc_refs": ["plan", "spec"],
+      "files": [
+        "dashboard/ACCEPTANCE.md"
+      ]
+    }
+  },
+  "units": {
+    "T1.1": {
+      "task": "T1",
+      "title": "Extend plan and state schemas; ship sample plan.json and state.json reaching every status",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 60,
+      "depends_on": []
+    },
+    "T2.1": {
+      "task": "T2",
+      "title": "Bootstrap Vite/React/TS project; add Radix color tokens, Inter and JetBrains Mono",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 240,
+      "depends_on": []
+    },
+    "T3.1": {
+      "task": "T3",
+      "title": "Build compare layer end-to-end with TDD: types, parseTimestamp, loadPlan, loadState, deriveStatus, computeDrift, compare orchestrator with frame contract",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 380,
+      "depends_on": ["T1.1", "T2.1"]
+    },
+    "T4.1": {
+      "task": "T4",
+      "title": "Zustand store with selectors and polling hook publishing ComparedView snapshots",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 1020,
+      "depends_on": ["T3.1"]
+    },
+    "T5.1": {
+      "task": "T5",
+      "title": "Visual primitives: StatusIcon (Tabler glyph map), adaptive TaskNodeCard (N1/N2/N3), orthogonal DepEdge router with state-colored edges",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 1110,
+      "depends_on": ["T2.1"]
+    },
+    "T6.1": {
+      "task": "T6",
+      "title": "Eight layout panels reading from store: Swimlanes, SummaryBar, PipelineStrip, ActiveTaskDrawer (D4 stratified), DriftSections (DR3), VerificationPanel (V3), HeartbeatStrip (H4), FilterToolbar",
+      "kind": "impl",
+      "wave": 4,
+      "plan_line": 1390,
+      "depends_on": ["T3.1", "T4.1", "T5.1"]
+    },
+    "T7.1": {
+      "task": "T7",
+      "title": "App shell with C3 12-col grid, plan-mismatch and truth-degraded banners, Spotlight and Diff modes",
+      "kind": "impl",
+      "wave": 5,
+      "plan_line": 2700,
+      "depends_on": ["T6.1"]
+    },
+    "T8.1": {
+      "task": "T8",
+      "title": "Acceptance pass against the 19 spec criteria; produces ACCEPTANCE.md results",
+      "kind": "verify",
+      "wave": 6,
+      "plan_line": 2870,
+      "depends_on": ["T7.1"]
+    }
+  }
+}
