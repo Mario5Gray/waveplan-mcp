@@ -1,0 +1,16 @@
+{
+  "plan": "2026-05-04-waveplan-schema-compatible-authoring-execution-waves.json",
+  "taken": {
+    "T1.1": {
+      "taken_by": "sigma",
+      "started_at": "2026-05-04 13:57",
+      "review_entered_at": "",
+      "review_ended_at": "",
+      "reviewer": "",
+      "review_note": "",
+      "git_sha": "",
+      "finished_at": ""
+    }
+  },
+  "completed": {}
+}
