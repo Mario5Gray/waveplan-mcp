@@ -25,6 +25,7 @@ type WaveplanState struct {
 	Plan      string               `json:"plan"`
 	Taken     map[string]TaskEntry `json:"taken"`
 	Completed map[string]TaskEntry `json:"completed"`
+	Tail      map[string]TaskEntry `json:"tail"`
 }
 
 // TaskEntry represents a task's state entry
@@ -93,6 +94,7 @@ func newWaveplanServer(planPath, statePath, serverGitSha string) (*WaveplanServe
 		Plan:      filepath.Base(planPath),
 		Taken:     make(map[string]TaskEntry),
 		Completed: make(map[string]TaskEntry),
+		Tail:      make(map[string]TaskEntry),
 	}
 
 	if statePath != "" {

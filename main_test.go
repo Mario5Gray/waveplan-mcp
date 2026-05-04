@@ -18,6 +18,7 @@ func makeTestServer(t *testing.T, planJSON []byte) *WaveplanServer {
 		Plan:      "test-plan.json",
 		Taken:     make(map[string]TaskEntry),
 		Completed: make(map[string]TaskEntry),
+		Tail:      make(map[string]TaskEntry),
 	}
 	return &WaveplanServer{
 		plan:     &plan,
