@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+WAVEPLAN_CLI_BIN="${WAVEPLAN_CLI_BIN:-}"
+INVOKER="${WP_PLAN_TO_AGENT_BIN:-wp-plan-to-agent.sh}"
+
 usage() {
   cat <<'USAGE'
 Usage:
-  ./wp-emit-wave-execution.sh --plan <plan.json> --agents <waveagents.json> [--task-scope <all|open>] [--out <path>]
+  wp-emit-wave-execution.sh --plan <plan.json> --agents <waveagents.json> [--task-scope <all|open>] [--invoker <path-or-cmd>] [--out <path>]
 
 Description:
   Emits a JSON execution plan (no execution) with rows:
@@ -25,6 +29,10 @@ Agent rotation:
 Task scope:
   - all (default): emit for every unit/task in plan order (wave, task_id)
   - open: emit only for currently claimable tasks from waveplan-cli get open
+
+Environment:
+  WAVEPLAN_CLI_BIN        Path to waveplan-cli (default: PATH, then sibling file)
+  WP_PLAN_TO_AGENT_BIN    Command/path used in emitted wp_invoke strings (default: wp-plan-to-agent.sh)
 USAGE
 }
 
@@ -32,12 +40,14 @@ PLAN=""
 AGENTS_JSON=""
 OUT=""
 TASK_SCOPE="all"
+INVOKER_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --plan) PLAN="${2:-}"; shift 2 ;;
     --agents) AGENTS_JSON="${2:-}"; shift 2 ;;
     --task-scope) TASK_SCOPE="${2:-}"; shift 2 ;;
+    --invoker) INVOKER_ARG="${2:-}"; shift 2 ;;
     --out) OUT="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
@@ -70,12 +80,32 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 2
 fi
 
-if [[ ! -f "./waveplan-cli" ]]; then
-  echo "waveplan-cli not found in current directory" >&2
+if [[ -n "$INVOKER_ARG" ]]; then
+  INVOKER="$INVOKER_ARG"
+fi
+
+if [[ -z "$WAVEPLAN_CLI_BIN" ]]; then
+  if command -v waveplan-cli >/dev/null 2>&1; then
+    WAVEPLAN_CLI_BIN="$(command -v waveplan-cli)"
+  elif [[ -x "$SCRIPT_DIR/waveplan-cli" ]]; then
+    WAVEPLAN_CLI_BIN="$SCRIPT_DIR/waveplan-cli"
+  elif [[ -f "$SCRIPT_DIR/waveplan-cli" ]]; then
+    WAVEPLAN_CLI_BIN="$SCRIPT_DIR/waveplan-cli"
+  fi
+fi
+
+if [[ -n "$WAVEPLAN_CLI_BIN" && ! -f "$WAVEPLAN_CLI_BIN" ]]; then
+  if command -v "$WAVEPLAN_CLI_BIN" >/dev/null 2>&1; then
+    WAVEPLAN_CLI_BIN="$(command -v "$WAVEPLAN_CLI_BIN")"
+  fi
+fi
+
+if [[ -z "$WAVEPLAN_CLI_BIN" || ! -f "$WAVEPLAN_CLI_BIN" ]]; then
+  echo "waveplan-cli not found. Set WAVEPLAN_CLI_BIN or install waveplan-cli in PATH." >&2
   exit 2
 fi
 
-EMITTED="$(python3 - "$PLAN" "$AGENTS_JSON" "$TASK_SCOPE" <<'PY'
+EMITTED="$(python3 - "$PLAN" "$AGENTS_JSON" "$TASK_SCOPE" "$WAVEPLAN_CLI_BIN" "$INVOKER" <<'PY'
 import json
 import shlex
 import subprocess
@@ -84,6 +114,8 @@ import sys
 plan_path = sys.argv[1]
 agents_path = sys.argv[2]
 task_scope = sys.argv[3]
+waveplan_cli_bin = sys.argv[4]
+invoker = sys.argv[5]
 
 with open(agents_path, 'r', encoding='utf-8') as f:
     cfg = json.load(f)
@@ -144,7 +176,7 @@ agent_map, schedule = parse_agents(cfg)
 def load_tasks(scope):
     if scope == "open":
         raw = subprocess.check_output([
-            "python3", "./waveplan-cli", "--plan", plan_path, "get", "open"
+            "python3", waveplan_cli_bin, "--plan", plan_path, "get", "open"
         ], text=True)
         state = json.loads(raw)
         if isinstance(state, dict) and state.get("error"):
@@ -200,14 +232,14 @@ for t in tasks:
 
     # 1) Implement / pop dispatch
     cmd1 = (
-        f"./wp-plan-to-agent.sh --mode implement --target {shlex.quote(pop_provider)} "
+        f"{shlex.quote(invoker)} --mode implement --target {shlex.quote(pop_provider)} "
         f"--plan {shlex.quote(plan_path)} --agent {shlex.quote(pop_agent)}"
     )
     execution.append({"task_id": tid, "wp_invoke": cmd1, "status": "available"})
 
     # 2) Review dispatch (owner=pop agent; reviewer=review agent)
     cmd2 = (
-        f"./wp-plan-to-agent.sh --mode review --target {shlex.quote(review_provider)} "
+        f"{shlex.quote(invoker)} --mode review --target {shlex.quote(review_provider)} "
         f"--plan {shlex.quote(plan_path)} --agent {shlex.quote(pop_agent)} "
         f"--reviewer {shlex.quote(review_agent)}"
     )
@@ -215,14 +247,14 @@ for t in tasks:
 
     # 3) End review
     cmd3 = (
-        f"./wp-plan-to-agent.sh --mode review_end --plan {shlex.quote(plan_path)} "
+        f"{shlex.quote(invoker)} --mode review_end --plan {shlex.quote(plan_path)} "
         f"--task-id {shlex.quote(tid)} --review-note '${{WP_COMMENT:-}}'"
     )
     execution.append({"task_id": tid, "wp_invoke": cmd3, "status": "taken"})
 
     # 4) Complete
     cmd4 = (
-        f"./wp-plan-to-agent.sh --mode fin --plan {shlex.quote(plan_path)} "
+        f"{shlex.quote(invoker)} --mode fin --plan {shlex.quote(plan_path)} "
         f"--task-id {shlex.quote(tid)} --git-sha '${{GIT_SHA:-DEFERRED}}'"
     )
     execution.append({"task_id": tid, "wp_invoke": cmd4, "status": "completed"})

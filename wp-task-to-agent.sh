@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+WAVEPLAN_CLI_BIN="${WAVEPLAN_CLI_BIN:-}"
+
 usage() {
   cat <<'USAGE'
 Usage:
-  ./wp-task-to-agent.sh \
+  wp-task-to-agent.sh \
     --target <codex|claude|opencode> \
     --plan <plan.json> \
     --agent <agent-name> \
@@ -38,6 +41,9 @@ Environment (opencode target):
   OPENCODE_SERVER_PORT   Port for auto-serve (default: 4096)
   OPENCODE_SERVER_USERNAME / OPENCODE_SERVER_PASSWORD
                          Optional basic-auth credentials for attach requests
+
+Environment:
+  WAVEPLAN_CLI_BIN        Path to waveplan-cli (default: PATH lookup, then sibling file)
 USAGE
 }
 
@@ -110,6 +116,27 @@ if [[ ! -f "$PLAN" ]]; then
   exit 2
 fi
 
+if [[ -z "$WAVEPLAN_CLI_BIN" ]]; then
+  if command -v waveplan-cli >/dev/null 2>&1; then
+    WAVEPLAN_CLI_BIN="$(command -v waveplan-cli)"
+  elif [[ -x "$SCRIPT_DIR/waveplan-cli" ]]; then
+    WAVEPLAN_CLI_BIN="$SCRIPT_DIR/waveplan-cli"
+  elif [[ -f "$SCRIPT_DIR/waveplan-cli" ]]; then
+    WAVEPLAN_CLI_BIN="$SCRIPT_DIR/waveplan-cli"
+  fi
+fi
+
+if [[ -n "$WAVEPLAN_CLI_BIN" && ! -f "$WAVEPLAN_CLI_BIN" ]]; then
+  if command -v "$WAVEPLAN_CLI_BIN" >/dev/null 2>&1; then
+    WAVEPLAN_CLI_BIN="$(command -v "$WAVEPLAN_CLI_BIN")"
+  fi
+fi
+
+if [[ -z "$WAVEPLAN_CLI_BIN" || ! -f "$WAVEPLAN_CLI_BIN" ]]; then
+  echo "waveplan-cli not found. Set WAVEPLAN_CLI_BIN or install waveplan-cli in PATH." >&2
+  exit 2
+fi
+
 for bin in python3 "$TARGET"; do
   if ! command -v "$bin" >/dev/null 2>&1; then
     echo "Required command not found: $bin" >&2
@@ -117,10 +144,9 @@ for bin in python3 "$TARGET"; do
   fi
 done
 
-if ! [[ -f "waveplan-cli" ]]; then
-  echo "waveplan-cli not found in current directory" >&2
-  exit 2
-fi
+waveplan_cli() {
+  python3 "$WAVEPLAN_CLI_BIN" "$@"
+}
 
 json_has_error() {
   local payload="$1"
@@ -152,7 +178,7 @@ select_taken_task_for_agent() {
   local plan="$1"
   local agent="$2"
   local agent_tasks_json
-  agent_tasks_json="$(python3 ./waveplan-cli --plan "$plan" get "$agent")"
+  agent_tasks_json="$(waveplan_cli --plan "$plan" get "$agent")"
   if json_has_error "$agent_tasks_json"; then
     return 1
   fi
@@ -268,10 +294,10 @@ if [[ "$MODE" == "implement" ]]; then
     TASK_SOURCE="resume_taken"
   else
     if [[ "$DRY_RUN" == "1" ]]; then
-      TASK_JSON="$(python3 ./waveplan-cli --plan "$PLAN" peek)"
+      TASK_JSON="$(waveplan_cli --plan "$PLAN" peek)"
       TASK_SOURCE="peek"
     else
-      TASK_JSON="$(python3 ./waveplan-cli --plan "$PLAN" pop "$AGENT")"
+      TASK_JSON="$(waveplan_cli --plan "$PLAN" pop "$AGENT")"
       TASK_SOURCE="pop"
       if json_has_error "$TASK_JSON"; then
         ERR_MSG="$(json_error_message "$TASK_JSON")"
@@ -328,7 +354,7 @@ if [[ -z "$REVIEWER" ]]; then
   REVIEWER="$AGENT"
 fi
 
-AGENT_TASKS_JSON="$(python3 ./waveplan-cli --plan "$PLAN" get "$AGENT")"
+AGENT_TASKS_JSON="$(waveplan_cli --plan "$PLAN" get "$AGENT")"
 if json_has_error "$AGENT_TASKS_JSON"; then
   echo "waveplan get returned error payload:" >&2
   echo "$AGENT_TASKS_JSON" >&2
@@ -357,16 +383,16 @@ if [[ -z "$TASK_ID" || -z "$CURRENT_TASK_JSON" ]]; then
 fi
 
 if [[ "$DRY_RUN" == "1" ]]; then
-  REVIEW_RESULT_JSON="{\"dry_run\":true,\"would_run\":\"python3 ./waveplan-cli --plan $PLAN start_review $TASK_ID $REVIEWER\"}"
+  REVIEW_RESULT_JSON="{\"dry_run\":true,\"would_run\":\"python3 $WAVEPLAN_CLI_BIN --plan $PLAN start_review $TASK_ID $REVIEWER\"}"
   TASK_AFTER_JSON="{\"dry_run\":true,\"task_id\":\"$TASK_ID\"}"
 else
-  REVIEW_RESULT_JSON="$(python3 ./waveplan-cli --plan "$PLAN" start_review "$TASK_ID" "$REVIEWER")"
+  REVIEW_RESULT_JSON="$(waveplan_cli --plan "$PLAN" start_review "$TASK_ID" "$REVIEWER")"
   if json_has_error "$REVIEW_RESULT_JSON"; then
     echo "waveplan start_review returned error payload:" >&2
     echo "$REVIEW_RESULT_JSON" >&2
     exit 1
   fi
-  TASK_AFTER_JSON="$(python3 ./waveplan-cli --plan "$PLAN" get "task-$TASK_ID")"
+  TASK_AFTER_JSON="$(waveplan_cli --plan "$PLAN" get "task-$TASK_ID")"
 fi
 
 read -r -d '' PREAMBLE <<'TXT' || true

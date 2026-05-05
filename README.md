@@ -46,6 +46,27 @@ For a detailed guide on how to use this stack together, see [planstack.md](plans
 
 ## Quick Start
 
+### Install Artifacts
+
+Install the MCP server and helper scripts into `~/.local/bin`:
+
+```bash
+make install
+```
+
+Install only one side:
+
+```bash
+make install-bin
+make install-helpers
+```
+
+Remove helper scripts:
+
+```bash
+make uninstall-helpers
+```
+
 ### Build
 
 ```bash
@@ -109,14 +130,14 @@ Response:
 `waveplan-cli` is a Python CLI that proxies commands to the `waveplan-mcp` server over stdio. It provides the same interface as the original Python CLI while all logic is delegated to the Go-based MCP server.
 
 ```bash
-python waveplan-cli peek
-python waveplan-cli pop <agent>
-python waveplan-cli start_review <task_id> <reviewer>
-python waveplan-cli end_review <task_id> [review_note]
-python waveplan-cli fin <task_id> [git_sha]
-python waveplan-cli get [all|taken|open|complete|deptree|task-<id>|<agent>] [--json]
-python waveplan-cli deptree
-python waveplan-cli list_plans [--plan-dir <dir>]
+waveplan-cli peek
+waveplan-cli pop <agent>
+waveplan-cli start_review <task_id> <reviewer>
+waveplan-cli end_review <task_id> [review_note]
+waveplan-cli fin <task_id> [git_sha]
+waveplan-cli get [all|taken|open|complete|deptree|task-<id>|<agent>] [--json]
+waveplan-cli deptree
+waveplan-cli list_plans [--plan-dir <dir>]
 ```
 
 Configure the server binary path via `--mcp-bin`, `WAVEPLAN_MCP_BIN` env var, or it auto-detects `~/.local/bin/waveplan-mcp`. Set `--plan` or `WAVEPLAN_PLAN` to specify the plan file; otherwise it auto-detects from `docs/superpowers/plans/`.
@@ -128,23 +149,26 @@ Configure the server binary path via `--mcp-bin`, `WAVEPLAN_MCP_BIN` env var, or
 ```json
 {
   "execution": [
-    { "task_id": "T1.1", "wp_invoke": "./wp-plan-to-agent.sh ...", "status": "available" },
-    { "task_id": "T1.1", "wp_invoke": "./wp-plan-to-agent.sh ...", "status": "taken" },
-    { "task_id": "T1.1", "wp_invoke": "./wp-plan-to-agent.sh ...", "status": "taken" },
-    { "task_id": "T1.1", "wp_invoke": "./wp-plan-to-agent.sh ...", "status": "completed" }
+    { "task_id": "T1.1", "wp_invoke": "wp-plan-to-agent.sh ...", "status": "available" },
+    { "task_id": "T1.1", "wp_invoke": "wp-plan-to-agent.sh ...", "status": "taken" },
+    { "task_id": "T1.1", "wp_invoke": "wp-plan-to-agent.sh ...", "status": "taken" },
+    { "task_id": "T1.1", "wp_invoke": "wp-plan-to-agent.sh ...", "status": "completed" }
   ]
 }
 ```
 
 ```bash
 # emit all tasks from plan order (default)
-./wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json
+wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json
 
 # emit only currently open tasks
-./wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json --task-scope open
+wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json --task-scope open
 
 # write output JSON to file
-./wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json --out tmp.json
+wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json --out tmp.json
+
+# override emitted command path (optional)
+wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json --invoker /opt/tools/wp-plan-to-agent.sh
 ```
 
 `waveagents.json` supports:
@@ -161,21 +185,26 @@ Task scope:
 
 ```bash
 # 1) Dispatch implementation task to an agent target
-./wp-plan-to-agent.sh --mode implement --target codex --plan <plan.json> --agent sigma
+wp-plan-to-agent.sh --mode implement --target codex --plan <plan.json> --agent sigma
 
 # 2) Dispatch review task (owner agent + reviewer agent)
-./wp-plan-to-agent.sh --mode review --target claude --plan <plan.json> --agent sigma --reviewer psi
+wp-plan-to-agent.sh --mode review --target claude --plan <plan.json> --agent sigma --reviewer psi
 
 # 3) End review with optional note
-./wp-plan-to-agent.sh --mode review_end --plan <plan.json> --task-id T1.1 --review-note "looks good"
+wp-plan-to-agent.sh --mode review_end --plan <plan.json> --task-id T1.1 --review-note "looks good"
 
 # 4) Mark complete with optional git sha (or DEFERRED)
-./wp-plan-to-agent.sh --mode fin --plan <plan.json> --task-id T1.1 --git-sha DEFERRED
+wp-plan-to-agent.sh --mode fin --plan <plan.json> --task-id T1.1 --git-sha DEFERRED
 ```
 
 Supported targets for `--target`: `codex`, `claude`, `opencode`.
 
 Use `--dry-run` to print the generated command/prompt without mutating waveplan state.
+
+Portability overrides:
+- `WAVEPLAN_CLI_BIN`: path to `waveplan-cli` if not installed in PATH
+- `WP_TASK_TO_AGENT_BIN`: path to `wp-task-to-agent.sh`
+- `WP_PLAN_TO_AGENT_BIN`: command/path used by `wp-emit-wave-execution.sh`
 
 ## Tools
 
