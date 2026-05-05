@@ -316,16 +316,35 @@ func (s *WaveplanServer) handlePop(ctx context.Context, request mcp.CallToolRequ
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	agent, err := requiredStringParam(request.Params.Arguments, "agent")
+	trace := startLangSmithTrace("waveplan pop", map[string]any{
+		"plan_path": s.planPath,
+		"agent":     agent,
+	})
+	traceStatus := "error"
+	traceErr := ""
+	traceOut := map[string]any{}
+	defer func() {
+		traceOut["status"] = traceStatus
+		if traceErr != "" {
+			traceOut["error"] = traceErr
+		}
+		trace.finish(traceOut)
+	}()
+
+	if err != nil {
+		traceErr = err.Error()
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	if err := s.reloadState(); err != nil {
+		traceErr = fmt.Sprintf("failed to reload state: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to reload state: %v", err)), nil
 	}
 
-	agent, err := requiredStringParam(request.Params.Arguments, "agent")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
 	taskID := s.nextAvailableTask()
 	if taskID == "" {
+		traceStatus = "no_available_tasks"
 		return mcp.NewToolResultText(`{"error":"No available tasks."}`), nil
 	}
 	ts := nowStr()
@@ -335,12 +354,17 @@ func (s *WaveplanServer) handlePop(ctx context.Context, request mcp.CallToolRequ
 		GitSha:    s.serverGitSha,
 	}
 	if err := s.saveState(); err != nil {
+		traceErr = fmt.Sprintf("failed to save state: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to save state: %v", err)), nil
 	}
 	info := s.taskInfo(taskID)
 	info["claimed"] = true
 	info["taken_by"] = agent
 	info["started_at"] = ts
+	traceStatus = "ok"
+	traceOut["task_id"] = taskID
+	traceOut["taken_by"] = agent
+	traceOut["started_at"] = ts
 	data, _ := json.Marshal(info)
 	return mcp.NewToolResultText(string(data)), nil
 }
@@ -349,26 +373,49 @@ func (s *WaveplanServer) handleStartReview(ctx context.Context, request mcp.Call
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	taskID, err := requiredStringParam(request.Params.Arguments, "task_id")
+	reviewer, reviewErr := requiredStringParam(request.Params.Arguments, "reviewer")
+	trace := startLangSmithTrace("waveplan start_review", map[string]any{
+		"plan_path": s.planPath,
+		"task_id":   taskID,
+		"reviewer":  reviewer,
+	})
+	traceStatus := "error"
+	traceErr := ""
+	traceOut := map[string]any{}
+	defer func() {
+		traceOut["status"] = traceStatus
+		if traceErr != "" {
+			traceOut["error"] = traceErr
+		}
+		trace.finish(traceOut)
+	}()
+
+	if err != nil {
+		traceErr = err.Error()
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if reviewErr != nil {
+		traceErr = reviewErr.Error()
+		return mcp.NewToolResultError(reviewErr.Error()), nil
+	}
+
 	if err := s.reloadState(); err != nil {
+		traceErr = fmt.Sprintf("failed to reload state: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to reload state: %v", err)), nil
 	}
 
-	taskID, err := requiredStringParam(request.Params.Arguments, "task_id")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	reviewer, err := requiredStringParam(request.Params.Arguments, "reviewer")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
 	if _, ok := s.plan.Units[taskID]; !ok {
+		traceErr = fmt.Sprintf("task '%s' not found in plan", taskID)
 		return mcp.NewToolResultError(fmt.Sprintf("task '%s' not found in plan", taskID)), nil
 	}
 	taken, ok := s.state.Taken[taskID]
 	if !ok {
+		traceErr = fmt.Sprintf("task '%s' is not currently taken", taskID)
 		return mcp.NewToolResultError(fmt.Sprintf("task '%s' is not currently taken", taskID)), nil
 	}
 	if taken.ReviewEnteredAt != "" {
+		traceErr = fmt.Sprintf("review for %s already started", taskID)
 		return mcp.NewToolResultError(fmt.Sprintf("review for %s already started", taskID)), nil
 	}
 	ts := nowStr()
@@ -379,6 +426,7 @@ func (s *WaveplanServer) handleStartReview(ctx context.Context, request mcp.Call
 		Reviewer:        reviewer,
 	}
 	if err := s.saveState(); err != nil {
+		traceErr = fmt.Sprintf("failed to save state: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to save state: %v", err)), nil
 	}
 	unit := s.plan.Units[taskID]
@@ -389,6 +437,10 @@ func (s *WaveplanServer) handleStartReview(ctx context.Context, request mcp.Call
 		"reviewer":          reviewer,
 		"review_entered_at": ts,
 	}
+	traceStatus = "ok"
+	traceOut["task_id"] = taskID
+	traceOut["reviewer"] = reviewer
+	traceOut["review_entered_at"] = ts
 	data, _ := json.Marshal(result)
 	return mcp.NewToolResultText(string(data)), nil
 }
@@ -397,23 +449,46 @@ func (s *WaveplanServer) handleEndReview(ctx context.Context, request mcp.CallTo
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	taskID, err := requiredStringParam(request.Params.Arguments, "task_id")
+	reviewNote, _ := optionalStringParam(request.Params.Arguments, "review_note")
+	trace := startLangSmithTrace("waveplan end_review", map[string]any{
+		"plan_path":   s.planPath,
+		"task_id":     taskID,
+		"review_note": reviewNote,
+		"has_note":    reviewNote != "",
+	})
+	traceStatus := "error"
+	traceErr := ""
+	traceOut := map[string]any{}
+	defer func() {
+		traceOut["status"] = traceStatus
+		if traceErr != "" {
+			traceOut["error"] = traceErr
+		}
+		trace.finish(traceOut)
+	}()
+
+	if err != nil {
+		traceErr = err.Error()
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	if err := s.reloadState(); err != nil {
+		traceErr = fmt.Sprintf("failed to reload state: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to reload state: %v", err)), nil
 	}
 
-	taskID, err := requiredStringParam(request.Params.Arguments, "task_id")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	reviewNote, _ := optionalStringParam(request.Params.Arguments, "review_note")
 	if _, ok := s.plan.Units[taskID]; !ok {
+		traceErr = fmt.Sprintf("task '%s' not found in plan", taskID)
 		return mcp.NewToolResultError(fmt.Sprintf("task '%s' not found in plan", taskID)), nil
 	}
 	taken, ok := s.state.Taken[taskID]
 	if !ok {
+		traceErr = fmt.Sprintf("task '%s' is not currently taken", taskID)
 		return mcp.NewToolResultError(fmt.Sprintf("task '%s' is not currently taken", taskID)), nil
 	}
 	if taken.ReviewEnteredAt == "" {
+		traceErr = fmt.Sprintf("no active review for %s", taskID)
 		return mcp.NewToolResultError(fmt.Sprintf("no active review for %s", taskID)), nil
 	}
 	ts := nowStr()
@@ -426,6 +501,7 @@ func (s *WaveplanServer) handleEndReview(ctx context.Context, request mcp.CallTo
 		ReviewNote:      reviewNote,
 	}
 	if err := s.saveState(); err != nil {
+		traceErr = fmt.Sprintf("failed to save state: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to save state: %v", err)), nil
 	}
 	unit := s.plan.Units[taskID]
@@ -437,6 +513,10 @@ func (s *WaveplanServer) handleEndReview(ctx context.Context, request mcp.CallTo
 		"review_ended_at": ts,
 		"review_note":     reviewNote,
 	}
+	traceStatus = "ok"
+	traceOut["task_id"] = taskID
+	traceOut["reviewer"] = taken.Reviewer
+	traceOut["review_ended_at"] = ts
 	data, _ := json.Marshal(result)
 	return mcp.NewToolResultText(string(data)), nil
 }
@@ -446,19 +526,39 @@ func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequ
 	defer s.mu.Unlock()
 
 	taskID, err := requiredStringParam(request.Params.Arguments, "task_id")
+	gitSha, _ := optionalStringParam(request.Params.Arguments, "git_sha")
+	trace := startLangSmithTrace("waveplan fin", map[string]any{
+		"plan_path": s.planPath,
+		"task_id":   taskID,
+		"git_sha":   gitSha,
+	})
+	traceStatus := "error"
+	traceErr := ""
+	traceOut := map[string]any{}
+	defer func() {
+		traceOut["status"] = traceStatus
+		if traceErr != "" {
+			traceOut["error"] = traceErr
+		}
+		trace.finish(traceOut)
+	}()
+
 	if err != nil {
+		traceErr = err.Error()
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	gitSha, _ := optionalStringParam(request.Params.Arguments, "git_sha")
 	if _, ok := s.plan.Units[taskID]; !ok {
+		traceErr = fmt.Sprintf("task '%s' not found in plan", taskID)
 		return mcp.NewToolResultError(fmt.Sprintf("task '%s' not found in plan", taskID)), nil
 	}
 	if _, ok := s.state.Completed[taskID]; ok {
+		traceErr = fmt.Sprintf("task %s is already completed", taskID)
 		return mcp.NewToolResultError(fmt.Sprintf("task %s is already completed", taskID)), nil
 	}
 	unit := s.plan.Units[taskID]
 	for _, dep := range unit.DependsOn {
 		if _, ok := s.state.Completed[dep]; !ok {
+			traceErr = fmt.Sprintf("task %s has incomplete dependencies: %s", taskID, strings.Join(unit.DependsOn, ", "))
 			return mcp.NewToolResultError(fmt.Sprintf("task %s has incomplete dependencies: %s", taskID, strings.Join(unit.DependsOn, ", "))), nil
 		}
 	}
@@ -466,6 +566,7 @@ func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequ
 	reviewEntered := taken.ReviewEnteredAt
 	reviewEnded := taken.ReviewEndedAt
 	if reviewEntered != "" && reviewEnded == "" {
+		traceErr = fmt.Sprintf("task %s has an active review. End review before completing.", taskID)
 		return mcp.NewToolResultError(fmt.Sprintf("task %s has an active review. End review before completing.", taskID)), nil
 	}
 	ts := nowStr()
@@ -481,8 +582,13 @@ func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequ
 		ReviewEndedAt:   reviewEnded,
 		Reviewer:        taken.Reviewer,
 		ReviewNote:      taken.ReviewNote,
-		GitSha:          func() string { if gitSha != "" { return gitSha }; return s.serverGitSha }(),
-		FinishedAt:      ts,
+		GitSha: func() string {
+			if gitSha != "" {
+				return gitSha
+			}
+			return s.serverGitSha
+		}(),
+		FinishedAt: ts,
 	}
 	if s.state.Tail == nil {
 		s.state.Tail = make(map[string]TaskEntry)
@@ -490,6 +596,7 @@ func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequ
 	s.state.Tail[taskID] = taken
 	delete(s.state.Taken, taskID)
 	if err := s.saveState(); err != nil {
+		traceErr = fmt.Sprintf("failed to save state: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to save state: %v", err)), nil
 	}
 	result := map[string]any{
@@ -499,6 +606,10 @@ func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequ
 		"finished_at": ts,
 		"git_sha":     gitSha,
 	}
+	traceStatus = "ok"
+	traceOut["task_id"] = taskID
+	traceOut["finished_at"] = ts
+	traceOut["git_sha"] = gitSha
 	data, _ := json.Marshal(result)
 	return mcp.NewToolResultText(string(data)), nil
 }

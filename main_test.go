@@ -2,11 +2,57 @@ package main
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+type traceRequest struct {
+	Method string
+	Path   string
+	Body   map[string]any
+}
+
+func startTraceServer(t *testing.T) (*httptest.Server, *[]traceRequest) {
+	t.Helper()
+	var (
+		mu       sync.Mutex
+		requests []traceRequest
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("ReadAll request body: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var payload map[string]any
+		if len(body) > 0 {
+			if err := json.Unmarshal(body, &payload); err != nil {
+				t.Errorf("json.Unmarshal trace body: %v\nbody=%s", err, body)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		mu.Lock()
+		requests = append(requests, traceRequest{
+			Method: r.Method,
+			Path:   r.URL.Path,
+			Body:   payload,
+		})
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+	return server, &requests
+}
 
 // makeTestServer creates a WaveplanServer with the given plan JSON bytes.
 func makeTestServer(t *testing.T, planJSON []byte) *WaveplanServer {
@@ -22,9 +68,9 @@ func makeTestServer(t *testing.T, planJSON []byte) *WaveplanServer {
 		Tail:      make(map[string]TaskEntry),
 	}
 	return &WaveplanServer{
-		plan:     &plan,
-		state:    state,
-		planPath: "test-plan.json",
+		plan:      &plan,
+		state:     state,
+		planPath:  "test-plan.json",
 		statePath: "",
 	}
 }
@@ -551,6 +597,92 @@ func TestFinRecordsTail(t *testing.T) {
 	}
 	if tailEntry.ReviewNote != "looks good" {
 		t.Errorf("tail review_note should be 'looks good', got '%s'", tailEntry.ReviewNote)
+	}
+}
+
+func TestExecutionReviewLoop_TracesToLangSmith(t *testing.T) {
+	server, requests := startTraceServer(t)
+	t.Setenv("LANGSMITH_TRACING", "true")
+	t.Setenv("LANGSMITH_API_KEY", "test-key")
+	t.Setenv("LANGSMITH_ENDPOINT", server.URL)
+	t.Setenv("LANGSMITH_PROJECT", "waveplan-test")
+
+	planJSON := []byte(`{
+		"units": {
+			"T1.1": {"task": "T1", "title": "Task 1", "kind": "impl", "wave": 1, "plan_line": 10, "depends_on": [], "doc_refs": [], "fp_refs": [], "notes": []}
+		},
+		"tasks": {"T1": {"plan_line": 10}},
+		"doc_index": {},
+		"fp_index": {}
+	}`)
+	srv := makeTestServer(t, planJSON)
+
+	// pop
+	_, err := srv.handlePop(nil, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{"agent": "sigma"}},
+	})
+	if err != nil {
+		t.Fatalf("handlePop returned error: %v", err)
+	}
+
+	// start review
+	_, err = srv.handleStartReview(nil, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{"task_id": "T1.1", "reviewer": "psi"}},
+	})
+	if err != nil {
+		t.Fatalf("handleStartReview returned error: %v", err)
+	}
+
+	// end review
+	_, err = srv.handleEndReview(nil, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{"task_id": "T1.1", "review_note": "ok"}},
+	})
+	if err != nil {
+		t.Fatalf("handleEndReview returned error: %v", err)
+	}
+
+	// fin
+	_, err = srv.handleFin(nil, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{"task_id": "T1.1", "git_sha": "abc1234"}},
+	})
+	if err != nil {
+		t.Fatalf("handleFin returned error: %v", err)
+	}
+
+	if got, want := len(*requests), 8; got != want {
+		t.Fatalf("trace request count = %d, want %d: %#v", got, want, *requests)
+	}
+
+	for i, req := range *requests {
+		if i%2 == 0 {
+			if req.Method != http.MethodPost || req.Path != "/runs" {
+				t.Fatalf("request[%d] = %s %s, want POST /runs", i, req.Method, req.Path)
+			}
+		} else {
+			if req.Method != http.MethodPatch || !strings.HasPrefix(req.Path, "/runs/") {
+				t.Fatalf("request[%d] = %s %s, want PATCH /runs/<id>", i, req.Method, req.Path)
+			}
+			outputs, ok := req.Body["outputs"].(map[string]any)
+			if !ok {
+				t.Fatalf("request[%d] outputs = %#v, want object", i, req.Body["outputs"])
+			}
+			if outputs["status"] != "ok" {
+				t.Fatalf("request[%d] outputs.status = %#v, want ok", i, outputs["status"])
+			}
+		}
+	}
+
+	if (*requests)[0].Body["name"] != "waveplan pop" {
+		t.Fatalf("trace start[0] name = %#v, want waveplan pop", (*requests)[0].Body["name"])
+	}
+	if (*requests)[2].Body["name"] != "waveplan start_review" {
+		t.Fatalf("trace start[2] name = %#v, want waveplan start_review", (*requests)[2].Body["name"])
+	}
+	if (*requests)[4].Body["name"] != "waveplan end_review" {
+		t.Fatalf("trace start[4] name = %#v, want waveplan end_review", (*requests)[4].Body["name"])
+	}
+	if (*requests)[6].Body["name"] != "waveplan fin" {
+		t.Fatalf("trace start[6] name = %#v, want waveplan fin", (*requests)[6].Body["name"])
 	}
 }
 
