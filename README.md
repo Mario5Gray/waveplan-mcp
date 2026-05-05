@@ -121,6 +121,62 @@ python waveplan-cli list_plans [--plan-dir <dir>]
 
 Configure the server binary path via `--mcp-bin`, `WAVEPLAN_MCP_BIN` env var, or it auto-detects `~/.local/bin/waveplan-mcp`. Set `--plan` or `WAVEPLAN_PLAN` to specify the plan file; otherwise it auto-detects from `docs/superpowers/plans/`.
 
+### Helper: `wp-emit-wave-execution.sh`
+
+`wp-emit-wave-execution.sh` emits (does not execute) a sequential workflow JSON for plan tasks:
+
+```json
+{
+  "execution": [
+    { "task_id": "T1.1", "wp_invoke": "./wp-plan-to-agent.sh ...", "status": "available" },
+    { "task_id": "T1.1", "wp_invoke": "./wp-plan-to-agent.sh ...", "status": "taken" },
+    { "task_id": "T1.1", "wp_invoke": "./wp-plan-to-agent.sh ...", "status": "taken" },
+    { "task_id": "T1.1", "wp_invoke": "./wp-plan-to-agent.sh ...", "status": "completed" }
+  ]
+}
+```
+
+```bash
+# emit all tasks from plan order (default)
+./wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json
+
+# emit only currently open tasks
+./wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json --task-scope open
+
+# write output JSON to file
+./wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json --out tmp.json
+```
+
+`waveagents.json` supports:
+- `agents`: list of `{name, provider}` where provider is `codex|claude|opencode`
+- `schedule` (optional): explicit rotation order
+
+Task scope:
+- `all` (default): includes every unit/task in `(wave, task_id)` order
+- `open`: includes only claimable tasks from `waveplan-cli get open`
+
+### Helper: `wp-plan-to-agent.sh`
+
+`wp-plan-to-agent.sh` is a unified wrapper for agent-dispatch + lifecycle commands.
+
+```bash
+# 1) Dispatch implementation task to an agent target
+./wp-plan-to-agent.sh --mode implement --target codex --plan <plan.json> --agent sigma
+
+# 2) Dispatch review task (owner agent + reviewer agent)
+./wp-plan-to-agent.sh --mode review --target claude --plan <plan.json> --agent sigma --reviewer psi
+
+# 3) End review with optional note
+./wp-plan-to-agent.sh --mode review_end --plan <plan.json> --task-id T1.1 --review-note "looks good"
+
+# 4) Mark complete with optional git sha (or DEFERRED)
+./wp-plan-to-agent.sh --mode fin --plan <plan.json> --task-id T1.1 --git-sha DEFERRED
+```
+
+Supported targets for `--target`: `codex`, `claude`, `opencode`.
+
+Use `--dry-run` to print the generated command/prompt without mutating waveplan state.
+
 ## Tools
 
 | Tool | Description |

@@ -1,0 +1,96 @@
+Using `caveman full`.
+
+Good direction. `dagdir` make plan-head. `wp` make deterministic editor + MCP surface.
+
+**Core shape**
+- One canonical plan doc per `plan_id`.
+- Plan fields: `plan_id`, `name`, `schema_version`, `created_at`, `updated_at`, `revision`, `tasks[]`, `meta`.
+- Task fields: `task_id`, `title`, `kind`, `depends_on[]`, `owner?`, `wave?`, `status`, `notes?`.
+- Every write bump `revision`. No silent merge.
+
+**CLI flow**
+1. `wp plan new #PLAN_NAME`
+- Validate name.
+- Create empty plan with `revision=1`.
+- Persist file.
+- Return `plan_id + path + revision`.
+
+2. `wp plan init #PLAN_NAME <blob>`
+- Parse blob (`json|yaml|markdown-extract`).
+- Normalize into canonical task objects.
+- Validate IDs/deps/duplicates/cycles.
+- Write full plan snapshot.
+- Return created task count + warnings.
+
+3. `wp plan add_task #PLAN_ID <blob>`
+- Load plan + lock.
+- Parse/normalize new task(s).
+- Validate against existing graph.
+- Append task(s), recompute derived fields (wave/depth if needed).
+- Persist, bump revision.
+- Return added IDs + new revision.
+
+4. `wp plan rem_task #PLAN_ID <TASK_ID>`
+- Load plan + lock.
+- Check inbound deps.
+- If inbound deps exist: fail hard unless `--cascade` or `--relink`.
+- Apply mutation.
+- Persist, bump revision.
+- Return removed ID + impacted IDs.
+
+**MCP actions (agent-safe)**
+1. `plan_create`
+- Input: `name`, optional `meta`.
+- Output: `plan_id`, `revision`.
+
+2. `plan_init`
+- Input: `plan_id|name`, `elements_blob`, `format`.
+- Output: `revision`, `created_tasks`, `issues`.
+
+3. `plan_add_tasks`
+- Input: `plan_id`, `tasks[]` or blob.
+- Output: `revision`, `added_ids`, `warnings`.
+
+4. `plan_remove_task`
+- Input: `plan_id`, `task_id`, mode `strict|cascade|relink`.
+- Output: `revision`, `removed`, `impacted`.
+
+5. `plan_get`
+- Input: `plan_id`, optional view `full|summary|task`.
+- Output: normalized plan snapshot.
+
+6. `plan_validate`
+- Input: `plan_id`.
+- Output: `ok`, `errors[]`, `warnings[]`.
+
+7. `plan_suggest_questions`
+- Input: partial task/plan object.
+- Output: missing required fields as question prompts.
+
+**Agent question loop**
+- Agent calls `plan_suggest_questions`.
+- MCP returns minimal unanswered set only.
+- Agent asks user.
+- Agent resubmits via `plan_add_tasks` or `plan_init`.
+- Repeat until `plan_validate.ok=true`.
+
+**Determinism rules**
+- Stable ID strategy: slug + counter or UUIDv7. Pick one. Lock early.
+- Last-write-wins not enough. Require `expected_revision` on mutating MCP calls.
+- If mismatch: return conflict + latest revision + diff hint.
+- All mutations append audit event (`who`, `when`, `op`, `before`, `after` hash).
+
+**Big bug traps to avoid**
+- Removing task with dependents and no policy.
+- Adding deps to nonexistent IDs.
+- Silent auto-cycle creation.
+- Non-idempotent retries from agent/tool timeout.
+
+**Fast MVP cut**
+1. Build canonical JSON schema.
+2. Implement `new/init/add/rem/get/validate`.
+3. Add `expected_revision` optimistic concurrency.
+4. Add `plan_suggest_questions`.
+5. Add golden tests for cycle/remove/conflict/retry-idempotency.
+
+If want, next step I draft exact MCP request/response JSON contracts for all 7 actions.

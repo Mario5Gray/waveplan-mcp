@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-05-04",
+  "plan": {
+    "id": "waveplan-test-hello",
+    "title": "Test Plan — Hello World",
+    "notes": ["Simple 2-task plan for testing waveplan-mcp tooling."]
+  },
+  "fp_index": {},
+  "doc_index": {},
+  "waves": [
+    {
+      "wave": 1,
+      "units": ["T1.1", "T1.2"]
+    }
+  ],
+  "units": {
+    "T1.1": {
+      "task": "test-hello",
+      "title": "Print hello world",
+      "kind": "test",
+      "wave": 1,
+      "plan_line": 1,
+      "depends_on": [],
+      "doc_refs": [],
+      "fp_refs": [],
+      "notes": ["Print 'hello world' to stdout."]
+    },
+    "T1.2": {
+      "task": "test-hello",
+      "title": "Print goodbye world",
+      "kind": "test",
+      "wave": 1,
+      "plan_line": 2,
+      "depends_on": [],
+      "doc_refs": [],
+      "fp_refs": [],
+      "notes": ["Print 'goodbye world' to stdout."]
+    }
+  },
+  "tasks": {
+    "test-hello": {
+      "plan_line": 1,
+      "title": "Test plan — hello world",
+      "description": "Simple 2-task test plan."
+    }
+  }
+}

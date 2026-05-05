@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-05-04",
+  "plan": {
+    "id": "waveplan-tail-state-hotfix",
+    "title": "Tail-State Hotfix — Record 'taken' before removal on fin",
+    "notes": [
+      "HOTFIX: Add 'tail' field to state file. On fin, record taken entry into tail before deleting from taken.",
+      "Convention: tail uses same structure as taken/completed (TaskEntry).",
+      "2 tasks: add tail to state struct + implement tail recording in handleFin."
+    ]
+  },
+  "fp_index": {},
+  "doc_index": {
+    "plan": {
+      "path": "2026-05-04-waveplan-tail-state-hotfix-execution-waves.json",
+      "line": 1,
+      "kind": "plan"
+    },
+    "main_go": {
+      "path": "main.go",
+      "line": 24,
+      "kind": "code"
+    },
+    "main_test": {
+      "path": "main_test.go",
+      "line": 1,
+      "kind": "test"
+    }
+  },
+  "waves": [
+    {
+      "wave": 1,
+      "units": ["T1.1", "T1.2"]
+    }
+  ],
+  "units": {
+    "T1.1": {
+      "task": "waveplan-tail-state-hotfix",
+      "title": "Add 'tail' field to WaveplanState struct",
+      "kind": "code",
+      "wave": 1,
+      "plan_line": 1,
+      "depends_on": [],
+      "doc_refs": ["main_go"],
+      "fp_refs": [],
+      "notes": [
+        "Add Tail map[string]TaskEntry to WaveplanState struct (main.go:24).",
+        "Same structure as Taken/Completed — uses TaskEntry type.",
+        "JSON tag: 'tail'.",
+        "Initialize in NewWaveplanServer: Tail: make(map[string]TaskEntry)."
+      ]
+    },
+    "T1.2": {
+      "task": "waveplan-tail-state-hotfix",
+      "title": "Record taken entry into tail before deletion in handleFin",
+      "kind": "code",
+      "wave": 1,
+      "plan_line": 2,
+      "depends_on": ["T1.1"],
+      "doc_refs": ["main_go", "main_test"],
+      "fp_refs": [],
+      "notes": [
+        "In handleFin (main.go:434), before delete(s.state.Taken, taskID), copy taken entry to s.state.Tail[taskID].",
+        "Store copy in s.state.Tail[taskID] = taken (the entry being removed).",
+        "Add test: verify tail entry exists after fin, matches pre-fin taken entry.",
+        "ReloadState must also merge Tail entries from disk (like Taken/Completed)."
+      ]
+    }
+  },
+  "tasks": {
+    "waveplan-tail-state-hotfix": {
+      "plan_line": 1,
+      "title": "Tail-state hotfix: record taken before removal on fin",
+      "description": "Add 'tail' field to state, record taken entry before deletion in handleFin, add test coverage."
+    }
+  }
+}

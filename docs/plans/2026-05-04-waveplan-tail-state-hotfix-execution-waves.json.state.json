@@ -1,0 +1,25 @@
+{
+  "plan": "2026-05-04-waveplan-tail-state-hotfix-execution-waves.json",
+  "taken": {},
+  "completed": {
+    "T1.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-04 16:30",
+      "review_entered_at": "2026-05-04 16:40",
+      "review_ended_at": "2026-05-04 16:55",
+      "reviewer": "sigma",
+      "git_sha": "11a9bed",
+      "finished_at": "2026-05-04 16:56"
+    },
+    "T1.2": {
+      "taken_by": "theta",
+      "started_at": "2026-05-04 17:07",
+      "review_entered_at": "2026-05-04 17:13",
+      "review_ended_at": "2026-05-04 17:21",
+      "reviewer": "phi",
+      "review_note": "Done. Full T1.2 review added to FP-bhhozffo as a comment. The agent in that log failed because it couldn't resolve the FP issue ID — it was looking at fp_refs (empty) instead of checking fp tree for the actual issue.",
+      "git_sha": "8f041f6",
+      "finished_at": "2026-05-04 17:38"
+    }
+  }
+}

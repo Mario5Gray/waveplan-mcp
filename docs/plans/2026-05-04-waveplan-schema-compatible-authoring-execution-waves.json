@@ -1,0 +1,1539 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-05-04",
+  "plan": {
+    "id": "waveplan-schema-compatible-authoring",
+    "title": "Waveplan Schema-Compatible Plan Authoring Implementation",
+    "plan_doc": {
+      "path": "docs/specs/2026-05-04-waveplan-schema-compatible-authoring-implementation-plan.md",
+      "line": 1
+    },
+    "spec_doc": {
+      "path": "docs/specs/waveplan-plan-schema.json",
+      "line": 1
+    },
+    "notes": [
+      "Goal: Add deterministic plan-authoring capabilities (new/init/add/remove/get/validate/suggest_questions/list) that emit and preserve files fully compatible with waveplan-plan-schema.json and existing runtime execution tools.",
+      "Architecture: Keep execution-state behavior intact (waveplan_* tools) and add a separate authoring service layer in Go.",
+      "Persist schema-required plan JSON unchanged, while storing concurrency/idempotency/audit metadata in sidecars so output remains schema-valid.",
+      "Expose new authoring MCP tools from main.go, then proxy them via waveplan-cli wp plan ... commands.",
+      "Tech stack: Go 1.26, mcp-go, standard library JSON/file I/O, JSON schema-compatible strict decode/validation, table-driven tests with go test.",
+      "Design boundary: main.go stays MCP transport + current runtime tools. internal/planedit/* owns authoring logic, validation, locking, sidecars. waveplan-cli remains thin transport proxy with new subcommands only."
+    ]
+  },
+  "fp_index": {},
+  "doc_index": {
+    "plan": {
+      "path": "docs/specs/2026-05-04-waveplan-schema-compatible-authoring-implementation-plan.md",
+      "line": 1,
+      "kind": "plan"
+    },
+    "plan_schema": {
+      "path": "docs/specs/waveplan-plan-schema.json",
+      "line": 1,
+      "kind": "spec"
+    },
+    "state_schema": {
+      "path": "docs/specs/waveplan-state-schema.json",
+      "line": 1,
+      "kind": "spec"
+    },
+    "types": {
+      "path": "internal/planedit/types.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "types_test": {
+      "path": "internal/planedit/types_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    "validate": {
+      "path": "internal/planedit/validate.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "validate_test": {
+      "path": "internal/planedit/validate_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    "errors": {
+      "path": "internal/planedit/errors.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "graph": {
+      "path": "internal/planedit/graph.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "graph_test": {
+      "path": "internal/planedit/graph_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    "store": {
+      "path": "internal/planedit/store.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "store_test": {
+      "path": "internal/planedit/store_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    "service": {
+      "path": "internal/planedit/service.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "service_test": {
+      "path": "internal/planedit/service_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    "main": {
+      "path": "main.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "main_test": {
+      "path": "main_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    "cli": {
+      "path": "waveplan-cli",
+      "line": 1,
+      "kind": "code"
+    },
+    "readme": {
+      "path": "README.md",
+      "line": 1,
+      "kind": "doc"
+    },
+    "mcp_contracts": {
+      "path": "adocs/specs/waveplan-plan-authoring-mcp-contracts.md",
+      "line": 1,
+      "kind": "doc"
+    },
+    "go_mod": {
+      "path": "go.mod",
+      "line": 1,
+      "kind": "code"
+    },
+    "budget": {
+      "path": "internal/planedit/budget.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "budget_test": {
+      "path": "internal/planedit/budget_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    "budget_contracts": {
+      "path": "adocs/specs/waveplan-plan-authoring-mcp-contracts.md",
+      "line": 1,
+      "kind": "doc"
+    }
+  },
+  "tasks": {
+    "T1": {
+      "title": "Add Plan Authoring Types and Strict Schema Decode",
+      "plan_line": 39,
+      "doc_refs": [
+        "plan",
+        "plan_schema",
+        "types",
+        "types_test"
+      ],
+      "files": [
+        "internal/planedit/types.go",
+        "internal/planedit/types_test.go"
+      ]
+    },
+    "T2": {
+      "title": "Implement Schema-Level Validation (IDs, kinds, deps, refs)",
+      "plan_line": 150,
+      "doc_refs": [
+        "plan",
+        "plan_schema",
+        "validate",
+        "errors",
+        "validate_test"
+      ],
+      "files": [
+        "internal/planedit/validate.go",
+        "internal/planedit/errors.go",
+        "internal/planedit/validate_test.go"
+      ]
+    },
+    "T3": {
+      "title": "Add Graph Validation and Deterministic Wave/Depth Recompute",
+      "plan_line": 256,
+      "doc_refs": [
+        "plan",
+        "graph",
+        "graph_test"
+      ],
+      "files": [
+        "internal/planedit/graph.go",
+        "internal/planedit/graph_test.go"
+      ]
+    },
+    "T4": {
+      "title": "Add Sidecar Control Store (Revision, Idempotency, Audit)",
+      "plan_line": 374,
+      "doc_refs": [
+        "plan",
+        "store",
+        "store_test"
+      ],
+      "files": [
+        "internal/planedit/store.go",
+        "internal/planedit/store_test.go"
+      ]
+    },
+    "T5": {
+      "title": "Implement Authoring Service (create/init/add/remove/get/validate/list/suggest)",
+      "plan_line": 495,
+      "doc_refs": [
+        "plan",
+        "service",
+        "service_test"
+      ],
+      "files": [
+        "internal/planedit/service.go",
+        "internal/planedit/service_test.go"
+      ]
+    },
+    "T6": {
+      "title": "Expose New MCP Tools in main.go",
+      "plan_line": 610,
+      "doc_refs": [
+        "plan",
+        "main",
+        "main_test"
+      ],
+      "files": [
+        "main.go",
+        "main_test.go"
+      ]
+    },
+    "T7": {
+      "title": "Extend waveplan-cli with wp plan ... Authoring Commands",
+      "plan_line": 680,
+      "doc_refs": [
+        "plan",
+        "cli"
+      ],
+      "files": [
+        "waveplan-cli"
+      ]
+    },
+    "T8": {
+      "title": "Document Contracts and End-to-End Verification",
+      "plan_line": 733,
+      "doc_refs": [
+        "plan",
+        "mcp_contracts",
+        "readme"
+      ],
+      "files": [
+        "adocs/specs/waveplan-plan-authoring-mcp-contracts.md",
+        "README.md"
+      ]
+    },
+    "T9": {
+      "title": "Implement Remaining Authoring Operations End-to-End",
+      "plan_line": 791,
+      "doc_refs": [
+        "plan",
+        "service",
+        "main",
+        "cli"
+      ],
+      "files": [
+        "internal/planedit/service.go",
+        "internal/planedit/service_test.go",
+        "main.go",
+        "main_test.go",
+        "waveplan-cli"
+      ]
+    },
+    "T10": {
+      "title": "Add Determinism and Conflict Tests for Authoring Surface",
+      "plan_line": 1010,
+      "doc_refs": [
+        "plan",
+        "store_test",
+        "service_test",
+        "main_test"
+      ],
+      "files": [
+        "internal/planedit/store_test.go",
+        "internal/planedit/service_test.go",
+        "main_test.go",
+        "main.go"
+      ]
+    },
+    "T11": {
+      "title": "Add 16k Context Fit Classification and Budget Reporting",
+      "plan_line": 1118,
+      "doc_refs": [
+        "plan",
+        "budget_contracts",
+        "readme"
+      ],
+      "files": [
+        "internal/planedit/budget.go",
+        "internal/planedit/budget_test.go",
+        "internal/planedit/service.go",
+        "main.go",
+        "main_test.go",
+        "waveplan-cli",
+        "README.md",
+        "adocs/specs/waveplan-plan-authoring-mcp-contracts.md"
+      ]
+    }
+  },
+  "waves": [
+    {
+      "wave": 1,
+      "units": [
+        "T1.1",
+        "T1.2",
+        "T1.3",
+        "T1.4",
+        "T1.5"
+      ]
+    },
+    {
+      "wave": 2,
+      "units": [
+        "T2.1",
+        "T2.2",
+        "T2.3",
+        "T2.4",
+        "T2.5"
+      ]
+    },
+    {
+      "wave": 3,
+      "units": [
+        "T3.1",
+        "T3.2",
+        "T3.3",
+        "T3.4",
+        "T3.5"
+      ]
+    },
+    {
+      "wave": 4,
+      "units": [
+        "T4.1",
+        "T4.2",
+        "T4.3",
+        "T4.4",
+        "T4.5"
+      ]
+    },
+    {
+      "wave": 5,
+      "units": [
+        "T5.1",
+        "T5.2",
+        "T5.3",
+        "T5.4",
+        "T5.5"
+      ]
+    },
+    {
+      "wave": 6,
+      "units": [
+        "T6.1",
+        "T6.2",
+        "T6.3",
+        "T6.4",
+        "T6.5"
+      ]
+    },
+    {
+      "wave": 7,
+      "units": [
+        "T7.1",
+        "T7.2",
+        "T7.3",
+        "T7.4",
+        "T7.5"
+      ]
+    },
+    {
+      "wave": 8,
+      "units": [
+        "T8.1",
+        "T8.2",
+        "T8.3",
+        "T8.4",
+        "T8.5"
+      ]
+    },
+    {
+      "wave": 9,
+      "units": [
+        "T9.1",
+        "T9.2",
+        "T9.3",
+        "T9.4",
+        "T9.5"
+      ]
+    },
+    {
+      "wave": 10,
+      "units": [
+        "T10.1",
+        "T10.2",
+        "T10.3",
+        "T10.4",
+        "T10.5"
+      ]
+    },
+    {
+      "wave": 11,
+      "units": [
+        "T11.1",
+        "T11.2",
+        "T11.3",
+        "T11.4",
+        "T11.5"
+      ]
+    }
+  ],
+  "units": {
+    "T1.1": {
+      "task": "T1",
+      "title": "Write failing tests for strict decode and required top-level sections",
+      "kind": "test",
+      "wave": 1,
+      "depends_on": [],
+      "doc_refs": [
+        "plan",
+        "types_test"
+      ],
+      "notes": [
+        "Create internal/planedit/types_test.go",
+        "Test 1: TestDecodePlan_RejectsUnknownTopLevelField \u2014 input with 'oops' field should error",
+        "Test 2: TestDecodePlan_RequiresSchemaSections \u2014 input missing doc_index/fp_index should error",
+        "Required test functions: TestDecodePlan_RejectsUnknownTopLevelField, TestDecodePlan_RequiresSchemaSections",
+        "Input JSON for unknown field test: {\"units\":{},\"tasks\":{},\"doc_index\":{},\"fp_index\":{},\"oops\":1}",
+        "Input JSON for missing sections test: {\"units\":{},\"tasks\":{}}"
+      ],
+      "plan_line": 39
+    },
+    "T1.2": {
+      "task": "T1",
+      "title": "Run tests to verify failure",
+      "kind": "verify",
+      "wave": 1,
+      "depends_on": [
+        "T1.1"
+      ],
+      "doc_refs": [
+        "plan",
+        "types_test"
+      ],
+      "command": "go test ./internal/planedit -run DecodePlan -v",
+      "notes": [
+        "Expected: FAIL with undefined DecodePlanStrict",
+        "This is the red phase of TDD \u2014 verify tests compile but fail"
+      ],
+      "plan_line": 39
+    },
+    "T1.3": {
+      "task": "T1",
+      "title": "Implement schema-compatible types and strict decoder",
+      "kind": "impl",
+      "wave": 1,
+      "depends_on": [
+        "T1.2"
+      ],
+      "doc_refs": [
+        "plan",
+        "plan_schema",
+        "types"
+      ],
+      "notes": [
+        "Create internal/planedit/types.go",
+        "PlanFile struct: SchemaVersion (int, omitempty), GeneratedOn (string, omitempty), Plan (map[string]any, omitempty), Units (map[string]PlanUnit), Tasks (map[string]map[string]any), DocIndex (map[string]DocRef), FpIndex (map[string]string), Waves ([]WaveDecl, omitempty)",
+        "PlanUnit struct: Task, Title, Kind, Wave, PlanLine, DependsOn ([]string), DocRefs ([]string, omitempty), FpRefs ([]string, omitempty), Notes ([]string, omitempty), Command (string, omitempty)",
+        "DocRef struct: Path (string), Line (int), Kind (string)",
+        "WaveDecl struct: Wave (int), Units ([]string)",
+        "DecodePlanStrict: uses json.NewDecoder with DisallowUnknownFields(), validates Units/Tasks/DocIndex/FpIndex are non-nil",
+        "Import: bytes, encoding/json, fmt"
+      ],
+      "plan_line": 39
+    },
+    "T1.4": {
+      "task": "T1",
+      "title": "Re-run tests",
+      "kind": "verify",
+      "wave": 1,
+      "depends_on": [
+        "T1.3"
+      ],
+      "doc_refs": [
+        "plan",
+        "types_test"
+      ],
+      "command": "go test ./internal/planedit -run DecodePlan -v",
+      "notes": [
+        "Expected: PASS",
+        "Both strict decode tests should pass"
+      ],
+      "plan_line": 39
+    },
+    "T1.5": {
+      "task": "T1",
+      "title": "Commit T1",
+      "kind": "verify",
+      "wave": 1,
+      "depends_on": [
+        "T1.4"
+      ],
+      "doc_refs": [
+        "plan"
+      ],
+      "command": "git add internal/planedit/types.go internal/planedit/types_test.go && git commit -m \"feat(planedit): add schema-compatible plan types and strict decoder\"",
+      "notes": [
+        "Commit message: feat(planedit): add schema-compatible plan types and strict decoder",
+        "Files: internal/planedit/types.go, internal/planedit/types_test.go"
+      ],
+      "plan_line": 39
+    },
+    "T2.1": {
+      "task": "T2",
+      "title": "Write failing validation tests for unit ID pattern, kind enum, and missing deps",
+      "kind": "test",
+      "wave": 2,
+      "depends_on": [
+        "T1.5"
+      ],
+      "doc_refs": [
+        "plan",
+        "plan_schema",
+        "validate_test",
+        "errors"
+      ],
+      "notes": [
+        "Create internal/planedit/validate_test.go and internal/planedit/errors.go",
+        "Test 1: TestValidatePlan_RejectsBadUnitID \u2014 unit id 'bad' should fail (must match ^[A-Z][0-9]+(\\.[0-9]+)$)",
+        "Test 2: TestValidatePlan_RejectsUnknownKind \u2014 kind 'weird' should fail (only impl/test/verify/doc/refactor allowed)",
+        "Helper: validPlanFixture() returns a valid PlanFile with T1.1 unit",
+        "DomainError struct: Code (string), Message (string), Retryable (bool), Details (map[string]any)",
+        "DomainError.Error() returns: Code + ': ' + Message"
+      ],
+      "plan_line": 150
+    },
+    "T2.2": {
+      "task": "T2",
+      "title": "Run tests to verify failure",
+      "kind": "verify",
+      "wave": 2,
+      "depends_on": [
+        "T2.1"
+      ],
+      "doc_refs": [
+        "plan",
+        "validate_test"
+      ],
+      "command": "go test ./internal/planedit -run ValidatePlan -v",
+      "notes": [
+        "Expected: FAIL with undefined ValidatePlanSchemaCompatible",
+        "Red phase of TDD"
+      ],
+      "plan_line": 150
+    },
+    "T2.3": {
+      "task": "T2",
+      "title": "Implement validation and stable error codes",
+      "kind": "impl",
+      "wave": 2,
+      "depends_on": [
+        "T2.2"
+      ],
+      "doc_refs": [
+        "plan",
+        "plan_schema",
+        "validate",
+        "errors"
+      ],
+      "notes": [
+        "Create internal/planedit/validate.go",
+        "unitIDRe regex: ^[A-Z][0-9]+(\\.[0-9]+)$",
+        "allowedKind map: impl, test, verify, doc, refactor \u2192 true",
+        "Validation checks per unit: ID pattern, kind enum, required fields (Task, Title, PlanLine>0, Wave>0), parent task exists in Tasks map, all depends_on units exist",
+        "Error codes: SCHEMA_VIOLATION for ID/kind/field issues, DEP_VIOLATION for missing parent/dep references",
+        "Return *DomainError on first validation failure",
+        "Import: fmt, regexp"
+      ],
+      "plan_line": 150
+    },
+    "T2.4": {
+      "task": "T2",
+      "title": "Re-run validation tests",
+      "kind": "verify",
+      "wave": 2,
+      "depends_on": [
+        "T2.3"
+      ],
+      "doc_refs": [
+        "plan",
+        "validate_test"
+      ],
+      "command": "go test ./internal/planedit -run ValidatePlan -v",
+      "notes": [
+        "Expected: PASS",
+        "Both validation tests should pass"
+      ],
+      "plan_line": 150
+    },
+    "T2.5": {
+      "task": "T2",
+      "title": "Commit T2",
+      "kind": "verify",
+      "wave": 2,
+      "depends_on": [
+        "T2.4"
+      ],
+      "doc_refs": [
+        "plan"
+      ],
+      "command": "git add internal/planedit/validate.go internal/planedit/errors.go internal/planedit/validate_test.go && git commit -m \"feat(planedit): add schema-compatible validator and domain errors\"",
+      "notes": [
+        "Commit message: feat(planedit): add schema-compatible validator and domain errors",
+        "Files: internal/planedit/validate.go, internal/planedit/errors.go, internal/planedit/validate_test.go"
+      ],
+      "plan_line": 150
+    },
+    "T3.1": {
+      "task": "T3",
+      "title": "Write failing tests for cycle detection and recompute behavior",
+      "kind": "test",
+      "wave": 3,
+      "depends_on": [
+        "T2.5"
+      ],
+      "doc_refs": [
+        "plan",
+        "graph_test"
+      ],
+      "notes": [
+        "Create internal/planedit/graph_test.go",
+        "Test 1: TestRecomputeWaves_AssignsRootsToWaveOne \u2014 root unit T1.1 should get wave=1",
+        "Test 2: TestRecomputeWaves_RejectsCycle \u2014 fixture creates two units with circular deps (A depends on B, B depends on A) and expects CYCLE_DETECTED",
+        "Helper: validPlanFixture() returns a valid PlanFile with acyclic units for positive-path tests",
+        "Cycle test must construct dedicated fixture data inside the test; do not mutate repository plan data"
+      ],
+      "plan_line": 256
+    },
+    "T3.2": {
+      "task": "T3",
+      "title": "Run tests to verify failure",
+      "kind": "verify",
+      "wave": 3,
+      "depends_on": [
+        "T3.1"
+      ],
+      "doc_refs": [
+        "plan",
+        "graph_test"
+      ],
+      "command": "go test ./internal/planedit -run RecomputeWaves -v",
+      "notes": [
+        "Expected: FAIL with undefined RecomputeWaves",
+        "Red phase of TDD"
+      ],
+      "plan_line": 256
+    },
+    "T3.3": {
+      "task": "T3",
+      "title": "Implement topo sort + wave recompute",
+      "kind": "impl",
+      "wave": 3,
+      "depends_on": [
+        "T3.2"
+      ],
+      "doc_refs": [
+        "plan",
+        "graph"
+      ],
+      "notes": [
+        "Create internal/planedit/graph.go",
+        "Algorithm: BFS topological sort using in-degree counting",
+        "Build in-degree map and adjacency list from depends_on",
+        "Queue starts with all zero in-degree nodes (roots)",
+        "Root nodes (no deps) get wave=1",
+        "Non-root nodes: wave = max(wave(dep) for dep in depends_on) + 1",
+        "Update p.Units[id].Wave with computed wave",
+        "Cycle detection: if seen != len(p.Units) after BFS, return CYCLE_DETECTED error",
+        "Empty graph with no units: no error (valid empty plan)",
+        "Error code: CYCLE_DETECTED with message 'no root nodes' or 'visited X of Y nodes'",
+        "Import: fmt"
+      ],
+      "plan_line": 256
+    },
+    "T3.4": {
+      "task": "T3",
+      "title": "Re-run graph tests",
+      "kind": "verify",
+      "wave": 3,
+      "depends_on": [
+        "T3.3"
+      ],
+      "doc_refs": [
+        "plan",
+        "graph_test"
+      ],
+      "command": "go test ./internal/planedit -run RecomputeWaves -v",
+      "notes": [
+        "Expected: PASS",
+        "Both wave recompute tests should pass"
+      ],
+      "plan_line": 256
+    },
+    "T3.5": {
+      "task": "T3",
+      "title": "Commit T3",
+      "kind": "verify",
+      "wave": 3,
+      "depends_on": [
+        "T3.4"
+      ],
+      "doc_refs": [
+        "plan"
+      ],
+      "command": "git add internal/planedit/graph.go internal/planedit/graph_test.go && git commit -m \"feat(planedit): add deterministic topo validation and wave recompute\"",
+      "notes": [
+        "Commit message: feat(planedit): add deterministic topo validation and wave recompute",
+        "Files: internal/planedit/graph.go, internal/planedit/graph_test.go"
+      ],
+      "plan_line": 256
+    },
+    "T4.1": {
+      "task": "T4",
+      "title": "Write failing tests for revision mismatch and idempotency replay",
+      "kind": "test",
+      "wave": 4,
+      "depends_on": [
+        "T3.5"
+      ],
+      "doc_refs": [
+        "plan",
+        "store_test"
+      ],
+      "notes": [
+        "Create internal/planedit/store_test.go",
+        "Test 1: TestApplyMutation_RejectsRevisionMismatch \u2014 CheckAndBump(2) on revision=1 should error",
+        "Test 2: TestIdempotency_ReplaySameKeyAndPayload \u2014 Remember then Replay with same key+hash should return stored result",
+        "NewControlState(): returns ControlState with Revision=1, empty Idempotency map",
+        "ControlState fields: Revision (int), Idempotency (map[string]IdempotentEntry)",
+        "IdempotentEntry fields: PayloadHash (string), Result (map[string]any)"
+      ],
+      "plan_line": 374
+    },
+    "T4.2": {
+      "task": "T4",
+      "title": "Run tests to verify failure",
+      "kind": "verify",
+      "wave": 4,
+      "depends_on": [
+        "T4.1"
+      ],
+      "doc_refs": [
+        "plan",
+        "store_test"
+      ],
+      "command": "go test ./internal/planedit -run 'RevisionMismatch|Idempotency' -v",
+      "notes": [
+        "Expected: FAIL with undefined NewControlState",
+        "Red phase of TDD"
+      ],
+      "plan_line": 374
+    },
+    "T4.3": {
+      "task": "T4",
+      "title": "Implement control sidecar model and audit append",
+      "kind": "impl",
+      "wave": 4,
+      "depends_on": [
+        "T4.2"
+      ],
+      "doc_refs": [
+        "plan",
+        "store"
+      ],
+      "notes": [
+        "Create internal/planedit/store.go",
+        "NewControlState(): Revision=1, Idempotency=empty map",
+        "CheckAndBump(expected): if expected!=Revision return error REVISION_MISMATCH with Retryable=true, else increment and return new revision",
+        "Remember(op, key, payloadHash, result): stores under key op:key",
+        "Replay(op, key, payloadHash): returns (result, true) if key exists and hash matches, (nil, false) if not found, (error map, true) if hash mismatch (IDEMPOTENCY_KEY_REUSED)",
+        "AppendAuditJSONL(path, event): opens file with O_APPEND|O_CREATE|O_WRONLY, mode 0o600, marshals event to JSON, appends with newline",
+        "Import: encoding/json, fmt, os"
+      ],
+      "plan_line": 374
+    },
+    "T4.4": {
+      "task": "T4",
+      "title": "Re-run store tests",
+      "kind": "verify",
+      "wave": 4,
+      "depends_on": [
+        "T4.3"
+      ],
+      "doc_refs": [
+        "plan",
+        "store_test"
+      ],
+      "command": "go test ./internal/planedit -run 'RevisionMismatch|Idempotency' -v",
+      "notes": [
+        "Expected: PASS",
+        "Both revision and idempotency tests should pass"
+      ],
+      "plan_line": 374
+    },
+    "T4.5": {
+      "task": "T4",
+      "title": "Commit T4",
+      "kind": "verify",
+      "wave": 4,
+      "depends_on": [
+        "T4.4"
+      ],
+      "doc_refs": [
+        "plan"
+      ],
+      "command": "git add internal/planedit/store.go internal/planedit/store_test.go && git commit -m \"feat(planedit): add control sidecar revision idempotency and audit append\"",
+      "notes": [
+        "Commit message: feat(planedit): add control sidecar revision idempotency and audit append",
+        "Files: internal/planedit/store.go, internal/planedit/store_test.go"
+      ],
+      "plan_line": 374
+    },
+    "T5.1": {
+      "task": "T5",
+      "title": "Write failing tests for create/init/add/remove and suggest_questions",
+      "kind": "test",
+      "wave": 5,
+      "depends_on": [
+        "T4.5"
+      ],
+      "doc_refs": [
+        "plan",
+        "service_test"
+      ],
+      "notes": [
+        "Create internal/planedit/service_test.go",
+        "Test 1: TestServiceCreatePlan_WritesSchemaCompatibleFile \u2014 CreatePlan('my-plan') should return PlanID!='', Revision=1",
+        "Test 2: TestSuggestQuestions_ReturnsMissingKindAndTitle \u2014 SuggestQuestions({task_id: T1.1}) should return questions for title and kind",
+        "NewService(planDir): returns Service with PlanDir set",
+        "CreatePlan(name): slugifies name, writes empty PlanFile with schema_version=1, returns CreatePlanResult{PlanID, PlanPath, Revision=1}",
+        "SuggestQuestions(in): returns sorted list of missing required fields (required first, then alphabetical)",
+        "Suggested fields: title (required, string), kind (required, enum: impl/test/verify/doc/refactor), depends_on (optional, array)"
+      ],
+      "plan_line": 495
+    },
+    "T5.2": {
+      "task": "T5",
+      "title": "Run tests to verify failure",
+      "kind": "verify",
+      "wave": 5,
+      "depends_on": [
+        "T5.1"
+      ],
+      "doc_refs": [
+        "plan",
+        "service_test"
+      ],
+      "command": "go test ./internal/planedit -run 'ServiceCreatePlan|SuggestQuestions' -v",
+      "notes": [
+        "Expected: FAIL with undefined NewService",
+        "Red phase of TDD"
+      ],
+      "plan_line": 495
+    },
+    "T5.3": {
+      "task": "T5",
+      "title": "Implement service operations and normalized outputs",
+      "kind": "impl",
+      "wave": 5,
+      "depends_on": [
+        "T5.2"
+      ],
+      "doc_refs": [
+        "plan",
+        "service"
+      ],
+      "notes": [
+        "Create internal/planedit/service.go",
+        "Service struct: PlanDir (string)",
+        "CreatePlanResult struct: PlanID (string), PlanPath (string), Revision (int)",
+        "CreatePlan(name): slug = strings.ToLower(strings.ReplaceAll(name, ' ', '-')), file = slug+'-execution-waves.json', writes PlanFile with SchemaVersion=1 and empty maps",
+        "SuggestQuestions(in): checks title/kind/depends_on against input, returns sorted []map[string]any with field/required/type/options keys",
+        "Sort: required fields first, then alphabetical by field name",
+        "Import: encoding/json, fmt, os, path/filepath, sort, strings"
+      ],
+      "plan_line": 495
+    },
+    "T5.4": {
+      "task": "T5",
+      "title": "Re-run service tests",
+      "kind": "verify",
+      "wave": 5,
+      "depends_on": [
+        "T5.3"
+      ],
+      "doc_refs": [
+        "plan",
+        "service_test"
+      ],
+      "command": "go test ./internal/planedit -run 'ServiceCreatePlan|SuggestQuestions' -v",
+      "notes": [
+        "Expected: PASS",
+        "Both service tests should pass"
+      ],
+      "plan_line": 495
+    },
+    "T5.5": {
+      "task": "T5",
+      "title": "Commit T5",
+      "kind": "verify",
+      "wave": 5,
+      "depends_on": [
+        "T5.4"
+      ],
+      "doc_refs": [
+        "plan"
+      ],
+      "command": "git add internal/planedit/service.go internal/planedit/service_test.go && git commit -m \"feat(planedit): add plan authoring service and deterministic question suggestions\"",
+      "notes": [
+        "Commit message: feat(planedit): add plan authoring service and deterministic question suggestions",
+        "Files: internal/planedit/service.go, internal/planedit/service_test.go"
+      ],
+      "plan_line": 495
+    },
+    "T6.1": {
+      "task": "T6",
+      "title": "Write failing MCP handler tests for plan_create and plan_validate",
+      "kind": "test",
+      "wave": 6,
+      "depends_on": [
+        "T5.5"
+      ],
+      "doc_refs": [
+        "plan",
+        "main_test"
+      ],
+      "notes": [
+        "Modify main_test.go",
+        "Test: TestPlanCreateTool \u2014 call NewWaveplanServer(testPlanPath, statePath), then call handlePlanCreate with name='demo', expect no error",
+        "Test: TestPlanValidateTool \u2014 create a valid plan file, call handlePlanValidate with plan_path, expect ok=true",
+        "Use exported constructor signature exactly: NewWaveplanServer(planPath, statePath)"
+      ],
+      "plan_line": 610
+    },
+    "T6.2": {
+      "task": "T6",
+      "title": "Run tests to verify failure",
+      "kind": "verify",
+      "wave": 6,
+      "depends_on": [
+        "T6.1"
+      ],
+      "doc_refs": [
+        "plan",
+        "main_test"
+      ],
+      "command": "go test ./... -run PlanCreateTool -v",
+      "notes": [
+        "Expected: FAIL with undefined handlePlanCreate",
+        "Red phase of TDD"
+      ],
+      "plan_line": 610
+    },
+    "T6.3": {
+      "task": "T6",
+      "title": "Register tools and add handlers",
+      "kind": "impl",
+      "wave": 6,
+      "depends_on": [
+        "T6.2"
+      ],
+      "doc_refs": [
+        "plan",
+        "main"
+      ],
+      "notes": [
+        "Modify main.go",
+        "In createTools(): add plan_create tool with name (required string) and plan_validate tool with plan_path (required string)",
+        "handlePlanCreate: extracts name param, calls planedit.NewService(defaultPlanDir()).CreatePlan(name), returns {ok: true, data: {plan_id, plan_path, revision}}",
+        "handlePlanValidate: extracts plan_path param, reads file, calls planedit.DecodePlanStrict + planedit.ValidatePlanSchemaCompatible, returns {ok: true} or {ok: false, error: {code, message}}",
+        "Update main.go import block to include planedit package path github.com/darkbit1001/Stability-Toys/waveplan-mcp/internal/planedit",
+        "No go.mod dependency change required for internal local package"
+      ],
+      "plan_line": 610
+    },
+    "T6.4": {
+      "task": "T6",
+      "title": "Re-run MCP tool tests",
+      "kind": "verify",
+      "wave": 6,
+      "depends_on": [
+        "T6.3"
+      ],
+      "doc_refs": [
+        "plan",
+        "main_test"
+      ],
+      "command": "go test ./... -run 'PlanCreateTool|PlanValidate' -v",
+      "notes": [
+        "Expected: PASS",
+        "Both MCP tool tests should pass"
+      ],
+      "plan_line": 610
+    },
+    "T6.5": {
+      "task": "T6",
+      "title": "Commit T6",
+      "kind": "verify",
+      "wave": 6,
+      "depends_on": [
+        "T6.4"
+      ],
+      "doc_refs": [
+        "plan"
+      ],
+      "command": "git add main.go main_test.go && git commit -m \"feat(mcp): add plan authoring tool surface\"",
+      "notes": [
+        "Commit message: feat(mcp): add plan authoring tool surface",
+        "Files: main.go, main_test.go"
+      ],
+      "plan_line": 610
+    },
+    "T7.1": {
+      "task": "T7",
+      "title": "Write failing CLI smoke test command list check",
+      "kind": "test",
+      "wave": 7,
+      "depends_on": [
+        "T6.5"
+      ],
+      "doc_refs": [
+        "plan",
+        "cli"
+      ],
+      "notes": [
+        "Modify waveplan-cli",
+        "Pre-implementation smoke check command should return no matches: python3 waveplan-cli --help | rg 'plan_create|plan_validate'",
+        "After implementation, python3 waveplan-cli plan --help should show new subcommands"
+      ],
+      "plan_line": 680,
+      "command": "python3 waveplan-cli --help | rg 'plan_create|plan_validate'"
+    },
+    "T7.2": {
+      "task": "T7",
+      "title": "Add CLI parser subcommands for plan authoring",
+      "kind": "impl",
+      "wave": 7,
+      "depends_on": [
+        "T7.1"
+      ],
+      "doc_refs": [
+        "plan",
+        "cli"
+      ],
+      "notes": [
+        "Modify waveplan-cli",
+        "Add plan_p = sub.add_parser('plan', help='Plan authoring commands')",
+        "plan_sub = plan_p.add_subparsers(dest='plan_command', required=True)",
+        "plan_new = plan_sub.add_parser('new', help='Create plan'), add_argument('name')",
+        "plan_validate = plan_sub.add_parser('validate', help='Validate plan'), add_argument('plan_path')",
+        "Parser lives alongside existing peek/pop/start_review/end_review/fin/get/list_plans/deptree commands"
+      ],
+      "plan_line": 680
+    },
+    "T7.3": {
+      "task": "T7",
+      "title": "Route new subcommands to MCP tools",
+      "kind": "impl",
+      "wave": 7,
+      "depends_on": [
+        "T7.2"
+      ],
+      "doc_refs": [
+        "plan",
+        "cli"
+      ],
+      "notes": [
+        "Modify waveplan-cli",
+        "In command routing section, add elif cmd == 'plan':",
+        "if args.plan_command == 'new': result = client.call_tool('plan_create', {'name': args.name})",
+        "elif args.plan_command == 'validate': result = client.call_tool('plan_validate', {'plan_path': args.plan_path})",
+        "else: raise RuntimeError(f'unknown plan command {args.plan_command}')",
+        "Route lives after existing elif cmd == 'deptree' block"
+      ],
+      "plan_line": 680
+    },
+    "T7.4": {
+      "task": "T7",
+      "title": "Re-run smoke command",
+      "kind": "verify",
+      "wave": 7,
+      "depends_on": [
+        "T7.3"
+      ],
+      "doc_refs": [
+        "plan",
+        "cli"
+      ],
+      "command": "python3 waveplan-cli plan --help",
+      "notes": [
+        "Expected: shows 'new', 'validate' subcommands",
+        "Exit code 0"
+      ],
+      "plan_line": 680
+    },
+    "T7.5": {
+      "task": "T7",
+      "title": "Commit T7",
+      "kind": "verify",
+      "wave": 7,
+      "depends_on": [
+        "T7.4"
+      ],
+      "doc_refs": [
+        "plan"
+      ],
+      "command": "git add waveplan-cli && git commit -m \"feat(cli): add wp plan authoring subcommands\"",
+      "notes": [
+        "Commit message: feat(cli): add wp plan authoring subcommands",
+        "Files: waveplan-cli"
+      ],
+      "plan_line": 680
+    },
+    "T8.1": {
+      "task": "T8",
+      "title": "Write failing documentation check for missing tool docs",
+      "kind": "test",
+      "wave": 8,
+      "depends_on": [
+        "T7.5"
+      ],
+      "doc_refs": [
+        "plan",
+        "readme"
+      ],
+      "notes": [
+        "Pre-update documentation check command: rg -n 'plan_create|plan_validate|wp plan' README.md",
+        "Expected before update: missing or incomplete references",
+        "After update, README should document plan authoring workflow"
+      ],
+      "plan_line": 733,
+      "command": "rg -n 'plan_create|plan_validate|wp plan' README.md"
+    },
+    "T8.2": {
+      "task": "T8",
+      "title": "Add MCP request/response contracts document",
+      "kind": "impl",
+      "wave": 8,
+      "depends_on": [
+        "T8.1"
+      ],
+      "doc_refs": [
+        "plan",
+        "mcp_contracts"
+      ],
+      "notes": [
+        "Create adocs/specs/waveplan-plan-authoring-mcp-contracts.md",
+        "Document plan_create: Request args (name: string required), Success response ({ok: true, data: {plan_id, plan_path, revision}}), Error response ({ok: false, error: {code, message, details}})",
+        "Document plan_validate: Request args (plan_path: string required), Success response ({ok: true}), Error response ({ok: false, error: {code, message, details}})",
+        "Include error code reference: SCHEMA_VIOLATION, DEP_VIOLATION, CYCLE_DETECTED, TASK_NOT_FOUND, REVISION_MISMATCH, TASK_HAS_DEPENDENTS, IDEMPOTENCY_KEY_REUSED"
+      ],
+      "plan_line": 733
+    },
+    "T8.3": {
+      "task": "T8",
+      "title": "Update README with new workflow",
+      "kind": "impl",
+      "wave": 8,
+      "depends_on": [
+        "T8.2"
+      ],
+      "doc_refs": [
+        "plan",
+        "readme"
+      ],
+      "notes": [
+        "Modify README.md",
+        "Add section: Plan Authoring (Schema-Compatible)",
+        "Example commands: python3 waveplan-cli plan new my-feature, python3 waveplan-cli plan validate <plan-path>",
+        "Add new tools table entries: plan_create, plan_validate, plan_init, plan_add_tasks, plan_remove_task, plan_get, plan_list, plan_suggest_questions",
+        "Add file structure map for internal/planedit/*"
+      ],
+      "plan_line": 733
+    },
+    "T8.4": {
+      "task": "T8",
+      "title": "Run full verification suite",
+      "kind": "verify",
+      "wave": 8,
+      "depends_on": [
+        "T8.3"
+      ],
+      "doc_refs": [
+        "plan"
+      ],
+      "command": "go test ./... -v",
+      "notes": [
+        "Expected: PASS \u2014 all tests pass",
+        "Also run: python3 waveplan-cli plan --help (expected: exits 0, prints plan subcommands)"
+      ],
+      "plan_line": 733
+    },
+    "T8.5": {
+      "task": "T8",
+      "title": "Commit T8",
+      "kind": "verify",
+      "wave": 8,
+      "depends_on": [
+        "T8.4"
+      ],
+      "doc_refs": [
+        "plan"
+      ],
+      "command": "git add adocs/specs/waveplan-plan-authoring-mcp-contracts.md README.md && git commit -m \"docs: add schema-compatible plan authoring contracts and usage\"",
+      "notes": [
+        "Commit message: docs: add schema-compatible plan authoring contracts and usage",
+        "Files: adocs/specs/waveplan-plan-authoring-mcp-contracts.md, README.md"
+      ],
+      "plan_line": 733
+    },
+    "T9.1": {
+      "task": "T9",
+      "title": "Write failing tests for plan_init, plan_add_tasks, plan_remove_task, plan_get, plan_list",
+      "kind": "test",
+      "wave": 9,
+      "depends_on": [
+        "T8.5"
+      ],
+      "doc_refs": [
+        "plan",
+        "service_test"
+      ],
+      "notes": [
+        "Modify internal/planedit/service_test.go",
+        "Test 1: TestServiceInitPlan_FromElementsBlob \u2014 InitPlanFromJSON('demo', blob with 2 tasks) should return created=2",
+        "Test 2: TestServiceRemoveTask_RejectsDependentsInStrictMode \u2014 RemoveTask('demo', 'T1.1', 'strict') where T2.1 depends on T1.1 should error",
+        "Helper: seedPlanForRemoveTest creates demo plan with T1.1 (no deps) and T2.1 (depends on T1.1)",
+        "InitElement struct: TaskID, Task, Title, Kind, DependsOn",
+        "RemoveTask modes: strict (fail if dependents), cascade (remove dependents too), relink (remove dep from dependents)"
+      ],
+      "plan_line": 791
+    },
+    "T9.2": {
+      "task": "T9",
+      "title": "Run tests to verify failure",
+      "kind": "verify",
+      "wave": 9,
+      "depends_on": [
+        "T9.1"
+      ],
+      "doc_refs": [
+        "plan",
+        "service_test"
+      ],
+      "command": "go test ./internal/planedit -run 'InitPlan|RemoveTask' -v",
+      "notes": [
+        "Expected: FAIL with undefined InitPlanFromJSON / RemoveTask",
+        "Red phase of TDD"
+      ],
+      "plan_line": 791
+    },
+    "T9.3": {
+      "task": "T9",
+      "title": "Implement all remaining service operations",
+      "kind": "impl",
+      "wave": 9,
+      "depends_on": [
+        "T9.2"
+      ],
+      "doc_refs": [
+        "plan",
+        "service"
+      ],
+      "notes": [
+        "Modify internal/planedit/service.go",
+        "InitElement struct: TaskID, Task, Title, Kind, DependsOn (from JSON)",
+        "InitPlanFromJSON(planID, blob): unmarshal tasks from blob, load plan, add units with Wave=1/PlanLine=1, call RecomputeWaves + ValidatePlanSchemaCompatible, save, return task count",
+        "AddTasks(planID, elems): load plan, check duplicates, add units, call RecomputeWaves + Validate, save, return added IDs",
+        "RemoveTask(planID, taskID, mode): load plan, check exists, find dependents, strict mode fails if dependents, cascade deletes dependents, relink removes dep from dependents, call RecomputeWaves + Validate, save, return impacted IDs",
+        "GetPlan(planID): load and return plan",
+        "ListPlans(): glob *execution-waves.json, sort, return paths",
+        "LoadPlan(planID): read file, DecodePlanStrict, return plan+path",
+        "SavePlan(planID, p): marshal indent, write file 0o600"
+      ],
+      "plan_line": 791
+    },
+    "T9.4": {
+      "task": "T9",
+      "title": "Expose MCP tools and CLI routes for remaining operations",
+      "kind": "impl",
+      "wave": 9,
+      "depends_on": [
+        "T9.3"
+      ],
+      "doc_refs": [
+        "plan",
+        "main",
+        "cli"
+      ],
+      "notes": [
+        "Modify main.go: add MCP tools plan_init (plan_id, elements_blob), plan_add_tasks (plan_id, elements_blob), plan_remove_task (plan_id, task_id, mode optional), plan_get (plan_id), plan_list (no args), plan_suggest_questions (partial_json)",
+        "Modify main.go: add handler functions for each tool, delegate to planedit.Service methods",
+        "Modify waveplan-cli: add plan_init (plan_id, elements_blob), plan_add_task (plan_id, elements_blob), plan_rem_task (plan_id, task_id, --mode default strict), plan_get (plan_id), plan_list (no args), plan_suggest_questions (partial_json)",
+        "Route each CLI subcommand to corresponding MCP tool call",
+        "Error handling: wrap planedit.DomainError codes in structured error responses"
+      ],
+      "plan_line": 791
+    },
+    "T9.5": {
+      "task": "T9",
+      "title": "Re-run operation tests and commit",
+      "kind": "verify",
+      "wave": 9,
+      "depends_on": [
+        "T9.4"
+      ],
+      "doc_refs": [
+        "plan"
+      ],
+      "command": "go test ./... -run 'PlanInit|PlanAddTasks|PlanRemoveTask|PlanGet|PlanList' -v",
+      "notes": [
+        "Expected: PASS",
+        "Also verify: python3 waveplan-cli plan --help shows new, init, add_task, rem_task, get, list, suggest_questions, validate",
+        "Commit: git add internal/planedit/service.go internal/planedit/service_test.go main.go main_test.go waveplan-cli && git commit -m \"feat(planedit): implement full plan authoring operations and tool wiring\""
+      ],
+      "plan_line": 791
+    },
+    "T10.1": {
+      "task": "T10",
+      "title": "Write failing tests for revision mismatch envelope and idempotent replay",
+      "kind": "test",
+      "wave": 10,
+      "depends_on": [
+        "T9.5"
+      ],
+      "doc_refs": [
+        "plan",
+        "main_test"
+      ],
+      "notes": [
+        "Modify main_test.go",
+        "Test 1: TestPlanAddTasks_RevisionMismatchReturnsStructuredError \u2014 call plan_add_tasks with expected_revision=999, verify response contains code:REVISION_MISMATCH",
+        "Test 2: TestPlanAddTasks_IdempotencyReplayReturnsSameResult \u2014 call plan_add_tasks twice with same idempotency_key, verify identical response text",
+        "setupAuthoringServerFixture(t): creates temp dir, writes schema-compatible stub plan file including schema_version:1 plus required empty sections, creates WaveplanServer",
+        "extractToolText(t, res): extracts Text from Content[0], fails if missing or wrong type",
+        "Test plan_add_tasks args: plan_id='demo', elements_blob with task, expected_revision, idempotency_key='f7fc2eea-c8f9-4a25-b8a5-c92cf888be0f'"
+      ],
+      "plan_line": 1010
+    },
+    "T10.2": {
+      "task": "T10",
+      "title": "Run tests to verify failure",
+      "kind": "verify",
+      "wave": 10,
+      "depends_on": [
+        "T10.1"
+      ],
+      "doc_refs": [
+        "plan",
+        "main_test"
+      ],
+      "command": "go test ./... -run 'RevisionMismatchReturnsStructuredError|IdempotencyReplay' -v",
+      "notes": [
+        "Expected: FAIL before envelope/idempotency wiring complete",
+        "Red phase of TDD"
+      ],
+      "plan_line": 1010
+    },
+    "T10.3": {
+      "task": "T10",
+      "title": "Implement deterministic envelope and idempotency checks in handlers",
+      "kind": "impl",
+      "wave": 10,
+      "depends_on": [
+        "T10.2"
+      ],
+      "doc_refs": [
+        "plan",
+        "main"
+      ],
+      "notes": [
+        "Modify main.go",
+        "ok(data any): marshals {ok: true, data: data} to JSON, returns mcp.NewToolResultText",
+        "fail(code, msg string, details map[string]any): marshals {ok: false, error: {code, message, retryable: code==REVISION_MISMATCH, details}} to JSON, returns mcp.NewToolResultText",
+        "All authoring handlers use ok() for success, fail() for errors",
+        "Idempotency: check idempotency_key in args, call ControlState.Replay before executing, if hit return cached result",
+        "Revision check: check expected_revision in args, call ControlState.CheckAndBump, if mismatch return fail(REVISION_MISMATCH, ...)"
+      ],
+      "plan_line": 1010
+    },
+    "T10.4": {
+      "task": "T10",
+      "title": "Re-run deterministic test set",
+      "kind": "verify",
+      "wave": 10,
+      "depends_on": [
+        "T10.3"
+      ],
+      "doc_refs": [
+        "plan",
+        "main_test"
+      ],
+      "command": "go test ./... -run 'RevisionMismatchReturnsStructuredError|IdempotencyReplay|SuggestQuestions' -v",
+      "notes": [
+        "Expected: PASS",
+        "All deterministic envelope and idempotency tests should pass"
+      ],
+      "plan_line": 1010
+    },
+    "T10.5": {
+      "task": "T10",
+      "title": "Commit T10",
+      "kind": "verify",
+      "wave": 10,
+      "depends_on": [
+        "T10.4"
+      ],
+      "doc_refs": [
+        "plan"
+      ],
+      "command": "git add internal/planedit/store_test.go internal/planedit/service_test.go main_test.go main.go && git commit -m \"test(planedit): enforce deterministic envelopes conflict handling and idempotency replay\"",
+      "notes": [
+        "Commit message: test(planedit): enforce deterministic envelopes conflict handling and idempotency replay",
+        "Files: internal/planedit/store_test.go, internal/planedit/service_test.go, main_test.go, main.go",
+        "This is the final commit \u2014 all 10 tasks complete"
+      ],
+      "plan_line": 1010
+    },
+    "T11.1": {
+      "task": "T11",
+      "title": "Write failing tests for 16k context-fit classifier and report output",
+      "kind": "test",
+      "wave": 11,
+      "plan_line": 1118,
+      "depends_on": [
+        "T10.5"
+      ],
+      "doc_refs": [
+        "plan",
+        "budget_test",
+        "service_test"
+      ],
+      "notes": [
+        "Create internal/planedit/budget_test.go",
+        "Test token counting for canonical task payload and deterministic ordering",
+        "Test fit_16k flag semantics: tokens <= 16384 => true, >16384 => false",
+        "Test budget report rows include unit_id, token_count, fit_16k, fit_8k, max_tokens_used, top_token_sources",
+        "Test stable output ordering by wave then task_id"
+      ]
+    },
+    "T11.2": {
+      "task": "T11",
+      "title": "Run tests to verify budget classifier fails before implementation",
+      "kind": "verify",
+      "wave": 11,
+      "plan_line": 1118,
+      "depends_on": [
+        "T11.1"
+      ],
+      "doc_refs": [
+        "plan",
+        "budget_test"
+      ],
+      "command": "go test ./internal/planedit -run 'Budget|ContextFit' -v",
+      "notes": [
+        "Expected: FAIL with undefined budget classifier/report symbols"
+      ]
+    },
+    "T11.3": {
+      "task": "T11",
+      "title": "Implement token-budget classifier and sidecar budget report",
+      "kind": "impl",
+      "wave": 11,
+      "plan_line": 1118,
+      "depends_on": [
+        "T11.2"
+      ],
+      "doc_refs": [
+        "plan",
+        "budget",
+        "service",
+        "main"
+      ],
+      "notes": [
+        "Create internal/planedit/budget.go",
+        "Define classifier over rendered task payload and emit per-unit budget rows",
+        "Required fields per row: unit_id, token_count, fit_16k, fit_8k, threshold_tokens",
+        "Threshold rule: fit_16k true iff token_count <= 16384",
+        "Add top_token_sources breakdown for explainability",
+        "Add service method: PlanBudget(plan_id, max_tokens=16384)",
+        "Persist optional sidecar: <plan>.budget.json for latest computed report",
+        "Add MCP tool: plan_budget with args plan_id and optional max_tokens",
+        "Add CLI route: wp plan budget <plan_id> [--max-tokens N]",
+        "Add plan_validate warning/error mode hook for over-budget units"
+      ]
+    },
+    "T11.4": {
+      "task": "T11",
+      "title": "Re-run classifier and integration tests",
+      "kind": "verify",
+      "wave": 11,
+      "plan_line": 1118,
+      "depends_on": [
+        "T11.3"
+      ],
+      "doc_refs": [
+        "plan",
+        "budget_test",
+        "main_test"
+      ],
+      "command": "go test ./... -run 'Budget|ContextFit|PlanBudget|PlanValidateBudget' -v",
+      "notes": [
+        "Expected: PASS for budget classifier, MCP handler, and validation warning paths"
+      ]
+    },
+    "T11.5": {
+      "task": "T11",
+      "title": "Update docs and commit budget classification feature",
+      "kind": "verify",
+      "wave": 11,
+      "plan_line": 1118,
+      "depends_on": [
+        "T11.4"
+      ],
+      "doc_refs": [
+        "plan",
+        "budget_contracts",
+        "readme"
+      ],
+      "command": "git add internal/planedit/budget.go internal/planedit/budget_test.go internal/planedit/service.go main.go main_test.go waveplan-cli README.md adocs/specs/waveplan-plan-authoring-mcp-contracts.md && git commit -m \"feat(planedit): add 16k context-fit budget classifier and reporting\"",
+      "notes": [
+        "Document plan_budget MCP contract and response shape",
+        "Document fit_16k semantics and default max_tokens=16384 in README"
+      ]
+    }
+  }
+}
