@@ -147,6 +147,14 @@ func (s *WaveplanServer) reloadState() error {
 			s.state.Completed[k] = v
 		}
 	}
+	for k, v := range fileState.Tail {
+		if _, ok := s.state.Tail[k]; !ok {
+			if s.state.Tail == nil {
+				s.state.Tail = make(map[string]TaskEntry)
+			}
+			s.state.Tail[k] = v
+		}
+	}
 	return nil
 }
 
@@ -476,6 +484,10 @@ func (s *WaveplanServer) handleFin(ctx context.Context, request mcp.CallToolRequ
 		GitSha:          func() string { if gitSha != "" { return gitSha }; return s.serverGitSha }(),
 		FinishedAt:      ts,
 	}
+	if s.state.Tail == nil {
+		s.state.Tail = make(map[string]TaskEntry)
+	}
+	s.state.Tail[taskID] = taken
 	delete(s.state.Taken, taskID)
 	if err := s.saveState(); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to save state: %v", err)), nil

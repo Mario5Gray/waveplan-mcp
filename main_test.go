@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -471,6 +472,135 @@ func TestFinWithPop(t *testing.T) {
 	}
 	if completed.GitSha != "abc1234" {
 		t.Errorf("git_sha should be 'abc1234', got '%s'", completed.GitSha)
+	}
+}
+
+// TestFinRecordsTail verifies that handleFin records the taken entry into Tail
+// before deleting it from Taken.
+func TestFinRecordsTail(t *testing.T) {
+	planJSON := []byte(`{
+		"units": {
+			"T1.1": {"task": "T1", "title": "Task 1", "kind": "impl", "wave": 1, "plan_line": 10, "depends_on": [], "doc_refs": [], "fp_refs": [], "notes": []}
+		},
+		"tasks": {"T1": {"plan_line": 10}},
+		"doc_index": {},
+		"fp_index": {}
+	}`)
+	srv := makeTestServer(t, planJSON)
+
+	// Pop the task first
+	popArgs := map[string]any{"agent": "phi"}
+	popReq := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: popArgs,
+		},
+	}
+	_, err := srv.handlePop(nil, popReq)
+	if err != nil {
+		t.Fatalf("handlePop returned error: %v", err)
+	}
+
+	// Start and end review
+	startReviewReq := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{"task_id": "T1.1", "reviewer": "reviewer1"},
+		},
+	}
+	_, err = srv.handleStartReview(nil, startReviewReq)
+	if err != nil {
+		t.Fatalf("handleStartReview returned error: %v", err)
+	}
+
+	endReviewReq := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{"task_id": "T1.1", "review_note": "looks good"},
+		},
+	}
+	_, err = srv.handleEndReview(nil, endReviewReq)
+	if err != nil {
+		t.Fatalf("handleEndReview returned error: %v", err)
+	}
+
+	// Now fin it
+	finArgs := map[string]any{"task_id": "T1.1", "git_sha": "abc1234"}
+	finReq := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: finArgs,
+		},
+	}
+	_, err = srv.handleFin(nil, finReq)
+	if err != nil {
+		t.Fatalf("handleFin returned error: %v", err)
+	}
+
+	// Verify the taken entry was removed
+	if _, ok := srv.state.Taken["T1.1"]; ok {
+		t.Error("T1.1 should be removed from Taken after fin")
+	}
+
+	// Verify the tail entry exists and matches the pre-fin taken entry
+	tailEntry, ok := srv.state.Tail["T1.1"]
+	if !ok {
+		t.Fatal("T1.1 should exist in Tail after fin")
+	}
+	if tailEntry.TakenBy != "phi" {
+		t.Errorf("tail taken_by should be 'phi', got '%s'", tailEntry.TakenBy)
+	}
+	if tailEntry.Reviewer != "reviewer1" {
+		t.Errorf("tail reviewer should be 'reviewer1', got '%s'", tailEntry.Reviewer)
+	}
+	if tailEntry.ReviewNote != "looks good" {
+		t.Errorf("tail review_note should be 'looks good', got '%s'", tailEntry.ReviewNote)
+	}
+}
+
+// TestReloadStateMergesTail verifies that reloadState merges Tail entries from
+// the on-disk state file into in-memory state, like Taken/Completed.
+func TestReloadStateMergesTail(t *testing.T) {
+	planJSON := []byte(`{
+		"units": {
+			"T1.1": {"task": "T1", "title": "Task 1", "kind": "impl", "wave": 1, "plan_line": 10, "depends_on": [], "doc_refs": [], "fp_refs": [], "notes": []}
+		},
+		"tasks": {"T1": {"plan_line": 10}},
+		"doc_index": {},
+		"fp_index": {}
+	}`)
+	srv := makeTestServer(t, planJSON)
+
+	// Point server at a real state file so reloadState/saveState are not no-ops.
+	dir := t.TempDir()
+	srv.statePath = dir + "/state.json"
+
+	// Simulate another process having recorded a tail entry on disk.
+	diskState := WaveplanState{
+		Plan:      "test-plan.json",
+		Taken:     map[string]TaskEntry{},
+		Completed: map[string]TaskEntry{},
+		Tail: map[string]TaskEntry{
+			"T1.1": {TakenBy: "external", StartedAt: "2026-05-04 10:00", FinishedAt: "2026-05-04 11:00"},
+		},
+	}
+	data, err := json.MarshalIndent(diskState, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal disk state: %v", err)
+	}
+	if err := os.WriteFile(srv.statePath, data, 0644); err != nil {
+		t.Fatalf("write disk state: %v", err)
+	}
+
+	if err := srv.reloadState(); err != nil {
+		t.Fatalf("reloadState: %v", err)
+	}
+
+	tailEntry, ok := srv.state.Tail["T1.1"]
+	if !ok {
+		t.Fatal("T1.1 should be merged into in-memory Tail from disk")
+	}
+	if tailEntry.TakenBy != "external" {
+		t.Errorf("tail taken_by should be 'external', got '%s'", tailEntry.TakenBy)
+	}
+	if tailEntry.FinishedAt != "2026-05-04 11:00" {
+		t.Errorf("tail finished_at should be '2026-05-04 11:00', got '%s'", tailEntry.FinishedAt)
 	}
 }
 
