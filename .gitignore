@@ -1,3 +1,7 @@
+.envrc
+CLAUDE.md
+AGENTS.md
+PHI.md
 waveplan-mcp
 .st-shell.zsh
 .st-shell.sh
@@ -9,3 +13,6 @@ waveplan-mcp
 .fp/extensions/*
 !.fp/extensions/*.ts
 .fp/config.local.toml
+.claude/
+.tmp/
+FP_CLAUDE.md
