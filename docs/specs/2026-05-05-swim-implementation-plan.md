@@ -1,4 +1,4 @@
-# Execution Observer Implementation Plan
+# Swim Implementation Plan
 
 > For agentic workers: use `superpowers:executing-plans` or `superpowers:subagent-driven-development` while implementing.
 
@@ -15,24 +15,26 @@ Current state:
 
 Target state:
 - `execution[]` rows become typed steps with explicit preconditions/postconditions.
-- an `execution journal` tracks applied steps and outcomes.
-- a runner/observer can compute `next unapplied safe step` deterministically.
+- a `swim journal` tracks applied steps and outcomes.
+- a swim runner can compute `next unapplied safe step` deterministically.
 - step execution is guarded by state-ownership + revalidation so stale reads cannot silently execute.
+- optional deterministic refinement layer can split coarse units into fine executable steps under explicit budget constraints.
 
 ## Non-Goals
 
 - Do not redesign core waveplan task state machine in this phase.
 - Do not replace existing `waveplan-cli` lifecycle commands.
 - Do not add auto-remediation logic for failed steps (only detect, record, and stop).
+- Do not replicate dagdir abductive planning or dialect generation inside swim refinement.
 
 ## Architecture Boundary
 
-Execution compiler:
+Swim compiler:
 - input: `*-execution-waves.json` + `waveagents.json`
-- output: `*-execution-schedule.json`
+- output: `*-swim-schedule.json`
 
-Execution observer/runner:
-- input: `*-execution-schedule.json` + plan state + journal sidecar
+Swim runner:
+- input: `*-swim-schedule.json` + plan state + journal sidecar
 - output: `next-step`, `step-apply`, `run-until`, and append-only journal events
 
 This keeps plan authoring and task lifecycle state in waveplan, while adding a durable execution timeline above it.
@@ -45,30 +47,30 @@ This keeps plan authoring and task lifecycle state in waveplan, while adding a d
 - canonical DAG emission
 - DAG runtime/projection truth
 
-Execution-observer in waveplan must be constrained to:
+Swim in waveplan must be constrained to:
 - consuming already-emitted execution waves
 - deciding next safe lifecycle command
-- recording execution journal metadata
+- recording swim journal metadata
 
 Hard boundaries:
-- no planner logic in waveplan observer
-- no dialect parsing/emission in observer
-- no DAG mutation by observer
+- no planner logic in swim
+- no dialect parsing/emission in swim
+- no DAG mutation by swim
 - no shadow planner ledger; journal is execution audit only
 
 Source-of-truth mapping:
 - `dagdir`: plan generation truth (why/what graph exists)
 - `waveplan`: execution lifecycle truth (who is doing step state)
-- `execution-observer`: command chronology truth (what command ran, when, and outcome)
+- `swim`: command chronology truth (what command ran, when, and outcome)
 
 Integration contract with dagdir artifacts:
-- observer input must be a waveplan execution plan artifact derived from dagdir output
-- observer may reference `dag_id`/artifact paths as metadata only
-- observer must never reinterpret or re-topologize dagdir DAG semantics
+- swim input must be a waveplan execution plan artifact derived from dagdir output
+- swim may reference `dag_id`/artifact paths as metadata only
+- swim must never reinterpret or re-topologize dagdir DAG semantics
 
 ## Data Contracts
 
-### 1) Execution Schedule v2
+### 1) Swim Schedule v2
 
 Every row must be explicitly typed and self-validating.
 
@@ -118,9 +120,9 @@ Required fields per step:
 - `invoke.argv` executable argv array (no shell parsing)
 
 Optional compatibility fields:
-- `wp_invoke` display/debug string only (must not be used as runner execution source)
+- `wp_invoke` display/debug string only (must not be used as swim runner execution source)
 
-### 2) Execution Journal Sidecar
+### 2) Swim Journal Sidecar
 
 Path convention:
 - `<schedule>.journal.json`
@@ -130,7 +132,7 @@ Structure:
 ```json
 {
   "schema_version": 1,
-  "schedule_path": ".../execution-schedule.json",
+  "schedule_path": ".../swim-schedule.json",
   "cursor": 4,
   "last_event": {
     "event_id": "E0004",
@@ -174,10 +176,10 @@ Journal rules:
 To close stale-state execution races, step apply must enforce both ownership and revalidation:
 
 - default mode is single-writer execution ownership:
-  - acquire `<plan>.execution.lock` before any `--apply`
-  - all observer-driven mutating commands must hold this lock
+  - acquire `<plan>.swim.lock` before any `--apply`
+  - all swim-driven mutating commands must hold this lock
   - direct helper scripts that mutate waveplan state are unsupported while lock is held
-  - safety guarantee is valid only when all mutators honor this lock; otherwise observer runs in best-effort detection mode
+  - safety guarantee is valid only when all mutators honor this lock; otherwise swim runs in best-effort detection mode
 - apply transaction protocol:
   1. read live waveplan state snapshot A and compute `state_token_A`
   2. evaluate `requires` against snapshot A
@@ -188,7 +190,47 @@ To close stale-state execution races, step apply must enforce both ownership and
 - if token mismatch occurs before invoke, append `blocked` event and abort apply
 - if process crashes between invoke and journal append, first recovery pass must append `unknown` for that seq and require operator action
 
-### 3) Canonical Action Semantics
+### 3) Swim Refinement Sidecar (Coarse -> Fine)
+
+Refinement is deterministic decomposition of a coarse unit into fine steps with fixed constraints.
+
+Path convention:
+- `<plan>.swim.refine.<profile>.json` (example profile: `8k`)
+
+Structure:
+
+```json
+{
+  "schema_version": 1,
+  "coarse_plan": "docs/plans/2026-05-05-swim-execution-waves.json",
+  "profile": "8k",
+  "generated_on": "2026-05-08T00:00:00Z",
+  "units": [
+    {
+      "parent_unit": "T2.1",
+      "step_id": "F2_T2.1_s1",
+      "seq": 1,
+      "context_budget": "8k",
+      "files_scope": ["internal/swim/engine.go", "internal/swim/journal.go"],
+      "depends_on": [],
+      "requires": {"task_status": "taken"},
+      "produces": {"artifact": "engine+journal skeleton"},
+      "invoke": {"argv": ["wp-plan-to-agent.sh", "--mode", "implement", "..."]},
+      "command_hint": "wp-plan-to-agent.sh --mode implement ..."
+    }
+  ]
+}
+```
+
+Refinement rules:
+- refinement may split only *within* a parent unit; cross-parent dependencies are immutable
+- refinement must not reorder parent-wave topology
+- fine `step_id` format is `F{wave}_{parent}_s{n}` and must be unique per refinement artifact
+- `context_budget` is mandatory per fine step
+- `command_hint` is optional debug text only; runner must execute `invoke.argv` exclusively
+- fine-step completion rolls up to parent unit state only when all child steps are applied/waived
+
+### 4) Canonical Action Semantics
 
 - `implement`: requires `available`, produces `taken`
 - `review`: requires `taken`, produces `review_taken`
@@ -196,30 +238,32 @@ To close stale-state execution races, step apply must enforce both ownership and
 - `finish`: requires `review_ended`, produces `completed`
 
 Compatibility note:
-- if runtime state lacks `review_taken` vs `review_ended` granularity, observer must infer from review timestamps (`review_entered_at`, `review_ended_at`) in state payload.
+- if runtime state lacks `review_taken` vs `review_ended` granularity, swim must infer from review timestamps (`review_entered_at`, `review_ended_at`) in state payload.
 
 ## CLI and MCP Surface
 
 ### CLI (waveplan-cli)
 
-Add `execution` command group:
-- `waveplan-cli execution compile --plan <plan.json> --agents <waveagents.json> --out <schedule.json>`
-- `waveplan-cli execution next --schedule <schedule.json> [--journal <journal.json>]`
-- `waveplan-cli execution step --schedule <schedule.json> [--journal <journal.json>] [--seq N|--step-id ID] [--apply]`
-- `waveplan-cli execution run --schedule <schedule.json> [--journal <journal.json>] --until <implement|review|end_review|finish|seq:N|step:ID>`
-- `waveplan-cli execution journal --schedule <schedule.json> [--journal <journal.json>] [--tail N]`
+Add `swim` command group:
+- `waveplan-cli swim compile --plan <plan.json> --agents <waveagents.json> --out <schedule.json>`
+- `waveplan-cli swim next --schedule <schedule.json> [--journal <journal.json>]`
+- `waveplan-cli swim step --schedule <schedule.json> [--journal <journal.json>] [--seq N|--step-id ID] [--apply]`
+- `waveplan-cli swim run --schedule <schedule.json> [--journal <journal.json>] --until <implement|review|end_review|finish|seq:N|step:ID>`
+- `waveplan-cli swim journal --schedule <schedule.json> [--journal <journal.json>] [--tail N]`
+- `waveplan-cli swim refine --plan <coarse-waves.json> --profile <8k> --out <refine.json>`
+- `waveplan-cli swim refine-run --refine <refine.json> [--journal <journal.json>] [--apply]`
 
 Behavior:
-- default is observer mode (read-only, no command execution).
+- default is swim mode (read-only, no command execution).
 - `--apply` executes `invoke.argv`, persists logs, writes journal event.
 
 ### MCP tools (optional in this phase; required in phase 2)
 
-- `waveplan_execution_compile`
-- `waveplan_execution_next`
-- `waveplan_execution_step`
-- `waveplan_execution_run`
-- `waveplan_execution_journal`
+- `waveplan_swim_compile`
+- `waveplan_swim_next`
+- `waveplan_swim_step`
+- `waveplan_swim_run`
+- `waveplan_swim_journal`
 
 ## Implementation Phases
 
@@ -227,10 +271,10 @@ Behavior:
 
 Files:
 - Modify: `wp-emit-wave-execution.sh`
-- Create: `internal/execution/contracts.go`
-- Create: `internal/execution/contracts_test.go`
-- Create: `docs/specs/execution-schedule-schema-v2.json`
-- Create: `docs/specs/execution-journal-schema-v1.json`
+- Create: `internal/swim/contracts.go`
+- Create: `internal/swim/contracts_test.go`
+- Create: `docs/specs/swim-schedule-schema-v2.json`
+- Create: `docs/specs/swim-journal-schema-v1.json`
 
 Tasks:
 - [ ] Add `schema_version`, `step_id`, `seq`, `action`, `requires`, `produces` to emitted rows.
@@ -243,14 +287,14 @@ Acceptance:
 - `execution[]` always includes typed actions for all rows.
 - same inputs produce byte-equivalent schedule output (deterministic JSON formatting).
 
-### Phase 2: Observer Core + Journal Engine
+### Phase 2: Swim Core + Journal Engine
 
 Files:
-- Create: `internal/execution/observer.go`
-- Create: `internal/execution/journal.go`
-- Create: `internal/execution/state_adapter.go`
-- Create: `internal/execution/observer_test.go`
-- Create: `internal/execution/journal_test.go`
+- Create: `internal/swim/engine.go`
+- Create: `internal/swim/journal.go`
+- Create: `internal/swim/state_adapter.go`
+- Create: `internal/swim/engine_test.go`
+- Create: `internal/swim/journal_test.go`
 
 Tasks:
 - [ ] Implement `next-step` resolver using schedule + journal + live state.
@@ -266,8 +310,8 @@ Acceptance:
 ### Phase 3: Step Application + Logging
 
 Files:
-- Create: `internal/execution/runner.go`
-- Create: `internal/execution/runner_test.go`
+- Create: `internal/swim/runner.go`
+- Create: `internal/swim/runner_test.go`
 - Modify: `wp-plan-to-agent.sh` (optional compatibility flags only)
 
 Tasks:
@@ -285,10 +329,10 @@ Acceptance:
 Files:
 - Modify: `waveplan-cli`
 - Modify: `README.md`
-- Create: `docs/specs/2026-05-05-execution-observer-ops.md`
+- Create: `docs/specs/2026-05-05-swim-ops.md`
 
 Tasks:
-- [ ] Add `execution` command group to CLI.
+- [ ] Add `swim` command group to CLI.
 - [ ] Provide examples for `compile`, `next`, `step --apply`, `run --until`.
 - [ ] Document failure recovery and manual override workflow.
 
@@ -302,11 +346,30 @@ Files:
 - Modify: `main_test.go`
 
 Tasks:
-- [ ] Expose observer operations as MCP tools.
+- [ ] Expose swim operations as MCP tools.
 - [ ] Ensure parity between CLI and MCP contracts.
 
 Acceptance:
 - MCP tools return deterministic JSON, no mixed plain text payloads.
+
+### Phase 6: Coarse -> Fine Refinement Layer
+
+Files:
+- Create: `internal/swim/refine.go`
+- Create: `internal/swim/refine_test.go`
+- Modify: `waveplan-cli`
+- Create: `docs/specs/swim-refine-schema-v1.json`
+
+Tasks:
+- [ ] Implement deterministic unit refinement (`parent_unit` -> ordered fine steps) with profile-driven context budget.
+- [ ] Enforce immutable cross-parent dependencies and no wave-topology mutation.
+- [ ] Emit refinement sidecar JSON and validator.
+- [ ] Add `swim refine` and `swim refine-run` commands.
+- [ ] Add roll-up semantics: parent unit marked complete only when all fine steps are terminal (`applied|waived`).
+
+Acceptance:
+- same coarse input + profile produces byte-equivalent refinement output.
+- fine execution cannot violate parent DAG dependency ordering.
 
 ## Failure Handling and Recovery
 
@@ -317,17 +380,17 @@ Failure classes:
 - stale schedule (plan state drift invalidates pending steps)
 
 Required recovery controls:
-- `execution next` must explain why a step is blocked.
-- `execution journal --tail` must expose last known event and cursor.
+- `swim next` must explain why a step is blocked.
+- `swim journal --tail` must expose last known event and cursor.
 - explicit override command (phase 2+): mark event outcome `waived` with operator note.
-- `execution step --ack-unknown <step_id>` must convert `unknown` into either retriable `failed` or operator `waived` before cursor can move past that seq.
+- `swim step --ack-unknown <step_id>` must convert `unknown` into either retriable `failed` or operator `waived` before cursor can move past that seq.
 
 ## Concurrency and Locking
 
 - journal writes must use file lock + compare-and-swap on cursor.
-- `--apply` must hold `<plan>.execution.lock` for the full evaluate->invoke->validate->journal transaction.
+- `--apply` must hold `<plan>.swim.lock` for the full evaluate->invoke->validate->journal transaction.
 - forbid parallel `--apply` against same journal unless explicit `--force-concurrent` (out-of-scope for phase 1-4).
-- if observer detects external waveplan mutation during apply transaction, it must emit `blocked` and abort.
+- if swim detects external waveplan mutation during apply transaction, it must emit `blocked` and abort.
 
 ## Observability
 
@@ -357,26 +420,35 @@ Integration tests:
 Golden tests:
 - deterministic emitted schedule for fixed plan/agents fixture
 - deterministic journal event shape
+- deterministic refinement emission for fixed coarse plan + profile fixture
 
 ## Rollout Plan
 
 1. Land schedule v2 contracts and keep legacy fields for compatibility.
-2. Introduce observer read-only commands (`next`, `journal`) first.
+2. Introduce swim read-only commands (`next`, `journal`) first.
 3. Gate `--apply` behind explicit flag and docs warning.
-4. Migrate automation scripts to observer-driven stepping.
+4. Migrate automation scripts to swim-driven stepping.
 5. Deprecate ambiguous `status`-only schedule rows.
+6. Add pilot coarse->fine refinement profile (`8k`) on one phase and validate roll-up behavior.
 
 Dagdir-safe rollout checks:
-1. verify no `internal/planner`-equivalent concepts appear in observer code
-2. verify observer has no DAG write/mutation path
+1. verify no `internal/planner`-equivalent concepts appear in swim code
+2. verify swim has no DAG write/mutation path
 3. verify journal events do not claim planner authority (execution-only vocabulary)
 
-## Open Decisions (Must Resolve Before Phase 2)
+## Remaining Open Decisions
 
 - Should `status` be retained in schedule rows for backward compatibility, or removed once `requires/produces` exists?
 - Is `review_taken` a persisted canonical status or derived transiently from timestamps?
 - Should `wp_invoke` remain as optional display/debug text, or be dropped entirely after migration completes?
 - Where should step logs live by default (`.waveplan/logs/` vs alongside journal)?
+
+## Locked Decisions for T6 Start
+
+- v1 refinement ships one first-class profile: `8k`.
+- `8k` hard limits: `max_tokens <= 8000`, `max_files <= 6`, `max_lines <= 400`.
+- `16k` and `custom` profiles are deferred until after `8k` pilot validation.
+- refinement output includes optional `command_hint` (debug-only), and parser/runner must refuse to execute it.
 
 ## Definition of Done
 
