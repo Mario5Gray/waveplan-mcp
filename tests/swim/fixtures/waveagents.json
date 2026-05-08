@@ -1,0 +1,7 @@
+{
+  "agents": [
+    {"name": "phi", "provider": "codex"},
+    {"name": "sigma", "provider": "claude"}
+  ],
+  "schedule": ["phi", "sigma"]
+}

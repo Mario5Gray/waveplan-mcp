@@ -232,7 +232,10 @@ for t in tasks:
     review_provider = agent_map[review_agent]
     wave = int(t.get("wave", 0) or 0)
 
-    def add_row(action, wp_invoke_cmd, status):
+    def add_row(action, argv, status):
+        # argv is the canonical execution payload; wp_invoke is derived from it
+        # so the two cannot drift. Runner consumption (T2.1+) reads argv only;
+        # wp_invoke is debug-only.
         global seq
         status_map = {
             "implement": ("available", "taken"),
@@ -242,6 +245,7 @@ for t in tasks:
         }
         req, prod = status_map[action]
         step_id = f"S{wave}_{tid}_{action}"
+        wp_invoke_cmd = shlex.join(argv)
         execution.append({
             "seq": seq,
             "step_id": step_id,
@@ -249,39 +253,48 @@ for t in tasks:
             "action": action,
             "requires": {"task_status": req},
             "produces": {"task_status": prod},
+            "invoke": {"argv": list(argv)},
             "wp_invoke": wp_invoke_cmd,
             "status": status,
         })
         seq += 1
 
     # 1) Implement / pop dispatch
-    cmd1 = (
-        f"{shlex.quote(invoker)} --mode implement --target {shlex.quote(pop_provider)} "
-        f"--plan {shlex.quote(plan_path)} --agent {shlex.quote(pop_agent)}"
-    )
-    add_row("implement", cmd1, "available")
+    argv1 = [
+        invoker, "--mode", "implement",
+        "--target", pop_provider,
+        "--plan", plan_path,
+        "--agent", pop_agent,
+    ]
+    add_row("implement", argv1, "available")
 
     # 2) Review dispatch (owner=pop agent; reviewer=review agent)
-    cmd2 = (
-        f"{shlex.quote(invoker)} --mode review --target {shlex.quote(review_provider)} "
-        f"--plan {shlex.quote(plan_path)} --agent {shlex.quote(pop_agent)} "
-        f"--reviewer {shlex.quote(review_agent)}"
-    )
-    add_row("review", cmd2, "taken")
+    argv2 = [
+        invoker, "--mode", "review",
+        "--target", review_provider,
+        "--plan", plan_path,
+        "--agent", pop_agent,
+        "--reviewer", review_agent,
+    ]
+    add_row("review", argv2, "taken")
 
     # 3) End review
-    cmd3 = (
-        f"{shlex.quote(invoker)} --mode review_end --plan {shlex.quote(plan_path)} "
-        f"--task-id {shlex.quote(tid)} --review-note '${{WP_COMMENT:-}}'"
-    )
-    add_row("end_review", cmd3, "taken")
+    argv3 = [
+        invoker, "--mode", "review_end",
+        "--plan", plan_path,
+        "--task-id", tid,
+        "--review-note", "${WP_COMMENT:-}",
+    ]
+    add_row("end_review", argv3, "taken")
 
     # 4) Complete
-    cmd4 = (
-        f"{shlex.quote(invoker)} --mode fin --plan {shlex.quote(plan_path)} "
-        f"--task-id {shlex.quote(tid)} --git-sha '${{GIT_SHA:-DEFERRED}}'"
-    )
-    add_row("finish", cmd4, "completed")
+    argv4 = [
+        invoker, "--mode", "fin",
+        "--plan", plan_path,
+        "--task-id", tid,
+        "--git-sha", "${GIT_SHA:-DEFERRED}",
+    ]
+    add_row("finish", argv4, "completed")
 
 print(json.dumps({"schema_version": 2, "execution": execution}, indent=2))
 PY
