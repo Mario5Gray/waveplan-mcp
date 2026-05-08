@@ -8,6 +8,7 @@ delegated to the Go-based waveplan-mcp binary via its MCP tools/call protocol.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +16,37 @@ from pathlib import Path
 
 MCP_PROTOCOL_VERSION = "2024-11-05"
 _SERVER_BIN = os.environ.get("WAVEPLAN_MCP_BIN") or str(Path.home() / ".local" / "bin" / "waveplan-mcp")
+_UNIT_ID_RE = re.compile(r"^[A-Z][0-9]+\.[0-9]+$")
+_TASK_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-]*$")
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+\-]\d{2}:?\d{2})?)?$")
+_ALLOWED_KINDS = {"impl", "test", "verify", "doc", "refactor", "code"}
+
+# Canonical field ordering — known fields emitted in this order, then any
+# remaining (preserved) fields appended alphabetically.
+_TOP_FIELD_ORDER = (
+    "schema_version", "generated_on", "plan_version", "plan_generation",
+    "plan", "fp_index", "doc_index", "tasks", "units",
+)
+_UNIT_FIELD_ORDER = (
+    "task", "title", "kind", "wave", "plan_line", "depends_on",
+    "doc_refs", "fp_refs", "files", "notes", "command", "command_hint",
+)
+_TASK_FIELD_ORDER = (
+    "title", "plan_line", "doc_refs", "files", "description", "notes",
+)
+
+
+def _ordered(d: dict, known: tuple[str, ...]) -> dict:
+    """Return a new dict with `known` fields first (in given order, present-only),
+    then remaining keys alphabetically. Preserves every input key — never drops."""
+    out: dict = {}
+    for k in known:
+        if k in d:
+            out[k] = d[k]
+    for k in sorted(d.keys()):
+        if k not in out:
+            out[k] = d[k]
+    return out
 
 # Where the repo keeps its execution-wave plan files.
 _REPO_PLAN_DIR = Path(__file__).resolve().parent.parent / "docs" / "superpowers" / "plans"
@@ -61,6 +93,206 @@ def _build_env(plan_arg: str | None = None) -> dict:
         env["WAVEPLAN_MCP_BIN"] = os.environ["WAVEPLAN_MCP_BIN"]
 
     return env
+
+
+def _unit_sort_key(unit_id: str) -> tuple[int, int]:
+    # T12.3 -> (12, 3). Fallback preserves deterministic lexicographic behavior.
+    m = re.match(r"^[A-Z]([0-9]+)\.([0-9]+)$", unit_id)
+    if not m:
+        return (10**9, 10**9)
+    return (int(m.group(1)), int(m.group(2)))
+
+
+def _validate_and_canonicalize_plan_json(raw: dict) -> dict:
+    """Safe canonicalizer for swim execution-waves JSON.
+
+    Preserves every field present in the input. Validates required structure,
+    types, formats, and referential integrity (depends_on, unit.task,
+    unit.doc_refs/fp_refs, task.doc_refs). Emits deterministic byte-identical
+    output for byte-identical input.
+    """
+    required_top = ("schema_version", "generated_on", "plan", "units", "tasks", "doc_index", "fp_index")
+    for key in required_top:
+        if key not in raw:
+            raise ValueError(f"missing required top-level field: {key}")
+
+    # ---- Top-level scalar / structure type checks ----
+    sv = raw["schema_version"]
+    if not isinstance(sv, int) or isinstance(sv, bool) or sv < 1:
+        raise ValueError(f"schema_version must be a positive integer, got: {sv!r}")
+
+    gen_on = raw["generated_on"]
+    if not isinstance(gen_on, str) or not _DATE_RE.match(gen_on):
+        raise ValueError(f"generated_on must be YYYY-MM-DD or ISO 8601 string, got: {gen_on!r}")
+
+    if "plan_version" in raw:
+        pv = raw["plan_version"]
+        if not isinstance(pv, int) or isinstance(pv, bool) or pv < 1:
+            raise ValueError(f"plan_version must be a positive integer, got: {pv!r}")
+    if "plan_generation" in raw:
+        pg = raw["plan_generation"]
+        if not isinstance(pg, str) or not pg:
+            raise ValueError(f"plan_generation must be a non-empty string, got: {pg!r}")
+
+    if not isinstance(raw["plan"], dict):
+        raise ValueError("plan must be an object")
+    if not isinstance(raw["units"], dict) or not raw["units"]:
+        raise ValueError("units must be a non-empty object")
+    if not isinstance(raw["tasks"], dict) or not raw["tasks"]:
+        raise ValueError("tasks must be a non-empty object")
+    if not isinstance(raw["doc_index"], dict):
+        raise ValueError("doc_index must be an object")
+    if not isinstance(raw["fp_index"], dict):
+        raise ValueError("fp_index must be an object")
+
+    units: dict = raw["units"]
+    tasks: dict = raw["tasks"]
+    doc_index: dict = raw["doc_index"]
+    fp_index: dict = raw["fp_index"]
+
+    # ---- Task-key shape (loose: alphanumeric + . _ -, must lead with alnum) ----
+    for task_id in tasks:
+        if not isinstance(task_id, str) or not _TASK_ID_RE.match(task_id):
+            raise ValueError(f"invalid task key: {task_id!r}")
+        if not isinstance(tasks[task_id], dict):
+            raise ValueError(f"task {task_id} must be an object")
+
+    # ---- Per-task validation (incl. doc_refs ref integrity) ----
+    for task_id, task in tasks.items():
+        if "doc_refs" in task:
+            dr = task["doc_refs"]
+            if not isinstance(dr, list):
+                raise ValueError(f"task {task_id} doc_refs must be an array")
+            for ref in dr:
+                if ref not in doc_index:
+                    raise ValueError(f"task {task_id} doc_refs entry not in doc_index: {ref!r}")
+
+    # ---- Per-unit validation ----
+    for unit_id, unit in units.items():
+        if not _UNIT_ID_RE.match(unit_id):
+            raise ValueError(f"invalid unit key: {unit_id!r}")
+        if not isinstance(unit, dict):
+            raise ValueError(f"unit {unit_id} must be an object")
+
+        for req in ("task", "title", "kind", "wave", "plan_line", "depends_on"):
+            if req not in unit:
+                raise ValueError(f"unit {unit_id} missing required field: {req}")
+
+        if not isinstance(unit["title"], str) or not unit["title"]:
+            raise ValueError(f"unit {unit_id} title must be a non-empty string")
+
+        task_ref = unit["task"]
+        if not isinstance(task_ref, str) or task_ref not in tasks:
+            raise ValueError(f"unit {unit_id} references missing task: {task_ref!r}")
+
+        kind = unit["kind"]
+        if kind not in _ALLOWED_KINDS:
+            raise ValueError(f"unit {unit_id} has invalid kind: {kind!r}")
+
+        wave = unit["wave"]
+        if not isinstance(wave, int) or isinstance(wave, bool) or wave <= 0:
+            raise ValueError(f"unit {unit_id} has invalid wave: {wave!r}")
+
+        plan_line = unit["plan_line"]
+        if not isinstance(plan_line, int) or isinstance(plan_line, bool) or plan_line <= 0:
+            raise ValueError(f"unit {unit_id} has invalid plan_line: {plan_line!r}")
+
+        deps = unit["depends_on"]
+        if not isinstance(deps, list):
+            raise ValueError(f"unit {unit_id} depends_on must be an array")
+        for dep in deps:
+            if dep not in units:
+                raise ValueError(f"unit {unit_id} depends on unknown unit: {dep!r}")
+
+        # doc_refs referential integrity
+        if "doc_refs" in unit:
+            dr = unit["doc_refs"]
+            if not isinstance(dr, list):
+                raise ValueError(f"unit {unit_id} doc_refs must be an array")
+            for ref in dr:
+                if ref not in doc_index:
+                    raise ValueError(f"unit {unit_id} doc_refs entry not in doc_index: {ref!r}")
+
+        # fp_refs referential integrity
+        if "fp_refs" in unit:
+            fr = unit["fp_refs"]
+            if not isinstance(fr, list):
+                raise ValueError(f"unit {unit_id} fp_refs must be an array")
+            for ref in fr:
+                if ref not in fp_index:
+                    raise ValueError(f"unit {unit_id} fp_refs entry not in fp_index: {ref!r}")
+
+    # ---- Cycle check (Kahn) ----
+    indeg: dict[str, int] = {k: 0 for k in units}
+    outgoing: dict[str, list[str]] = {k: [] for k in units}
+    for uid, unit in units.items():
+        for dep in unit["depends_on"]:
+            outgoing[dep].append(uid)
+            indeg[uid] += 1
+
+    queue = [uid for uid, deg in indeg.items() if deg == 0]
+    queue.sort(key=_unit_sort_key)
+    seen = 0
+    while queue:
+        node = queue.pop(0)
+        seen += 1
+        for child in sorted(outgoing[node], key=_unit_sort_key):
+            indeg[child] -= 1
+            if indeg[child] == 0:
+                queue.append(child)
+                queue.sort(key=_unit_sort_key)
+    if seen != len(units):
+        raise ValueError("unit dependency graph contains a cycle")
+
+    # ---- Canonicalize: preserve every field, deterministic ordering ----
+    def _task_sort_key(tid: str) -> tuple[int, int, str]:
+        # Numeric-prefixed task IDs (T1, T12) sort numerically; others lexicographically.
+        m = re.match(r"^[A-Z]([0-9]+)$", tid)
+        if m:
+            return (0, int(m.group(1)), tid)
+        return (1, 0, tid)
+
+    canonical_units: dict[str, dict] = {}
+    for unit_id in sorted(units.keys(), key=_unit_sort_key):
+        unit = dict(units[unit_id])
+        unit["depends_on"] = sorted(unit["depends_on"], key=_unit_sort_key)
+        canonical_units[unit_id] = _ordered(unit, _UNIT_FIELD_ORDER)
+
+    canonical_tasks: dict[str, dict] = {}
+    for task_id in sorted(tasks.keys(), key=_task_sort_key):
+        canonical_tasks[task_id] = _ordered(dict(tasks[task_id]), _TASK_FIELD_ORDER)
+
+    canonical_doc_index = {k: doc_index[k] for k in sorted(doc_index.keys())}
+    canonical_fp_index = {k: fp_index[k] for k in sorted(fp_index.keys())}
+
+    # Build canonical top-level: known fields first in order, then remaining
+    # top-level keys alphabetically (preserves any future / experimental fields).
+    rebuilt = dict(raw)
+    rebuilt["fp_index"] = canonical_fp_index
+    rebuilt["doc_index"] = canonical_doc_index
+    rebuilt["tasks"] = canonical_tasks
+    rebuilt["units"] = canonical_units
+    return _ordered(rebuilt, _TOP_FIELD_ORDER)
+
+
+def _swim_compile_plan_json(in_path: str, out_path: str | None) -> None:
+    src = Path(in_path)
+    if not src.exists():
+        raise ValueError(f"input file not found: {in_path}")
+    try:
+        payload = json.loads(src.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"invalid JSON in input file: {e}") from e
+    if not isinstance(payload, dict):
+        raise ValueError("top-level JSON must be an object")
+
+    canonical = _validate_and_canonicalize_plan_json(payload)
+    rendered = json.dumps(canonical, indent=2) + "\n"
+    if out_path:
+        Path(out_path).write_text(rendered, encoding="utf-8")
+        print(json.dumps({"ok": True, "input": str(src), "output": str(Path(out_path)), "mode": "write"}, indent=2))
+        return
+    print(rendered, end="")
 
 
 class MCPPhone:
@@ -189,8 +421,24 @@ def main() -> None:
     list_p.add_argument("--plan-dir", dest="plan_dir", nargs="?", default=None,
                         help="Directory to search for plans")
     sub.add_parser("deptree", help="Show tasks in dependency order with parallel groups")
+    swim_p = sub.add_parser("swim", help="SWIM deterministic tooling")
+    swim_sub = swim_p.add_subparsers(dest="swim_command", required=True)
+    swim_compile = swim_sub.add_parser(
+        "compile-plan-json",
+        help="Deterministically validate + canonicalize a swim execution-waves JSON plan",
+    )
+    swim_compile.add_argument("--in", dest="input_path", required=True, help="Input *-execution-waves.json path")
+    swim_compile.add_argument("--out", dest="output_path", required=False, help="Output path (prints to stdout if omitted)")
 
     args = parser.parse_args()
+
+    if args.command == "swim" and args.swim_command == "compile-plan-json":
+        try:
+            _swim_compile_plan_json(args.input_path, args.output_path)
+        except ValueError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
 
     server_bin = args.mcp_bin or _SERVER_BIN
     if not os.path.isfile(server_bin):
