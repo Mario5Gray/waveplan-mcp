@@ -26,7 +26,13 @@
       "Dagdir guardrails apply globally: no planner logic, no dialect parsing, no DAG mutation in swim.",
       "Phase 5 (MCP) marked optional in the spec but included as T5.1 to keep CLI/MCP parity tracked.",
       "FP parent tracker: FP-tkcpbbjh",
-      "Cutover tracker (post-Phase-4): FP-olhzdtnc"
+      "Cutover tracker (post-Phase-4): FP-olhzdtnc",
+      "Refinement tracker (Phase 6): FP-sgvrqasn",
+      "T6 dependency corrected: T6 is parallel with T5 and depends on T4 completion, not MCP parity.",
+      "Refinement v1 profile locked: 8k only (max_tokens<=8000, max_files<=6, max_lines<=400).",
+      "Fine step_id namespace locked: F{wave}_{parent}_s{n}.",
+      "command_hint is debug-only in refinement output; never an execution source.",
+      "Refine MCP parity tracker (Phase 7): FP-avivlxqt"
     ]
   },
   "fp_index": {
@@ -37,7 +43,9 @@
     "FP-sdxiidyl": "sdxiidylnhgelncmpymkfjsmysrhudno",
     "FP-epvqsvqp": "epvqsvqpymiflgrafddcxqaraieimuos",
     "FP-gvwfpzuy": "gvwfpzuyqlbtwozcibjjrzphidobotal",
-    "FP-olhzdtnc": "olhzdtncfmruxoumzhzauijenaogqkoj"
+    "FP-olhzdtnc": "olhzdtncfmruxoumzhzauijenaogqkoj",
+    "FP-sgvrqasn": "sgvrqasnbehdwcegzbtzgcfxunrwnngz",
+    "FP-avivlxqt": "avivlxqtrtobbavenboxnxcuicobmxxp"
   },
   "doc_index": {
     "plan": {
@@ -84,12 +92,22 @@
       "path": "docs/specs/swim-journal-schema-v1.json",
       "line": 1,
       "kind": "code"
+    },
+    "refine_root": {
+      "path": "internal/swim/refine.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "refine_schema": {
+      "path": "docs/specs/swim-refine-schema-v1.json",
+      "line": 1,
+      "kind": "code"
     }
   },
   "tasks": {
     "T1": {
       "title": "Phase 1 \u2014 Contracts and compiler hardening (schedule v2 + locked decisions)",
-      "plan_line": 226,
+      "plan_line": 270,
       "doc_refs": [
         "spec",
         "wp_emit",
@@ -106,7 +124,7 @@
     },
     "T2": {
       "title": "Phase 2 \u2014 Swim core + journal engine + race-closure protocol",
-      "plan_line": 246,
+      "plan_line": 290,
       "doc_refs": [
         "spec",
         "swim_root"
@@ -121,7 +139,7 @@
     },
     "T3": {
       "title": "Phase 3 \u2014 Step runner, logging, dry-run, --apply / run --until",
-      "plan_line": 266,
+      "plan_line": 310,
       "doc_refs": [
         "spec",
         "swim_root",
@@ -135,7 +153,7 @@
     },
     "T4": {
       "title": "Phase 4 \u2014 CLI swim command group + ops documentation",
-      "plan_line": 283,
+      "plan_line": 327,
       "doc_refs": [
         "spec",
         "cli_root"
@@ -148,7 +166,7 @@
     },
     "T5": {
       "title": "Phase 5 \u2014 MCP swim tooling + CLI/MCP parity",
-      "plan_line": 298,
+      "plan_line": 342,
       "doc_refs": [
         "spec",
         "mcp_main"
@@ -157,16 +175,99 @@
         "main.go",
         "main_test.go"
       ]
+    },
+    "T6": {
+      "title": "Phase 6 \u2014 Deterministic coarse->fine refinement layer (profile-driven)",
+      "plan_line": 355,
+      "doc_refs": [
+        "spec",
+        "refine_root",
+        "refine_schema",
+        "cli_root"
+      ],
+      "files": [
+        "internal/swim/refine.go",
+        "internal/swim/refine_test.go",
+        "waveplan-cli",
+        "docs/specs/swim-refine-schema-v1.json"
+      ]
+    },
+    "T7": {
+      "title": "Phase 7 \u2014 MCP refine parity (swim_refine / swim_refine_run)",
+      "plan_line": 370,
+      "doc_refs": [
+        "spec",
+        "mcp_main",
+        "refine_root"
+      ],
+      "files": [
+        "main.go",
+        "main_test.go",
+        "internal/swim/refine.go",
+        "internal/swim/refine_test.go"
+      ]
     }
   },
   "units": {
     "T1.1": {
       "task": "T1",
-      "title": "Emit schedule v2 from wp-emit-wave-execution.sh: schema_version, step_id (underscore-separated S{wave}_{task_id}_{action}), seq, action, requires, produces, invoke.argv canonical, wp_invoke debug-only, status field kept with deprecation notice; deterministic byte-equivalent output; publish swim-schedule-schema-v2.json and swim-journal-schema-v1.json; add Go-side strict validators",
+      "title": "schedule v2 core fields: schema_version, seq, action, requires, produces scaffolding in emitter",
       "kind": "impl",
       "wave": 1,
-      "plan_line": 226,
+      "plan_line": 270,
       "depends_on": [],
+      "fp_refs": [
+        "FP-ridrsrpw"
+      ]
+    },
+    "T1.2": {
+      "task": "T1",
+      "title": "emit canonical invoke.argv and enforce wp_invoke as debug-only compatibility field",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 270,
+      "depends_on": [
+        "T1.1"
+      ],
+      "fp_refs": [
+        "FP-ridrsrpw"
+      ]
+    },
+    "T1.3": {
+      "task": "T1",
+      "title": "deterministic coarse step_id format and stable ordering guarantees in emitted schedule",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 270,
+      "depends_on": [
+        "T1.2"
+      ],
+      "fp_refs": [
+        "FP-ridrsrpw"
+      ]
+    },
+    "T1.4": {
+      "task": "T1",
+      "title": "publish swim-schedule-schema-v2.json and swim-journal-schema-v1.json contracts",
+      "kind": "doc",
+      "wave": 1,
+      "plan_line": 270,
+      "depends_on": [
+        "T1.3"
+      ],
+      "fp_refs": [
+        "FP-ridrsrpw"
+      ]
+    },
+    "T1.5": {
+      "task": "T1",
+      "title": "strict validators + golden determinism tests for schedule/journal emission",
+      "kind": "test",
+      "wave": 1,
+      "plan_line": 270,
+      "depends_on": [
+        "T1.4"
+      ],
       "fp_refs": [
         "FP-spnuqvme",
         "FP-ridrsrpw"
@@ -174,12 +275,64 @@
     },
     "T2.1": {
       "task": "T2",
-      "title": "Swim engine: next-step resolver over schedule + journal + live state; precondition evaluator (requires) and postcondition validator (produces) including review_taken timestamp derivation; append-only journal with file-lock CAS on cursor; apply-time race-closure protocol (snapshot tokens A/B before invoke, C after); unknown-recovery on crash between invoke and journal append",
+      "title": "state adapter and canonical runtime-state derivations (including review_taken via timestamps)",
       "kind": "impl",
       "wave": 2,
-      "plan_line": 246,
+      "plan_line": 290,
       "depends_on": [
-        "T1.1"
+        "T1.5"
+      ],
+      "fp_refs": [
+        "FP-olthpttb"
+      ]
+    },
+    "T2.2": {
+      "task": "T2",
+      "title": "requires/produces evaluator with deterministic failure reasons",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 290,
+      "depends_on": [
+        "T2.1"
+      ],
+      "fp_refs": [
+        "FP-olthpttb"
+      ]
+    },
+    "T2.3": {
+      "task": "T2",
+      "title": "append-only swim journal engine with CAS cursor and outcome semantics",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 290,
+      "depends_on": [
+        "T2.2"
+      ],
+      "fp_refs": [
+        "FP-olthpttb"
+      ]
+    },
+    "T2.4": {
+      "task": "T2",
+      "title": "next-step resolver over schedule + journal + live state",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 290,
+      "depends_on": [
+        "T2.3"
+      ],
+      "fp_refs": [
+        "FP-olthpttb"
+      ]
+    },
+    "T2.5": {
+      "task": "T2",
+      "title": "apply-time race-closure protocol and unknown recovery path",
+      "kind": "verify",
+      "wave": 2,
+      "plan_line": 290,
+      "depends_on": [
+        "T2.4"
       ],
       "fp_refs": [
         "FP-olthpttb"
@@ -187,12 +340,38 @@
     },
     "T3.1": {
       "task": "T3",
-      "title": "Swim runner: execute invoke.argv via argv (no shell eval); per-step stdout/stderr log files under .waveplan/swim/<plan-basename>/logs/; dry-run mode emits intended command + gating decision without state mutation; --apply transaction holds .waveplan/swim/<plan-basename>/swim.lock; run --until <action|seq:N|step:ID> with stop-on-failure",
+      "title": "argv-only step runner with stdout/stderr artifact capture",
       "kind": "impl",
       "wave": 3,
-      "plan_line": 266,
+      "plan_line": 310,
       "depends_on": [
-        "T2.1"
+        "T2.5"
+      ],
+      "fp_refs": [
+        "FP-sdxiidyl"
+      ]
+    },
+    "T3.2": {
+      "task": "T3",
+      "title": "--apply transaction wiring with swim.lock lifecycle and postcondition gate",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 310,
+      "depends_on": [
+        "T3.1"
+      ],
+      "fp_refs": [
+        "FP-sdxiidyl"
+      ]
+    },
+    "T3.3": {
+      "task": "T3",
+      "title": "run --until and dry-run behavior with stop-on-failure semantics",
+      "kind": "verify",
+      "wave": 3,
+      "plan_line": 310,
+      "depends_on": [
+        "T3.2"
       ],
       "fp_refs": [
         "FP-sdxiidyl"
@@ -200,12 +379,38 @@
     },
     "T4.1": {
       "task": "T4",
-      "title": "waveplan-cli swim command group: compile/next/step/run/journal subcommands; default read-only, --apply gated; --ack-unknown override; failure recovery and manual-override workflow documented in 2026-05-05-swim-ops.md; README updated with examples",
+      "title": "waveplan-cli swim command scaffold and argument contracts",
       "kind": "impl",
       "wave": 4,
-      "plan_line": 283,
+      "plan_line": 327,
       "depends_on": [
-        "T3.1"
+        "T3.3"
+      ],
+      "fp_refs": [
+        "FP-epvqsvqp"
+      ]
+    },
+    "T4.2": {
+      "task": "T4",
+      "title": "wire compile/next/step/run/journal + ack-unknown CLI behaviors",
+      "kind": "impl",
+      "wave": 4,
+      "plan_line": 327,
+      "depends_on": [
+        "T4.1"
+      ],
+      "fp_refs": [
+        "FP-epvqsvqp"
+      ]
+    },
+    "T4.3": {
+      "task": "T4",
+      "title": "ops doc + README examples for recovery, override, and safe apply usage",
+      "kind": "doc",
+      "wave": 4,
+      "plan_line": 327,
+      "depends_on": [
+        "T4.2"
       ],
       "fp_refs": [
         "FP-epvqsvqp"
@@ -213,15 +418,94 @@
     },
     "T5.1": {
       "task": "T5",
-      "title": "MCP tools waveplan_swim_compile / _next / _step / _run / _journal mirroring CLI surface; deterministic JSON returns (no mixed text payloads); contract parity tests CLI vs MCP",
+      "title": "add waveplan_swim_compile/next/step/journal MCP tools",
       "kind": "impl",
       "wave": 5,
-      "plan_line": 298,
+      "plan_line": 342,
       "depends_on": [
-        "T4.1"
+        "T4.3"
       ],
       "fp_refs": [
         "FP-gvwfpzuy"
+      ]
+    },
+    "T5.2": {
+      "task": "T5",
+      "title": "add waveplan_swim_run MCP tool and CLI/MCP parity tests",
+      "kind": "test",
+      "wave": 5,
+      "plan_line": 342,
+      "depends_on": [
+        "T5.1"
+      ],
+      "fp_refs": [
+        "FP-gvwfpzuy"
+      ]
+    },
+    "T6.1": {
+      "task": "T6",
+      "title": "define swim refinement schema and v1 profile contract (8k only) including step_id format F{wave}_{parent}_s{n}",
+      "kind": "doc",
+      "wave": 5,
+      "plan_line": 355,
+      "depends_on": [
+        "T4.3"
+      ],
+      "fp_refs": [
+        "FP-sgvrqasn"
+      ]
+    },
+    "T6.2": {
+      "task": "T6",
+      "title": "implement deterministic coarse->fine compiler honoring immutable cross-parent dependencies",
+      "kind": "impl",
+      "wave": 5,
+      "plan_line": 355,
+      "depends_on": [
+        "T6.1"
+      ],
+      "fp_refs": [
+        "FP-sgvrqasn"
+      ]
+    },
+    "T6.3": {
+      "task": "T6",
+      "title": "implement refine-run execution path and parent roll-up semantics",
+      "kind": "impl",
+      "wave": 5,
+      "plan_line": 355,
+      "depends_on": [
+        "T6.2"
+      ],
+      "fp_refs": [
+        "FP-sgvrqasn"
+      ]
+    },
+    "T6.4": {
+      "task": "T6",
+      "title": "add swim refine/refine-run CLI commands and refinement determinism tests",
+      "kind": "test",
+      "wave": 5,
+      "plan_line": 355,
+      "depends_on": [
+        "T6.3"
+      ],
+      "fp_refs": [
+        "FP-sgvrqasn"
+      ]
+    },
+    "T7.1": {
+      "task": "T7",
+      "title": "Add MCP tools waveplan_swim_refine and waveplan_swim_refine_run with deterministic JSON payloads and CLI parity tests",
+      "kind": "impl",
+      "wave": 6,
+      "plan_line": 370,
+      "depends_on": [
+        "T5.2",
+        "T6.4"
+      ],
+      "fp_refs": [
+        "FP-avivlxqt"
       ]
     }
   }
