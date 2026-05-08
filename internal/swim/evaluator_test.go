@@ -1,6 +1,11 @@
 package swim
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestEvaluate_Table(t *testing.T) {
 	taskID := "T9.9"
@@ -154,6 +159,36 @@ func TestPredict(t *testing.T) {
 	row := ScheduleRow{Produces: StatusWrapper{TaskStatus: string(StatusReviewEnded)}}
 	if got := Predict(row); got != StatusReviewEnded {
 		t.Fatalf("Predict() = %q, want %q", got, StatusReviewEnded)
+	}
+}
+
+// TestEvaluate_LiveSchedule asserts every emitted row in the live schedule is
+// allowed when paired with a state where the task already holds the row's
+// required status. Catches drift between emitter and evaluator on real data.
+func TestEvaluate_LiveSchedule(t *testing.T) {
+	root, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("findRepoRoot: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(root, "docs", "plans", "2026-05-05-swim-execution-schedule.json"))
+	if err != nil {
+		t.Fatalf("read live schedule: %v", err)
+	}
+	var sched Schedule
+	if err := json.Unmarshal(body, &sched); err != nil {
+		t.Fatalf("parse live schedule: %v", err)
+	}
+	if len(sched.Execution) == 0 {
+		t.Fatal("live schedule has no rows")
+	}
+	for _, row := range sched.Execution {
+		want := Status(row.Requires.TaskStatus)
+		snap := snapshotWithTaskStatus(row.TaskID, want)
+		res := Evaluate(row, snap)
+		if !res.Allowed {
+			t.Errorf("%s: expected allowed when status=%s, got code=%s reason=%s",
+				row.StepID, want, res.Code, res.Reason)
+		}
 	}
 }
 
