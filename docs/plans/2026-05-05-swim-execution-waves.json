@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-05-07",
+  "plan_version": 1,
+  "plan_generation": "2026-05-07T00:00:00Z",
+  "plan": {
+    "id": "swim-implementation",
+    "title": "Swim \u2014 Durable Execution State Machine for Waveplan",
+    "plan_doc": {
+      "path": "docs/specs/2026-05-05-swim-implementation-plan.md",
+      "line": 1
+    },
+    "spec_doc": {
+      "path": "docs/specs/2026-05-05-swim-implementation-plan.md",
+      "line": 1
+    },
+    "notes": [
+      "Coarse-grained objective tree. One unit per phase (TN.1). Sub-decomposition lands in a follow-up plan after this tree is approved.",
+      "Strict serial waves: each phase consumes outputs of the prior phase.",
+      "Locked decisions before wave generation (Sigma proposals + step_id fix), all enforced in T1.1:",
+      "  1. Keep `status` field in schedule rows during transition; mark deprecated; drop in a future phase behind feature flag.",
+      "  2. Derive `review_taken` from `review_entered_at` / `review_ended_at` timestamps (no schema change).",
+      "  3. Keep `wp_invoke` as display/debug-only; never an execution source; runner must read `invoke.argv` exclusively.",
+      "  4. Default swim artifact layout: `.waveplan/swim/<plan-basename>/` containing `swim.lock`, `logs/`, and journal sidecar.",
+      "  5. step_id separator switches to underscore: `S1_T1.1_implement` (parser-trivial, avoids period collision with task IDs like `T1.1`).",
+      "Dagdir guardrails apply globally: no planner logic, no dialect parsing, no DAG mutation in swim.",
+      "Phase 5 (MCP) marked optional in the spec but included as T5.1 to keep CLI/MCP parity tracked.",
+      "FP parent tracker: FP-tkcpbbjh",
+      "Cutover tracker (post-Phase-4): FP-olhzdtnc"
+    ]
+  },
+  "fp_index": {
+    "FP-tkcpbbjh": "tkcpbbjhmowkowlrgycfjeuwgbevrdmk",
+    "FP-spnuqvme": "spnuqvmezordicbtogfvwhprcmwnltci",
+    "FP-ridrsrpw": "ridrsrpwrcuozirlvgishhsfyxgglkss",
+    "FP-olthpttb": "olthpttbieolwdscotiglmaiweabpwtk",
+    "FP-sdxiidyl": "sdxiidylnhgelncmpymkfjsmysrhudno",
+    "FP-epvqsvqp": "epvqsvqpymiflgrafddcxqaraieimuos",
+    "FP-gvwfpzuy": "gvwfpzuyqlbtwozcibjjrzphidobotal",
+    "FP-olhzdtnc": "olhzdtncfmruxoumzhzauijenaogqkoj"
+  },
+  "doc_index": {
+    "plan": {
+      "path": "docs/specs/2026-05-05-swim-implementation-plan.md",
+      "line": 1,
+      "kind": "plan"
+    },
+    "spec": {
+      "path": "docs/specs/2026-05-05-swim-implementation-plan.md",
+      "line": 1,
+      "kind": "spec"
+    },
+    "wp_emit": {
+      "path": "wp-emit-wave-execution.sh",
+      "line": 1,
+      "kind": "code"
+    },
+    "wp_plan_to_agent": {
+      "path": "wp-plan-to-agent.sh",
+      "line": 1,
+      "kind": "code"
+    },
+    "cli_root": {
+      "path": "waveplan-cli",
+      "line": 1,
+      "kind": "code"
+    },
+    "mcp_main": {
+      "path": "main.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "swim_root": {
+      "path": "internal/swim/",
+      "line": 1,
+      "kind": "code"
+    },
+    "schedule_schema": {
+      "path": "docs/specs/swim-schedule-schema-v2.json",
+      "line": 1,
+      "kind": "code"
+    },
+    "journal_schema": {
+      "path": "docs/specs/swim-journal-schema-v1.json",
+      "line": 1,
+      "kind": "code"
+    }
+  },
+  "tasks": {
+    "T1": {
+      "title": "Phase 1 \u2014 Contracts and compiler hardening (schedule v2 + locked decisions)",
+      "plan_line": 226,
+      "doc_refs": [
+        "spec",
+        "wp_emit",
+        "schedule_schema",
+        "journal_schema"
+      ],
+      "files": [
+        "wp-emit-wave-execution.sh",
+        "internal/swim/contracts.go",
+        "internal/swim/contracts_test.go",
+        "docs/specs/swim-schedule-schema-v2.json",
+        "docs/specs/swim-journal-schema-v1.json"
+      ]
+    },
+    "T2": {
+      "title": "Phase 2 \u2014 Swim core + journal engine + race-closure protocol",
+      "plan_line": 246,
+      "doc_refs": [
+        "spec",
+        "swim_root"
+      ],
+      "files": [
+        "internal/swim/engine.go",
+        "internal/swim/journal.go",
+        "internal/swim/state_adapter.go",
+        "internal/swim/engine_test.go",
+        "internal/swim/journal_test.go"
+      ]
+    },
+    "T3": {
+      "title": "Phase 3 \u2014 Step runner, logging, dry-run, --apply / run --until",
+      "plan_line": 266,
+      "doc_refs": [
+        "spec",
+        "swim_root",
+        "wp_plan_to_agent"
+      ],
+      "files": [
+        "internal/swim/runner.go",
+        "internal/swim/runner_test.go",
+        "wp-plan-to-agent.sh"
+      ]
+    },
+    "T4": {
+      "title": "Phase 4 \u2014 CLI swim command group + ops documentation",
+      "plan_line": 283,
+      "doc_refs": [
+        "spec",
+        "cli_root"
+      ],
+      "files": [
+        "waveplan-cli",
+        "README.md",
+        "docs/specs/2026-05-05-swim-ops.md"
+      ]
+    },
+    "T5": {
+      "title": "Phase 5 \u2014 MCP swim tooling + CLI/MCP parity",
+      "plan_line": 298,
+      "doc_refs": [
+        "spec",
+        "mcp_main"
+      ],
+      "files": [
+        "main.go",
+        "main_test.go"
+      ]
+    }
+  },
+  "units": {
+    "T1.1": {
+      "task": "T1",
+      "title": "Emit schedule v2 from wp-emit-wave-execution.sh: schema_version, step_id (underscore-separated S{wave}_{task_id}_{action}), seq, action, requires, produces, invoke.argv canonical, wp_invoke debug-only, status field kept with deprecation notice; deterministic byte-equivalent output; publish swim-schedule-schema-v2.json and swim-journal-schema-v1.json; add Go-side strict validators",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 226,
+      "depends_on": [],
+      "fp_refs": [
+        "FP-spnuqvme",
+        "FP-ridrsrpw"
+      ]
+    },
+    "T2.1": {
+      "task": "T2",
+      "title": "Swim engine: next-step resolver over schedule + journal + live state; precondition evaluator (requires) and postcondition validator (produces) including review_taken timestamp derivation; append-only journal with file-lock CAS on cursor; apply-time race-closure protocol (snapshot tokens A/B before invoke, C after); unknown-recovery on crash between invoke and journal append",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 246,
+      "depends_on": [
+        "T1.1"
+      ],
+      "fp_refs": [
+        "FP-olthpttb"
+      ]
+    },
+    "T3.1": {
+      "task": "T3",
+      "title": "Swim runner: execute invoke.argv via argv (no shell eval); per-step stdout/stderr log files under .waveplan/swim/<plan-basename>/logs/; dry-run mode emits intended command + gating decision without state mutation; --apply transaction holds .waveplan/swim/<plan-basename>/swim.lock; run --until <action|seq:N|step:ID> with stop-on-failure",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 266,
+      "depends_on": [
+        "T2.1"
+      ],
+      "fp_refs": [
+        "FP-sdxiidyl"
+      ]
+    },
+    "T4.1": {
+      "task": "T4",
+      "title": "waveplan-cli swim command group: compile/next/step/run/journal subcommands; default read-only, --apply gated; --ack-unknown override; failure recovery and manual-override workflow documented in 2026-05-05-swim-ops.md; README updated with examples",
+      "kind": "impl",
+      "wave": 4,
+      "plan_line": 283,
+      "depends_on": [
+        "T3.1"
+      ],
+      "fp_refs": [
+        "FP-epvqsvqp"
+      ]
+    },
+    "T5.1": {
+      "task": "T5",
+      "title": "MCP tools waveplan_swim_compile / _next / _step / _run / _journal mirroring CLI surface; deterministic JSON returns (no mixed text payloads); contract parity tests CLI vs MCP",
+      "kind": "impl",
+      "wave": 5,
+      "plan_line": 298,
+      "depends_on": [
+        "T4.1"
+      ],
+      "fp_refs": [
+        "FP-gvwfpzuy"
+      ]
+    }
+  }
+}
