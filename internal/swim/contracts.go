@@ -84,8 +84,8 @@ type JournalEvent struct {
 	Action      string        `json:"action"`
 	Attempt     int           `json:"attempt"`
 	StartedOn   string        `json:"started_on"`
-	CompletedOn string        `json:"completed_on"`
-	Outcome     string        `json:"outcome"`
+	CompletedOn string        `json:"completed_on,omitempty"`
+	Outcome     string        `json:"outcome,omitempty"`
 	StateBefore StatusWrapper `json:"state_before"`
 	StateAfter  StatusWrapper `json:"state_after"`
 	ExitCode    *int          `json:"exit_code,omitempty"`

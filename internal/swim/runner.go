@@ -17,6 +17,7 @@ type ExecNextOptions struct {
 	JournalPath  string
 	WorkDir      string
 	ExpectCursor *int
+	InvokeFn     func(argv []string, workDir string) error
 }
 
 // ExecNextResult is the outcome of executing one cursor step.
@@ -88,16 +89,7 @@ func ExecuteNextStep(opts ExecNextOptions) (*ExecNextResult, error) {
 	}
 
 	started := time.Now().UTC().Format(time.RFC3339)
-	cmd := exec.Command(row.Invoke.Argv[0], row.Invoke.Argv[1:]...)
-	if opts.WorkDir != "" {
-		cmd.Dir = opts.WorkDir
-	}
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	runErr := cmd.Run()
+	runErr := invokeArgv(row.Invoke.Argv, opts.WorkDir, opts.InvokeFn)
 	completed := time.Now().UTC().Format(time.RFC3339)
 
 	exitCode := 0
@@ -182,10 +174,10 @@ func loadOrInitJournal(journalPath, schedulePath string) (*Journal, error) {
 	if err := json.Unmarshal(raw, &journal); err != nil {
 		return nil, fmt.Errorf("decode journal: %w", err)
 	}
-	if journal.SchedulePath != "" && journal.SchedulePath != schedulePath {
+	if schedulePath != "" && journal.SchedulePath != "" && journal.SchedulePath != schedulePath {
 		return nil, fmt.Errorf("journal schedule_path mismatch: journal=%q schedule=%q", journal.SchedulePath, schedulePath)
 	}
-	if journal.SchedulePath == "" {
+	if schedulePath != "" && journal.SchedulePath == "" {
 		journal.SchedulePath = schedulePath
 	}
 	return &journal, nil
@@ -233,4 +225,20 @@ func exitCodeFromErr(err error) int {
 		return ee.ExitCode()
 	}
 	return 1
+}
+
+func invokeArgv(argv []string, workDir string, fn func(argv []string, workDir string) error) error {
+	if fn != nil {
+		return fn(argv, workDir)
+	}
+
+	cmd := exec.Command(argv[0], argv[1:]...)
+	if workDir != "" {
+		cmd.Dir = workDir
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	return cmd.Run()
 }

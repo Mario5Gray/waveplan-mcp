@@ -206,5 +206,6 @@ func snapshotWithTaskStatus(taskID string, status Status) *StateSnapshot {
 	case StatusCompleted:
 		s.raw.Completed[taskID] = completedEntry{TakenBy: "phi", StartedAt: "2026-05-08 10:00", FinishedAt: "2026-05-08 10:03"}
 	}
+	s.canonBody = canonicalize(s.raw)
 	return s
 }
