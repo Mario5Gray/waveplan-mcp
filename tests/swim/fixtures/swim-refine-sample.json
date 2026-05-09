@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "coarse_plan": "docs/plans/2026-05-05-swim-execution-waves.json",
+  "profile": "8k",
+  "generated_on": "2026-05-09",
+  "plan_ref": {
+    "plan_version": 1,
+    "plan_generation": "2026-05-07T00:00:00Z"
+  },
+  "units": [
+    {
+      "parent_unit": "T2.1",
+      "step_id": "F2_T2.1_s1",
+      "seq": 1,
+      "context_budget": "8k",
+      "files_scope": ["internal/swim/state_adapter.go"],
+      "depends_on": [],
+      "requires": {"task_status": "taken"},
+      "produces": {"artifact": "state_adapter type sketch"},
+      "invoke": {
+        "argv": ["wp-plan-to-agent.sh", "--mode", "implement", "--target", "codex", "--task-id", "T2.1", "--step", "s1"]
+      },
+      "command_hint": "wp-plan-to-agent.sh --mode implement --target codex --task-id T2.1 --step s1"
+    },
+    {
+      "parent_unit": "T2.1",
+      "step_id": "F2_T2.1_s2",
+      "seq": 2,
+      "context_budget": "8k",
+      "files_scope": ["internal/swim/state_adapter.go", "internal/swim/state_adapter_test.go"],
+      "depends_on": ["F2_T2.1_s1"],
+      "requires": {"task_status": "taken"},
+      "produces": {"artifact": "ReadStateSnapshot + tests"},
+      "invoke": {
+        "argv": ["wp-plan-to-agent.sh", "--mode", "implement", "--target", "codex", "--task-id", "T2.1", "--step", "s2"]
+      }
+    }
+  ]
+}

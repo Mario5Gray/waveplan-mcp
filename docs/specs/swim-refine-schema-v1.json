@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/darkbit1001/waveplan-mcp/main/docs/specs/swim-refine-schema-v1.json",
+  "title": "SWIM Refinement Sidecar v1",
+  "description": "Schema for deterministic coarse->fine refinement of a SWIM coarse plan. Refinement splits within a parent unit; cross-parent dependencies are immutable; parent-wave topology must not be reordered. v1 ships profile=8k only.",
+  "type": "object",
+  "required": ["schema_version", "coarse_plan", "profile", "generated_on", "units"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "coarse_plan": {
+      "type": "string",
+      "description": "Path to the coarse *-execution-waves.json plan this refinement is derived from."
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["8k"],
+      "description": "Refinement profile name. v1 ships 8k only. Profile limits are documented in swim-refine-profile-8k.md."
+    },
+    "generated_on": {
+      "type": "string",
+      "description": "Generation timestamp (ISO 8601 or YYYY-MM-DD)."
+    },
+    "plan_ref": {
+      "type": "object",
+      "description": "Frame contract back to the coarse plan: must match the source plan's plan_version + plan_generation.",
+      "properties": {
+        "plan_version": {"type": "integer"},
+        "plan_generation": {"type": "string"}
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/refine_unit"},
+      "minItems": 1
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "task_status": {
+      "type": "string",
+      "enum": ["available", "taken", "review_taken", "review_ended", "completed"]
+    },
+    "context_budget": {
+      "type": "string",
+      "enum": ["8k"],
+      "description": "Per-step context budget tier. Mandatory per the spec; v1 only defines 8k. Numeric limits live in swim-refine-profile-8k.md."
+    },
+    "status_wrapper": {
+      "type": "object",
+      "required": ["task_status"],
+      "properties": {
+        "task_status": {"$ref": "#/$defs/task_status"}
+      },
+      "additionalProperties": false
+    },
+    "produces_marker": {
+      "type": "object",
+      "description": "Free-form per-step produces marker (artifact name, schema, or task_status). Compiler emits the same shape for sibling rolls; runtime treats this as opaque.",
+      "minProperties": 1
+    },
+    "invoke_spec": {
+      "type": "object",
+      "required": ["argv"],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "description": "Canonical execution payload. Runner reads this directly."
+        }
+      },
+      "additionalProperties": false
+    },
+    "refine_unit": {
+      "type": "object",
+      "required": [
+        "parent_unit",
+        "step_id",
+        "seq",
+        "context_budget",
+        "depends_on",
+        "requires",
+        "produces",
+        "invoke"
+      ],
+      "properties": {
+        "parent_unit": {
+          "type": "string",
+          "pattern": "^[A-Z][0-9]+\\.[0-9]+$",
+          "description": "The coarse unit ID this fine step belongs to (e.g. T2.1)."
+        },
+        "step_id": {
+          "type": "string",
+          "pattern": "^F[0-9]+_[A-Z][0-9]+\\.[0-9]+_s[0-9]+$",
+          "description": "Fine step ID. Format: F{wave}_{parent_unit}_s{n}. F prefix distinguishes from coarse S{wave}_{...} step_ids."
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "context_budget": {"$ref": "#/$defs/context_budget"},
+        "files_scope": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Files this step is allowed to read or write. Used by the compiler to enforce the profile's max_files limit."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^F[0-9]+_[A-Z][0-9]+\\.[0-9]+_s[0-9]+$"
+          },
+          "description": "Fine-step dependencies. MUST share the same parent_unit (intra-parent only). Cross-parent dependencies are immutable and live in the coarse plan."
+        },
+        "requires": {"$ref": "#/$defs/status_wrapper"},
+        "produces": {"$ref": "#/$defs/produces_marker"},
+        "invoke": {"$ref": "#/$defs/invoke_spec"},
+        "command_hint": {
+          "type": "string",
+          "description": "Optional debug-only mirror of invoke.argv as a shell-quoted string. Runner MUST NOT execute this; invoke.argv is the canonical execution source."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
