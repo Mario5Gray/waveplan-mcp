@@ -30,11 +30,11 @@ Update protocol — when a unit lands, edit its row to `done` with the commit sh
 | T2.4 | impl | T2.3 | done | `58826bb` | ResolveNext read-only; ahead-of-cursor → cursor_drift, behind → blocked_precondition |
 | T2.5 | verify | T2.4 | done | `671bef5` (prep), `e4cd2cc` | ExecuteNextStepSafe with locked A/B/C apply transaction; flock primitive; DetectAndMarkUnknown promotes orphan events; InvokeFn injectable |
 
-## Wave 3 — Step runner + logging + dry-run (0/3)
+## Wave 3 — Step runner + logging + dry-run (1/3)
 
 | unit | kind | deps | status | commit | notes |
 |---|---|---|---|---|---|
-| T3.1 | impl | T2.5 | pending | — | argv-only runner; stdout/stderr capture under `.waveplan/swim/<plan>/logs/` |
+| T3.1 | impl | T2.5 | done | `a79891f` | direct fork-exec; logs at `.waveplan/swim/<plan>/logs/<step_id>.<attempt>.{stdout,stderr}.log`; attempt derived from journal scan |
 | T3.2 | impl | T3.1 | pending | — | --apply transaction holds `.waveplan/swim/<plan>/swim.lock`; postcondition gate |
 | T3.3 | verify | T3.2 | pending | — | run --until <action\|seq:N\|step:ID> + dry-run; stop-on-failure |
 
@@ -88,4 +88,5 @@ Update protocol — when a unit lands, edit its row to `done` with the commit sh
 ## Session log
 
 - **2026-05-07** — Wave 1 complete; T2.1, T2.2 land. Compile-plan-json hardened. Live schedule emitted + placed.
-- **2026-05-08** — T2.3, T2.4 land. T2.5 prep patch (schema relaxation + resolver unknown_pending). Sigma in flight on T2.5 lock + safe_runner + recovery. **Wave 2 complete** with `e4cd2cc` (T2.5 race-closure). swim-progress.md tracker added (`30fa99a`).
+- **2026-05-08** — T2.3, T2.4 land. T2.5 prep patch (schema relaxation + resolver unknown_pending). Sigma in flight on T2.5 lock + safe_runner + recovery. **Wave 2 complete** with `e4cd2cc` (T2.5 race-closure). swim-progress.md tracker added (`30fa99a`). gitignore SWIM artifacts (`a51416b`).
+- **2026-05-09** — T3.1 lands (`a79891f`): argv runner with direct stdout/stderr capture and journal-derived attempt counter.
