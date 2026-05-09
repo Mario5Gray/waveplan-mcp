@@ -1,0 +1,12 @@
+{
+  "word_map": {
+    "kubernetes": "k8s",
+    "microservice": "msvc",
+    "infrastructure": "infra"
+  },
+  "bigram_map": {
+    "feature flag": "fflag",
+    "rate limit": "ratelimit"
+  },
+  "protected_tokens": ["k8s", "msvc", "oauth2", "http2"]
+}

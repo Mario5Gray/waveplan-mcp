@@ -96,10 +96,8 @@ def render_waveplan_dag(units, edges, waves, output_path, title="Waveplan Execut
         if len(clean_title) > 50:
             clean_title = clean_title[:47] + "…"
         
-        # Build label with optional wave badge
-        label = clean_title
-        if wave is not None:
-            label = f"{clean_title}\\n⟪W{wave}⟫"
+        # Build label: W{wave}-Tx.y with title
+        label = f"W{wave}-{unit_id}\\n{clean_title}"
         
         # Apply kind-based fill color
         fillcolor = get_kind_color(kind)
