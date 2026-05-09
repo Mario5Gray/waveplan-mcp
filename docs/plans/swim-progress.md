@@ -20,7 +20,7 @@ Update protocol — when a unit lands, edit its row to `done` with the commit sh
 | T1.4 | doc  | T1.3 | done | `c71d400` | published swim-schedule-schema-v2.json + swim-journal-schema-v1.json (Draft 2020-12) |
 | T1.5 | test | T1.4 | done | `a2f59f1` | Go validators (santhosh-tekuri) + cmd/swim-validate; golden expected-schedule.json frozen |
 
-## Wave 2 — Engine layer (4/5 done · T2.5 in flight)
+## Wave 2 — Engine layer ✅ (5/5)
 
 | unit | kind | deps | status | commit | notes |
 |---|---|---|---|---|---|
@@ -28,9 +28,9 @@ Update protocol — when a unit lands, edit its row to `done` with the commit sh
 | T2.2 | impl | T2.1 | done | `80b4e13`, `bfb66b3` | Evaluate(row, snap) + Predict(row); 12 table-driven cases + 92-row live-schedule dogfood |
 | T2.3 | impl | T2.2 | done | `970f77d` | ExecuteNextStep cursor-driven; appends event + advances cursor on success; cmd/swim-next binary |
 | T2.4 | impl | T2.3 | done | `58826bb` | ResolveNext read-only; ahead-of-cursor → cursor_drift, behind → blocked_precondition |
-| T2.5 | verify | T2.4 | in-flight | `671bef5` (prep) | journal schema relaxed for in-flight events; resolver blocks on unknown_pending. Sigma writing: lock.go (flock), safe_runner.go (snapshot A/B/C), recovery.go (DetectAndMarkUnknown) |
+| T2.5 | verify | T2.4 | done | `671bef5` (prep), `e4cd2cc` | ExecuteNextStepSafe with locked A/B/C apply transaction; flock primitive; DetectAndMarkUnknown promotes orphan events; InvokeFn injectable |
 
-## Wave 3 — Step runner + logging + dry-run (0/3, gated on T2.5)
+## Wave 3 — Step runner + logging + dry-run (0/3)
 
 | unit | kind | deps | status | commit | notes |
 |---|---|---|---|---|---|
@@ -88,4 +88,4 @@ Update protocol — when a unit lands, edit its row to `done` with the commit sh
 ## Session log
 
 - **2026-05-07** — Wave 1 complete; T2.1, T2.2 land. Compile-plan-json hardened. Live schedule emitted + placed.
-- **2026-05-08** — T2.3, T2.4 land. T2.5 prep patch (schema relaxation + resolver unknown_pending). Sigma in flight on T2.5 lock + safe_runner + recovery.
+- **2026-05-08** — T2.3, T2.4 land. T2.5 prep patch (schema relaxation + resolver unknown_pending). Sigma in flight on T2.5 lock + safe_runner + recovery. **Wave 2 complete** with `e4cd2cc` (T2.5 race-closure). swim-progress.md tracker added (`30fa99a`).
