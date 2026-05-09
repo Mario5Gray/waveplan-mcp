@@ -88,6 +88,9 @@ type JournalEvent struct {
 	Outcome     string        `json:"outcome"`
 	StateBefore StatusWrapper `json:"state_before"`
 	StateAfter  StatusWrapper `json:"state_after"`
+	ExitCode    *int          `json:"exit_code,omitempty"`
+	StdoutPath  string        `json:"stdout_path,omitempty"`
+	StderrPath  string        `json:"stderr_path,omitempty"`
 	Operator    string        `json:"operator,omitempty"`
 	Reason      string        `json:"reason,omitempty"`
 	WaivedOn    string        `json:"waived_on,omitempty"`
