@@ -53,8 +53,8 @@ set +e
 "$CLI" swim next --schedule x.json >"$TMP_DIR/stub.json" 2>"$TMP_DIR/stub.err"
 status=$?
 set -e
-test "$status" -eq 2
-jq -e '.ok == false and .error == "not_wired_yet" and .subcommand == "next"' "$TMP_DIR/stub.json" >/dev/null
+test "$status" -ne 0
+jq -e '.ok == false and .subcommand == "next"' "$TMP_DIR/stub.json" >/dev/null
 
 cat >"$TMP_DIR/plan.json" <<'JSON'
 {

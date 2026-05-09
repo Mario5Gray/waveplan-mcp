@@ -50,6 +50,7 @@ def _ordered(d: dict, known: tuple[str, ...]) -> dict:
 
 # Where the repo keeps its execution-wave plan files.
 _REPO_PLAN_DIR = Path(__file__).resolve().parent.parent / "docs" / "superpowers" / "plans"
+_REPO_ROOT = Path(__file__).resolve().parent
 
 
 def _find_auto_plan() -> Path | None:
@@ -304,6 +305,108 @@ def _swim_not_wired(subcommand: str) -> None:
     sys.exit(2)
 
 
+def _emit_json(obj: dict, code: int = 0) -> None:
+    print(json.dumps(obj, indent=2))
+    sys.exit(code)
+
+
+def _default_swim_journal(schedule_path: str) -> str:
+    return schedule_path + ".journal.json"
+
+
+def _derive_swim_state(schedule_path: str) -> str | None:
+    env_state = os.environ.get("WAVEPLAN_STATE")
+    if env_state:
+        return env_state
+    try:
+        payload = json.loads(Path(schedule_path).read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    execution = payload.get("execution")
+    if not isinstance(execution, list):
+        return None
+    for row in execution:
+        if not isinstance(row, dict):
+            continue
+        invoke = row.get("invoke", {})
+        argv = invoke.get("argv") if isinstance(invoke, dict) else None
+        if not isinstance(argv, list):
+            continue
+        for i, token in enumerate(argv):
+            if token == "--plan" and i + 1 < len(argv):
+                return str(argv[i + 1]) + ".state.json"
+    return None
+
+
+def _run_swim_go(tool: str, tool_args: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["go", "run", f"./cmd/swim-{tool}", *tool_args],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _handle_swim_subprocess(tool: str, tool_args: list[str], subcommand: str) -> None:
+    proc = _run_swim_go(tool, tool_args)
+    stdout = proc.stdout.strip()
+    stderr = proc.stderr.strip()
+    if proc.returncode == 0:
+        if stdout:
+            print(stdout)
+        return
+    if stdout:
+        print(stdout)
+        sys.exit(proc.returncode)
+    _emit_json({
+        "ok": False,
+        "error": stderr or f"swim-{tool} failed",
+        "subcommand": subcommand,
+    }, proc.returncode if proc.returncode in (2, 3, 4) else 3)
+
+
+def _handle_swim_compile_schedule(args: argparse.Namespace) -> None:
+    cmd = [
+        str(_REPO_ROOT / "wp-emit-wave-execution.sh"),
+        "--plan", args.plan,
+        "--agents", args.agents,
+        "--task-scope", args.task_scope,
+    ]
+    if args.out:
+        cmd.extend(["--out", args.out])
+    env = {**os.environ, "WAVEPLAN_CLI_BIN": str(_REPO_ROOT / "waveplan-cli")}
+    proc = subprocess.run(cmd, cwd=_REPO_ROOT, capture_output=True, text=True, env=env)
+    if proc.returncode != 0:
+        _emit_json({
+            "ok": False,
+            "error": proc.stderr.strip() or proc.stdout.strip() or "compile-schedule failed",
+            "subcommand": "compile-schedule",
+        }, proc.returncode if proc.returncode in (2, 3, 4) else 3)
+    if args.out:
+        _emit_json({"ok": True, "output": args.out, "subcommand": "compile-schedule"})
+    print(proc.stdout, end="")
+
+
+def _handle_swim_validate(args: argparse.Namespace) -> None:
+    if args.kind == "plan":
+        try:
+            payload = json.loads(Path(args.input_path).read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("top-level JSON must be an object")
+            _validate_and_canonicalize_plan_json(payload)
+        except Exception as e:
+            _emit_json({"ok": False, "error": str(e), "subcommand": "validate"}, 3)
+        _emit_json({"ok": True, "kind": args.kind, "input": args.input_path})
+    proc = _run_swim_go("validate", ["--kind", args.kind, "--in", args.input_path])
+    if proc.returncode != 0:
+        _emit_json({
+            "ok": False,
+            "error": proc.stderr.strip() or proc.stdout.strip() or "validate failed",
+            "subcommand": "validate",
+        }, proc.returncode if proc.returncode in (2, 3, 4) else 3)
+    _emit_json({"ok": True, "kind": args.kind, "input": args.input_path})
+
+
 class MCPPhone:
     """Minimal MCP JSON-RPC 2.0 client over stdio."""
 
@@ -471,6 +574,8 @@ def main() -> None:
     step_mode = swim_step.add_mutually_exclusive_group()
     step_mode.add_argument("--apply", action="store_true", help="Apply the selected step")
     step_mode.add_argument("--ack-unknown", metavar="STEP_ID", help="Acknowledge an unknown step by step_id")
+    swim_step.add_argument("--as", dest="ack_as", choices=("failed", "waived"), required=False,
+                           help="Outcome to record for --ack-unknown")
     swim_run = swim_sub.add_parser(
         "run",
         help="Run SWIM steps until a stop condition is met",
@@ -505,7 +610,72 @@ def main() -> None:
             sys.exit(1)
         return
     if args.command == "swim":
-        _swim_not_wired(args.swim_command)
+        if args.swim_command == "compile-schedule":
+            _handle_swim_compile_schedule(args)
+        elif args.swim_command == "next":
+            journal_path = args.journal or _default_swim_journal(args.schedule)
+            state_path = args.state or _derive_swim_state(args.schedule)
+            if not state_path:
+                _emit_json({"ok": False, "error": "could not derive state path", "subcommand": "next"}, 3)
+            _handle_swim_subprocess("next-resolve", [
+                "--schedule", args.schedule,
+                "--journal", journal_path,
+                "--state", state_path,
+            ], "next")
+        elif args.swim_command == "step":
+            if args.ack_unknown:
+                if not args.journal:
+                    _emit_json({"ok": False, "error": "--journal is required for --ack-unknown", "subcommand": "step"}, 2)
+                if not getattr(args, "ack_as", None):
+                    _emit_json({"ok": False, "error": "--as is required for --ack-unknown", "subcommand": "step"}, 2)
+                _handle_swim_subprocess("step", [
+                    "--journal", args.journal,
+                    "--ack-unknown", args.ack_unknown,
+                    "--as", args.ack_as,
+                ], "step")
+                return
+            schedule = args.schedule
+            if not schedule:
+                _emit_json({"ok": False, "error": "--schedule is required", "subcommand": "step"}, 2)
+            journal_path = args.journal or _default_swim_journal(schedule)
+            state_path = args.state or _derive_swim_state(schedule)
+            if not state_path:
+                _emit_json({"ok": False, "error": "could not derive state path", "subcommand": "step"}, 3)
+            tool_args = ["--schedule", schedule, "--journal", journal_path, "--state", state_path]
+            if args.seq is not None:
+                tool_args.extend(["--seq", str(args.seq)])
+            if args.step_id:
+                tool_args.extend(["--step-id", args.step_id])
+            if args.apply:
+                tool_args.append("--apply")
+            _handle_swim_subprocess("step", tool_args, "step")
+        elif args.swim_command == "run":
+            journal_path = args.journal or _default_swim_journal(args.schedule)
+            state_path = args.state or _derive_swim_state(args.schedule)
+            if not state_path:
+                _emit_json({"ok": False, "error": "could not derive state path", "subcommand": "run"}, 3)
+            tool_args = [
+                "--schedule", args.schedule,
+                "--journal", journal_path,
+                "--state", state_path,
+                "--until", args.until,
+            ]
+            if args.dry_run:
+                tool_args.append("--dry-run")
+            if args.max_steps is not None:
+                tool_args.extend(["--max-steps", str(args.max_steps)])
+            _handle_swim_subprocess("run", tool_args, "run")
+        elif args.swim_command == "journal":
+            journal_path = args.journal or _default_swim_journal(args.schedule)
+            tool_args = ["--schedule", args.schedule, "--journal", journal_path]
+            if args.tail is not None:
+                tool_args.extend(["--tail", str(args.tail)])
+            _handle_swim_subprocess("journal", tool_args, "journal")
+        elif args.swim_command == "validate":
+            _handle_swim_validate(args)
+        else:
+            _swim_not_wired(args.swim_command)
+        return
 
     server_bin = args.mcp_bin or _SERVER_BIN
     if not os.path.isfile(server_bin):
