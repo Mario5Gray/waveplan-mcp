@@ -206,6 +206,37 @@ Portability overrides:
 - `WP_TASK_TO_AGENT_BIN`: path to `wp-task-to-agent.sh`
 - `WP_PLAN_TO_AGENT_BIN`: command/path used by `wp-emit-wave-execution.sh`
 
+## SWIM
+
+SWIM ("Schedule, Work, Invoke, Mark") is a deterministic execution layer above waveplan that turns a plan into a typed, journaled, race-safe step sequence. Operators drive it via `waveplan-cli swim`.
+
+Quick start (3 commands):
+
+```bash
+waveplan-cli swim compile-schedule \
+  --plan docs/specs/swim-ops-examples/plan.json \
+  --agents docs/specs/swim-ops-examples/waveagents.json \
+  --out /tmp/schedule.json
+
+waveplan-cli swim next --schedule /tmp/schedule.json
+waveplan-cli swim step --apply --schedule /tmp/schedule.json
+```
+
+Subcommands: `compile-schedule`, `next`, `step` (with `--apply` and `--ack-unknown`), `run` (with `--until` / `--dry-run` / `--max-steps`), `journal`, `validate`, `compile-plan-json`.
+
+Full reference: [docs/specs/2026-05-05-swim-ops.md](docs/specs/2026-05-05-swim-ops.md). Recovery flows for stuck `unknown` events, `lock_busy`, and cursor drift are documented there with copy-paste bash.
+
+Runtime artifact layout (per plan):
+
+```text
+.waveplan/swim/<plan-basename>/
+  swim.lock                       # advisory flock; content = JSON {pid, started_at, hostname}
+  <schedule>.journal.json         # append-only event journal with cursor
+  logs/
+    <step_id>.<attempt>.stdout.log
+    <step_id>.<attempt>.stderr.log
+```
+
 ## Tools
 
 | Tool | Description |

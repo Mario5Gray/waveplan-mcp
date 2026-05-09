@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-05-09",
+  "plan_version": 1,
+  "plan_generation": "2026-05-09T00:00:00Z",
+  "plan": {"id": "swim-ops-example", "title": "Two-task example for ops doc"},
+  "fp_index": {},
+  "doc_index": {
+    "spec": {"path": "docs/specs/2026-05-05-swim-implementation-plan.md", "line": 1, "kind": "spec"}
+  },
+  "tasks": {
+    "T1": {"title": "First task", "plan_line": 1, "doc_refs": ["spec"]},
+    "T2": {"title": "Second task", "plan_line": 2, "doc_refs": ["spec"]}
+  },
+  "units": {
+    "T1.1": {"task": "T1", "title": "Implement T1", "kind": "impl", "wave": 1, "plan_line": 1, "depends_on": []},
+    "T2.1": {"task": "T2", "title": "Implement T2", "kind": "impl", "wave": 2, "plan_line": 2, "depends_on": ["T1.1"]}
+  }
+}
