@@ -58,6 +58,36 @@ func TestResolveNext_Table(t *testing.T) {
 	}
 }
 
+func TestResolveNext_UnknownPendingBlocksCursor(t *testing.T) {
+	taskID := "T9.9"
+	sched := &Schedule{SchemaVersion: 2, Execution: []ScheduleRow{
+		{Seq: 1, StepID: "S1_T9.9_implement", TaskID: taskID, Action: "implement", Requires: StatusWrapper{TaskStatus: string(StatusAvailable)}, Produces: StatusWrapper{TaskStatus: string(StatusTaken)}},
+		{Seq: 2, StepID: "S1_T9.9_review", TaskID: taskID, Action: "review", Requires: StatusWrapper{TaskStatus: string(StatusTaken)}, Produces: StatusWrapper{TaskStatus: string(StatusReviewTaken)}},
+	}}
+	j := &Journal{
+		SchemaVersion: 1,
+		Cursor:        0,
+		Events: []JournalEvent{
+			{EventID: "E0009", StepID: "S1_T9.9_review", Seq: 2, Outcome: "unknown"},
+		},
+	}
+	snap := snapshotWithTaskStatus(taskID, StatusAvailable)
+
+	d := ResolveNext(sched, j, snap)
+	if d.Action != ActionBlocked {
+		t.Fatalf("Action = %q, want %q", d.Action, ActionBlocked)
+	}
+	if d.Code != ResolutionUnknownPending {
+		t.Fatalf("Code = %q, want %q", d.Code, ResolutionUnknownPending)
+	}
+	if d.Cursor != 0 {
+		t.Fatalf("Cursor = %d, want 0", d.Cursor)
+	}
+	if d.Reason == "" {
+		t.Fatalf("Reason should be non-empty for unknown_pending")
+	}
+}
+
 func TestResolveNext_LiveSchedule_ReadyForFreshJournal(t *testing.T) {
 	sched := loadExpectedScheduleFixtureSchedule(t)
 	j := &Journal{SchemaVersion: 1, Cursor: 0, Events: []JournalEvent{}}

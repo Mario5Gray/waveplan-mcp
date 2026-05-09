@@ -53,8 +53,6 @@
         "action",
         "attempt",
         "started_on",
-        "completed_on",
-        "outcome",
         "state_before",
         "state_after"
       ],
@@ -124,6 +122,22 @@
         }
       },
       "allOf": [
+        {
+          "if": {
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": ["completed_on"]
+          }
+        },
+        {
+          "if": {
+            "required": ["completed_on"]
+          },
+          "then": {
+            "required": ["outcome"]
+          }
+        },
         {
           "if": {
             "properties": {

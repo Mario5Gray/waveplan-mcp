@@ -193,6 +193,41 @@ func TestValidateJournal_Cases(t *testing.T) {
 	if !strings.Contains(err.Error(), "schema validation failed") {
 		t.Fatalf("ValidateJournal() unexpected error: %v", err)
 	}
+
+	inflight := deepCopyJSONMap(t, validJournal)
+	events2, ok := inflight["events"].([]any)
+	if !ok || len(events2) == 0 {
+		t.Fatalf("invalid inflight events payload")
+	}
+	e1, ok := events2[0].(map[string]any)
+	if !ok {
+		t.Fatalf("event[0] not object")
+	}
+	delete(e1, "completed_on")
+	delete(e1, "outcome")
+	inflightRaw := marshalJSON(t, inflight)
+	if err := ValidateJournal(inflightRaw); err != nil {
+		t.Fatalf("ValidateJournal(inflight) unexpected error: %v", err)
+	}
+
+	badTerminalPair := deepCopyJSONMap(t, validJournal)
+	events3, ok := badTerminalPair["events"].([]any)
+	if !ok || len(events3) == 0 {
+		t.Fatalf("invalid terminal-pair events payload")
+	}
+	e2, ok := events3[0].(map[string]any)
+	if !ok {
+		t.Fatalf("event[0] not object")
+	}
+	delete(e2, "completed_on")
+	badTerminalPairRaw := marshalJSON(t, badTerminalPair)
+	err = ValidateJournal(badTerminalPairRaw)
+	if err == nil {
+		t.Fatalf("ValidateJournal() expected outcome/completed_on pair violation")
+	}
+	if !strings.Contains(err.Error(), "schema validation failed") {
+		t.Fatalf("ValidateJournal() unexpected pair violation error: %v", err)
+	}
 }
 
 func TestEmitterGoldenSchedule(t *testing.T) {

@@ -19,6 +19,7 @@ const (
 	ResolutionReady               ResolutionCode = "ready"
 	ResolutionBlockedPrecondition ResolutionCode = "blocked_precondition"
 	ResolutionCursorDrift         ResolutionCode = "cursor_drift"
+	ResolutionUnknownPending      ResolutionCode = "unknown_pending"
 	ResolutionDone                ResolutionCode = "done"
 	ResolutionBadCursor           ResolutionCode = "bad_cursor"
 )
@@ -53,6 +54,14 @@ func ResolveNext(sched *Schedule, journal *Journal, snap *StateSnapshot) Decisio
 			Reason: fmt.Sprintf("bad_cursor: cursor=%d execution_len=%d", cur, n),
 		}
 	}
+	if ev, ok := firstUnknownPending(journal, cur); ok {
+		return Decision{
+			Action: ActionBlocked,
+			Code:   ResolutionUnknownPending,
+			Cursor: cur,
+			Reason: fmt.Sprintf("unknown_pending: event_id=%s step_id=%s seq=%d", ev.EventID, ev.StepID, ev.Seq),
+		}
+	}
 	if cur == n {
 		return Decision{Action: ActionDone, Code: ResolutionDone, Cursor: cur}
 	}
@@ -84,4 +93,17 @@ func ResolveNext(sched *Schedule, journal *Journal, snap *StateSnapshot) Decisio
 	}
 
 	return Decision{Action: ActionBlocked, Row: row, Code: ResolutionCode(e.Code), Cursor: cur, Reason: e.Reason}
+}
+
+func firstUnknownPending(journal *Journal, cursor int) (JournalEvent, bool) {
+	if journal == nil {
+		return JournalEvent{}, false
+	}
+	for _, ev := range journal.Events {
+		// seq is 1-based, cursor is 0-based index into execution rows.
+		if ev.Outcome == "unknown" && cursor < ev.Seq {
+			return ev, true
+		}
+	}
+	return JournalEvent{}, false
 }
