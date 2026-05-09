@@ -30,13 +30,13 @@ Update protocol — when a unit lands, edit its row to `done` with the commit sh
 | T2.4 | impl | T2.3 | done | `58826bb` | ResolveNext read-only; ahead-of-cursor → cursor_drift, behind → blocked_precondition |
 | T2.5 | verify | T2.4 | done | `671bef5` (prep), `e4cd2cc` | ExecuteNextStepSafe with locked A/B/C apply transaction; flock primitive; DetectAndMarkUnknown promotes orphan events; InvokeFn injectable |
 
-## Wave 3 — Step runner + logging + dry-run (2/3)
+## Wave 3 — Step runner + logging + dry-run ✅ (3/3)
 
 | unit | kind | deps | status | commit | notes |
 |---|---|---|---|---|---|
 | T3.1 | impl | T2.5 | done | `a79891f` | direct fork-exec; logs at `.waveplan/swim/<plan>/logs/<step_id>.<attempt>.{stdout,stderr}.log`; attempt derived from journal scan |
 | T3.2 | impl | T3.1 | done | `858c9c0` | `Apply()` operator wrapper; ApplyReport with applied/blocked/done/lock_busy/unknown_pending; lock-holder JSON metadata; postcondition_mismatch Reason; MCP-friendly JSON tags |
-| T3.3 | verify | T3.2 | pending | — | run --until <action\|seq:N\|step:ID> + dry-run; stop-on-failure |
+| T3.3 | verify | T3.2 | done | `291f395` | `Run()` loop with Until parser (action/seq:N/step:ID), MaxSteps cap, dry-run via in-memory journal+state shadow, stop-on-first-non-applied default |
 
 ## Wave 4 — CLI + docs (0/3)
 
@@ -89,4 +89,4 @@ Update protocol — when a unit lands, edit its row to `done` with the commit sh
 
 - **2026-05-07** — Wave 1 complete; T2.1, T2.2 land. Compile-plan-json hardened. Live schedule emitted + placed.
 - **2026-05-08** — T2.3, T2.4 land. T2.5 prep patch (schema relaxation + resolver unknown_pending). Sigma in flight on T2.5 lock + safe_runner + recovery. **Wave 2 complete** with `e4cd2cc` (T2.5 race-closure). swim-progress.md tracker added (`30fa99a`). gitignore SWIM artifacts (`a51416b`).
-- **2026-05-09** — T3.1 lands (`a79891f`): argv runner with direct stdout/stderr capture and journal-derived attempt counter. T3.2 lands (`858c9c0`): Apply() wrapper with ApplyReport status normalization + lock-holder diagnostics.
+- **2026-05-09** — T3.1 lands (`a79891f`): argv runner with direct stdout/stderr capture and journal-derived attempt counter. T3.2 lands (`858c9c0`): Apply() wrapper with ApplyReport status normalization + lock-holder diagnostics. T3.3 lands (`291f395`): Run() loop with Until parser, MaxSteps cap, and dry-run via in-memory shadow. **Wave 3 complete.**
