@@ -42,7 +42,7 @@ Update protocol — when a unit lands, edit its row to `done` with the commit sh
 
 | unit | kind | deps | status | commit | notes |
 |---|---|---|---|---|---|
-| T4.1 | impl | T3.3 | in-flight | — | waveplan-cli swim scaffold + argument contracts (Sigma) |
+| T4.1 | impl | T3.3 | done | `26cc02f` | swim subparser tree (compile-schedule, next, step, run, journal, validate); stubs return `not_wired_yet`/exit 2; mutex enforced on step args; rg→grep portability fix in test harness |
 | T4.2 | impl | T4.1 | pending | — | wire compile/next/step/run/journal + --ack-unknown |
 | T4.3 | doc  | T4.2 | pending | — | ops doc + README; recovery, override, safe apply |
 
@@ -89,4 +89,4 @@ Update protocol — when a unit lands, edit its row to `done` with the commit sh
 
 - **2026-05-07** — Wave 1 complete; T2.1, T2.2 land. Compile-plan-json hardened. Live schedule emitted + placed.
 - **2026-05-08** — T2.3, T2.4 land. T2.5 prep patch (schema relaxation + resolver unknown_pending). Sigma in flight on T2.5 lock + safe_runner + recovery. **Wave 2 complete** with `e4cd2cc` (T2.5 race-closure). swim-progress.md tracker added (`30fa99a`). gitignore SWIM artifacts (`a51416b`).
-- **2026-05-09** — T3.1 lands (`a79891f`): argv runner with direct stdout/stderr capture and journal-derived attempt counter. T3.2 lands (`858c9c0`): Apply() wrapper with ApplyReport status normalization + lock-holder diagnostics. T3.3 lands (`291f395`): Run() loop with Until parser, MaxSteps cap, and dry-run via in-memory shadow. **Wave 3 complete.** Wave 4 opens: Sigma takes T4.1 (waveplan-cli swim scaffold + argument contracts; handlers stubbed for T4.2).
+- **2026-05-09** — T3.1 lands (`a79891f`): argv runner with direct stdout/stderr capture and journal-derived attempt counter. T3.2 lands (`858c9c0`): Apply() wrapper with ApplyReport status normalization + lock-holder diagnostics. T3.3 lands (`291f395`): Run() loop with Until parser, MaxSteps cap, and dry-run via in-memory shadow. **Wave 3 complete.** T4.1 lands (`26cc02f`): waveplan-cli swim subparser tree with stub handlers; rg→grep portability fix in test harness.
