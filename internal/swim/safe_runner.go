@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -117,6 +118,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 
 	eventIndex := len(journal.Events)
 	event := makeInFlightEvent(journal, decision.Row)
+	event.StdoutPath, event.StderrPath = deriveLogPaths(opts.SchedulePath, decision.Row.StepID, event.Attempt)
 	journal.Events = append(journal.Events, event)
 	last := journal.Events[eventIndex]
 	journal.LastEvent = &last
@@ -124,7 +126,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 		return nil, err
 	}
 
-	runErr := invokeArgv(decision.Row.Invoke.Argv, opts.WorkDir, opts.InvokeFn)
+	runErr := invokeArgv(decision.Row.Invoke.Argv, opts.WorkDir, filepath.Dir(opts.SchedulePath), event.StdoutPath, event.StderrPath, opts.InvokeFn)
 	exitCode := 0
 	outcome := "applied"
 	reason := ""

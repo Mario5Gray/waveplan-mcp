@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -157,6 +158,155 @@ func TestExecuteNextStep_ExpectCursorMismatch(t *testing.T) {
 	expected := 1
 	if _, err := ExecuteNextStep(ExecNextOptions{SchedulePath: schedulePath, JournalPath: journalPath, ExpectCursor: &expected}); err == nil {
 		t.Fatalf("expected cursor mismatch error")
+	}
+}
+
+func TestExecuteNextStep_WritesStdoutAndStderrLogs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX argv fixture")
+	}
+
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "sample-plan.json")
+	journalPath := filepath.Join(dir, "journal.json")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{
+			Seq:      1,
+			StepID:   "S1_T1.1_implement",
+			TaskID:   "T1.1",
+			Action:   "implement",
+			Requires: StatusWrapper{TaskStatus: string(StatusAvailable)},
+			Produces: StatusWrapper{TaskStatus: string(StatusTaken)},
+			Invoke:   InvokeSpec{Argv: []string{"/bin/sh", "-c", "printf 'hello\\n'; printf 'warn\\n' >&2"}},
+		},
+	})
+
+	if _, err := ExecuteNextStep(ExecNextOptions{SchedulePath: schedulePath, JournalPath: journalPath}); err != nil {
+		t.Fatalf("ExecuteNextStep: %v", err)
+	}
+
+	j := readJournal(t, journalPath)
+	if len(j.Events) != 1 {
+		t.Fatalf("events len = %d, want 1", len(j.Events))
+	}
+	event := j.Events[0]
+	if event.StdoutPath == "" {
+		t.Fatal("stdout_path = empty, want populated")
+	}
+	if event.StderrPath == "" {
+		t.Fatal("stderr_path = empty, want populated")
+	}
+	wantStdoutPath := filepath.Join(".waveplan", "swim", "sample-plan", "logs", "S1_T1.1_implement.1.stdout.log")
+	wantStderrPath := filepath.Join(".waveplan", "swim", "sample-plan", "logs", "S1_T1.1_implement.1.stderr.log")
+	if event.StdoutPath != wantStdoutPath {
+		t.Fatalf("stdout_path = %q, want %q", event.StdoutPath, wantStdoutPath)
+	}
+	if event.StderrPath != wantStderrPath {
+		t.Fatalf("stderr_path = %q, want %q", event.StderrPath, wantStderrPath)
+	}
+
+	stdoutBody, err := os.ReadFile(filepath.Join(dir, event.StdoutPath))
+	if err != nil {
+		t.Fatalf("read stdout log: %v", err)
+	}
+	if string(stdoutBody) != "hello\n" {
+		t.Fatalf("stdout log = %q, want %q", string(stdoutBody), "hello\n")
+	}
+
+	stderrBody, err := os.ReadFile(filepath.Join(dir, event.StderrPath))
+	if err != nil {
+		t.Fatalf("read stderr log: %v", err)
+	}
+	if string(stderrBody) != "warn\n" {
+		t.Fatalf("stderr log = %q, want %q", string(stderrBody), "warn\n")
+	}
+}
+
+func TestExecuteNextStep_FailureWritesLogPathsAndExitCode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX argv fixture")
+	}
+
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "sample-plan.json")
+	journalPath := filepath.Join(dir, "journal.json")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{
+			Seq:      1,
+			StepID:   "S1_T1.1_implement",
+			TaskID:   "T1.1",
+			Action:   "implement",
+			Requires: StatusWrapper{TaskStatus: string(StatusAvailable)},
+			Produces: StatusWrapper{TaskStatus: string(StatusTaken)},
+			Invoke:   InvokeSpec{Argv: []string{"/bin/sh", "-c", "printf 'boom\\n' >&2; exit 7"}},
+		},
+	})
+
+	res, err := ExecuteNextStep(ExecNextOptions{SchedulePath: schedulePath, JournalPath: journalPath})
+	if err != nil {
+		t.Fatalf("ExecuteNextStep: %v", err)
+	}
+	if res.ExitCode != 7 {
+		t.Fatalf("exit_code = %d, want 7", res.ExitCode)
+	}
+
+	j := readJournal(t, journalPath)
+	event := j.Events[0]
+	if event.StdoutPath == "" || event.StderrPath == "" {
+		t.Fatalf("expected log paths, got stdout=%q stderr=%q", event.StdoutPath, event.StderrPath)
+	}
+	if event.ExitCode == nil || *event.ExitCode != 7 {
+		t.Fatalf("event exit_code = %v, want 7", event.ExitCode)
+	}
+
+	stderrBody, err := os.ReadFile(filepath.Join(dir, event.StderrPath))
+	if err != nil {
+		t.Fatalf("read stderr log: %v", err)
+	}
+	if string(stderrBody) != "boom\n" {
+		t.Fatalf("stderr log = %q, want %q", string(stderrBody), "boom\n")
+	}
+}
+
+func TestExecuteNextStep_RetryUsesAttemptInLogFileNames(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX argv fixture")
+	}
+
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "sample-plan.json")
+	journalPath := filepath.Join(dir, "journal.json")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{
+			Seq:      1,
+			StepID:   "S1_T1.1_implement",
+			TaskID:   "T1.1",
+			Action:   "implement",
+			Requires: StatusWrapper{TaskStatus: string(StatusAvailable)},
+			Produces: StatusWrapper{TaskStatus: string(StatusTaken)},
+			Invoke:   InvokeSpec{Argv: []string{"/bin/false"}},
+		},
+	})
+
+	if _, err := ExecuteNextStep(ExecNextOptions{SchedulePath: schedulePath, JournalPath: journalPath}); err != nil {
+		t.Fatalf("first ExecuteNextStep: %v", err)
+	}
+	if _, err := ExecuteNextStep(ExecNextOptions{SchedulePath: schedulePath, JournalPath: journalPath}); err != nil {
+		t.Fatalf("second ExecuteNextStep: %v", err)
+	}
+
+	j := readJournal(t, journalPath)
+	if len(j.Events) != 2 {
+		t.Fatalf("events len = %d, want 2", len(j.Events))
+	}
+	if got := j.Events[0].StdoutPath; got != filepath.Join(".waveplan", "swim", "sample-plan", "logs", "S1_T1.1_implement.1.stdout.log") {
+		t.Fatalf("first stdout_path = %q", got)
+	}
+	if got := j.Events[1].StdoutPath; got != filepath.Join(".waveplan", "swim", "sample-plan", "logs", "S1_T1.1_implement.2.stdout.log") {
+		t.Fatalf("second stdout_path = %q", got)
 	}
 }
 

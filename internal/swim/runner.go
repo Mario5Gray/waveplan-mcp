@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -87,9 +88,10 @@ func ExecuteNextStep(opts ExecNextOptions) (*ExecNextResult, error) {
 			attempt++
 		}
 	}
+	stdoutPath, stderrPath := deriveLogPaths(opts.SchedulePath, row.StepID, attempt)
 
 	started := time.Now().UTC().Format(time.RFC3339)
-	runErr := invokeArgv(row.Invoke.Argv, opts.WorkDir, opts.InvokeFn)
+	runErr := invokeArgv(row.Invoke.Argv, opts.WorkDir, filepath.Dir(opts.SchedulePath), stdoutPath, stderrPath, opts.InvokeFn)
 	completed := time.Now().UTC().Format(time.RFC3339)
 
 	exitCode := 0
@@ -117,6 +119,8 @@ func ExecuteNextStep(opts ExecNextOptions) (*ExecNextResult, error) {
 		Outcome:     outcome,
 		StateBefore: StatusWrapper{TaskStatus: row.Requires.TaskStatus},
 		StateAfter:  StatusWrapper{TaskStatus: stateAfter},
+		StdoutPath:  stdoutPath,
+		StderrPath:  stderrPath,
 	}
 	if runErr != nil {
 		event.ExitCode = &exitCode
@@ -227,7 +231,16 @@ func exitCodeFromErr(err error) int {
 	return 1
 }
 
-func invokeArgv(argv []string, workDir string, fn func(argv []string, workDir string) error) error {
+func invokeArgv(argv []string, workDir, artifactRoot, stdoutPath, stderrPath string, fn func(argv []string, workDir string) error) error {
+	stdoutFile, stderrFile, err := openLogFiles(artifactRoot, stdoutPath, stderrPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = stdoutFile.Close()
+		_ = stderrFile.Close()
+	}()
+
 	if fn != nil {
 		return fn(argv, workDir)
 	}
@@ -236,9 +249,51 @@ func invokeArgv(argv []string, workDir string, fn func(argv []string, workDir st
 	if workDir != "" {
 		cmd.Dir = workDir
 	}
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stdout = stdoutFile
+	cmd.Stderr = stderrFile
 	return cmd.Run()
+}
+
+func deriveLogPaths(schedulePath, stepID string, attempt int) (string, string) {
+	logDir := deriveLogDir(schedulePath)
+	base := fmt.Sprintf("%s.%d", stepID, attempt)
+	return filepath.Join(logDir, base+".stdout.log"), filepath.Join(logDir, base+".stderr.log")
+}
+
+func deriveLogDir(schedulePath string) string {
+	base := filepath.Base(schedulePath)
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+	if name == "" {
+		name = base
+	}
+	if name == "" {
+		name = "default"
+	}
+	return filepath.Join(".waveplan", "swim", name, "logs")
+}
+
+func openLogFiles(artifactRoot, stdoutPath, stderrPath string) (*os.File, *os.File, error) {
+	stdoutAbs := stdoutPath
+	stderrAbs := stderrPath
+	if artifactRoot != "" {
+		stdoutAbs = filepath.Join(artifactRoot, stdoutPath)
+		stderrAbs = filepath.Join(artifactRoot, stderrPath)
+	}
+	if err := os.MkdirAll(filepath.Dir(stdoutAbs), 0o755); err != nil {
+		return nil, nil, fmt.Errorf("create stdout log dir: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(stderrAbs), 0o755); err != nil {
+		return nil, nil, fmt.Errorf("create stderr log dir: %w", err)
+	}
+	stdoutFile, err := os.OpenFile(stdoutAbs, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open stdout log: %w", err)
+	}
+	stderrFile, err := os.OpenFile(stderrAbs, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		_ = stdoutFile.Close()
+		return nil, nil, fmt.Errorf("open stderr log: %w", err)
+	}
+	return stdoutFile, stderrFile, nil
 }
