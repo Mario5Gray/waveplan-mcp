@@ -295,6 +295,15 @@ def _swim_compile_plan_json(in_path: str, out_path: str | None) -> None:
     print(rendered, end="")
 
 
+def _swim_not_wired(subcommand: str) -> None:
+    print(json.dumps({
+        "ok": False,
+        "error": "not_wired_yet",
+        "subcommand": subcommand,
+    }, indent=2))
+    sys.exit(2)
+
+
 class MCPPhone:
     """Minimal MCP JSON-RPC 2.0 client over stdio."""
 
@@ -429,6 +438,62 @@ def main() -> None:
     )
     swim_compile.add_argument("--in", dest="input_path", required=True, help="Input *-execution-waves.json path")
     swim_compile.add_argument("--out", dest="output_path", required=False, help="Output path (prints to stdout if omitted)")
+    swim_compile_schedule = swim_sub.add_parser(
+        "compile-schedule",
+        help="Compile a SWIM execution schedule from a plan and waveagents file",
+    )
+    swim_compile_schedule.add_argument("--plan", required=True, help="Input plan JSON path")
+    swim_compile_schedule.add_argument("--agents", required=True, help="Input waveagents JSON path")
+    swim_compile_schedule.add_argument("--out", required=False, help="Optional output schedule JSON path")
+    swim_compile_schedule.add_argument(
+        "--task-scope",
+        choices=("all", "open"),
+        default="all",
+        help="Task scope to compile into the schedule",
+    )
+    swim_next = swim_sub.add_parser(
+        "next",
+        help="Resolve the next SWIM step without applying it",
+    )
+    swim_next.add_argument("--schedule", required=True, help="Input schedule JSON path")
+    swim_next.add_argument("--journal", required=False, help="Optional journal JSON path")
+    swim_next.add_argument("--state", required=False, help="Optional state JSON path")
+    swim_step = swim_sub.add_parser(
+        "step",
+        help="Inspect, apply, or acknowledge a single SWIM step",
+    )
+    swim_step.add_argument("--schedule", required=False, help="Input schedule JSON path")
+    swim_step.add_argument("--journal", required=False, help="Optional journal JSON path")
+    swim_step.add_argument("--state", required=False, help="Optional state JSON path")
+    seq_or_step = swim_step.add_mutually_exclusive_group()
+    seq_or_step.add_argument("--seq", type=int, required=False, help="Target sequence number")
+    seq_or_step.add_argument("--step-id", required=False, help="Target step_id")
+    step_mode = swim_step.add_mutually_exclusive_group()
+    step_mode.add_argument("--apply", action="store_true", help="Apply the selected step")
+    step_mode.add_argument("--ack-unknown", metavar="STEP_ID", help="Acknowledge an unknown step by step_id")
+    swim_run = swim_sub.add_parser(
+        "run",
+        help="Run SWIM steps until a stop condition is met",
+    )
+    swim_run.add_argument("--schedule", required=True, help="Input schedule JSON path")
+    swim_run.add_argument("--journal", required=False, help="Optional journal JSON path")
+    swim_run.add_argument("--state", required=False, help="Optional state JSON path")
+    swim_run.add_argument("--until", required=True, help="Stop condition: action, seq:N, or step:<id>")
+    swim_run.add_argument("--dry-run", action="store_true", help="Resolve without mutating state")
+    swim_run.add_argument("--max-steps", type=int, required=False, help="Maximum number of steps to process")
+    swim_journal = swim_sub.add_parser(
+        "journal",
+        help="Inspect a SWIM journal",
+    )
+    swim_journal.add_argument("--schedule", required=True, help="Input schedule JSON path")
+    swim_journal.add_argument("--journal", required=False, help="Optional journal JSON path")
+    swim_journal.add_argument("--tail", type=int, required=False, help="Show the last N journal events")
+    swim_validate = swim_sub.add_parser(
+        "validate",
+        help="Validate a SWIM artifact by kind",
+    )
+    swim_validate.add_argument("--kind", choices=("schedule", "journal", "plan"), required=True, help="Artifact kind")
+    swim_validate.add_argument("--in", dest="input_path", required=True, help="Input artifact path")
 
     args = parser.parse_args()
 
@@ -439,6 +504,8 @@ def main() -> None:
             print(f"ERROR: {e}", file=sys.stderr)
             sys.exit(1)
         return
+    if args.command == "swim":
+        _swim_not_wired(args.swim_command)
 
     server_bin = args.mcp_bin or _SERVER_BIN
     if not os.path.isfile(server_bin):
