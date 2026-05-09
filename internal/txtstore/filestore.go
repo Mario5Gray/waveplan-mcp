@@ -238,7 +238,34 @@ func (fs *FileStore) Append(title, content, unit, section string) error {
 	// Find unique title
 	title = findUniqueTitle(existing, title)
 
-	return fs.createFile(title, content, unit, section)
+	// If file is empty or doesn't exist, create new
+	if existing == "" {
+		return fs.createFile(title, content, unit, section)
+	}
+
+	// Extract content without index
+	contentWithoutIndex := extractContentWithoutIndex(existing)
+
+	// Build new section
+	heading := buildHeading(title, unit, section)
+	sectionContent := heading + "\n" + content
+	if !strings.HasSuffix(content, "\n") {
+		sectionContent += "\n"
+	}
+
+	// Append section
+	newContent := contentWithoutIndex + "\n\n" + sectionContent
+
+	// Rebuild index
+	index := buildIndex(newContent)
+
+	var sb strings.Builder
+	if index != "" {
+		sb.WriteString(index + "\n\n")
+	}
+	sb.WriteString(newContent)
+
+	return fs.writeAtomically(sb.String())
 }
 
 // createFile creates a new section in the file.
