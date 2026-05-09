@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 )
@@ -123,6 +124,9 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 	last := journal.Events[eventIndex]
 	journal.LastEvent = &last
 	if err := saveJournal(opts.JournalPath, journal); err != nil {
+		return nil, err
+	}
+	if err := WriteLockHolder(lock.f, os.Getpid(), time.Now().UTC().Format(time.RFC3339)); err != nil {
 		return nil, err
 	}
 
@@ -267,4 +271,8 @@ func nextAttempt(journal *Journal, stepID string) int {
 		}
 	}
 	return attempt
+}
+
+func exitError(code int) error {
+	return exec.Command("sh", "-c", fmt.Sprintf("exit %d", code)).Run()
 }
