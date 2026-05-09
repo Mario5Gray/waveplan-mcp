@@ -14,3 +14,10 @@ FP_CLAUDE.md
 complete-plans/
 
 __pycache__/
+
+# SWIM test artifacts (locks, journals, logs created during go test / runtime)
+internal/swim/.waveplan/
+/.waveplan/
+
+# macOS
+.DS_Store
