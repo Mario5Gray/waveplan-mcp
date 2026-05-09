@@ -96,8 +96,30 @@ def render_waveplan_dag(units, edges, waves, output_path, title="Waveplan Execut
         if len(clean_title) > 50:
             clean_title = clean_title[:47] + "…"
         
-        # Build label: W{wave}-Tx.y with title
-        label = f"W{wave}-{unit_id}\\n{clean_title}"
+        # Apply text contractor to title
+        import sys
+        import os
+        import json
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from title_contractor import MiddleOutTitleContractor
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'contr_conf.json')
+        config = {}
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+        extra_words = config.get('word_map', {})
+        extra_bigrams = config.get('bigram_map', {})
+        if not hasattr(render_waveplan_dag, '_contractor'):
+            render_waveplan_dag._contractor = MiddleOutTitleContractor(
+                contract_words=True,
+                contract_bigrams=True
+            )
+        contracted, _ = render_waveplan_dag._contractor.contract(
+            clean_title,
+            extra_word_map=extra_words,
+            extra_bigram_map=extra_bigrams
+        )
+        label = f"W{wave}-{unit_id}\\n{contracted}"
         
         # Apply kind-based fill color
         fillcolor = get_kind_color(kind)
