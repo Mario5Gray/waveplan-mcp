@@ -120,7 +120,7 @@ func RefineRun(opts RefineRunOptions) (*RefineRunReport, error) {
 
 	var coarseJournal *Journal
 	if opts.CoarseJournalPath != "" {
-		coarseJournal, err = loadOrInitJournal(opts.CoarseJournalPath, "")
+		coarseJournal, err = loadOrInitJournal(opts.CoarseJournalPath, opts.CoarseJournalPath)
 		if err != nil {
 			return nil, err
 		}
@@ -258,6 +258,9 @@ func refineRunDry(side *RefinementSidecar, opts RefineRunOptions, fineJournalPat
 		}
 		parentChildren[u.ParentUnit] = append(parentChildren[u.ParentUnit], u)
 	}
+	// Dry-run tracks would-apply siblings in memory so dependency chains
+	// validate against the simulated future, not just the persisted past.
+	wouldApplied := map[string]bool{}
 	for _, parentID := range parentOrder {
 		gateOK, gateReason, _ := crossParentGate(opts.StatePath, readSnap, side.CoarsePlan, parentID)
 		if !gateOK {
@@ -273,14 +276,24 @@ func refineRunDry(side *RefinementSidecar, opts RefineRunOptions, fineJournalPat
 		}
 		for _, child := range parentChildren[parentID] {
 			if fineEventTerminal(fineJournal, child.StepID) {
+				wouldApplied[child.StepID] = true
 				continue
 			}
-			if reason, ok := intraParentDepsSatisfied(fineJournal, child); !ok {
+			depsOK := true
+			var blockReason string
+			for _, dep := range child.DependsOn {
+				if !fineEventTerminal(fineJournal, dep) && !wouldApplied[dep] {
+					depsOK = false
+					blockReason = fmt.Sprintf("intra_parent_dep_unmet: %s depends on %s (not applied|waived)", child.StepID, dep)
+					break
+				}
+			}
+			if !depsOK {
 				report.Steps = append(report.Steps, RefineApplyReport{
 					Status:     "blocked",
 					StepID:     child.StepID,
 					ParentUnit: child.ParentUnit,
-					Reason:     reason,
+					Reason:     blockReason,
 					WouldBlock: true,
 				})
 				report.Stopped = "non_applied"
@@ -293,6 +306,7 @@ func refineRunDry(side *RefinementSidecar, opts RefineRunOptions, fineJournalPat
 				Seq:        child.Seq,
 				WouldApply: true,
 			})
+			wouldApplied[child.StepID] = true
 		}
 	}
 	return report, nil
@@ -493,6 +507,7 @@ func writeRollupEvent(j *Journal, journalPath, parentID, beforeStatus, afterStat
 	ev := JournalEvent{
 		EventID:     fmt.Sprintf("E%04d", len(j.Events)+1),
 		StepID:      parentRollupID(parentID),
+		Seq:         len(j.Events) + 1,
 		TaskID:      parentID,
 		Action:      "implement",
 		Attempt:     1,
