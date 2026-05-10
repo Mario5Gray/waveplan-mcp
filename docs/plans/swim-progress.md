@@ -55,7 +55,7 @@ Update protocol — when a unit lands, edit its row to `done` with the commit sh
 | T6.1 | doc  | T4.3 | done | `2adeba2` | swim-refine-schema-v1.json (profile enum locked to `8k`); swim-refine-profile-8k.md (limits + refinement rules + step_id format + debug-only command_hint); sample fixture; smoke test |
 | T6.2 | impl | T6.1 | done | `e0b37d8` | Refine(opts) + cmd/swim-refine-compile; profile=8k locked, --targets required, sort+dedup, chunk-by-index at MaxFiles=6, linear sN chain, passthrough s1, byte-identical sha256 across runs; 13 unit tests + shell harness with real exit codes; google/shlex vendored under third_party/ |
 | T6.3 | impl | T6.2 | done | `84adf76` | RefineRun() + swim-refine-run binary; A/B/C apply per fine step; parent rolls up to coarse journal once all targeted children terminal; dry-run surfaces would_apply; idempotent rerun = protocol_note=idempotent_noop; cross-parent gate; 7 unit tests + T6.3 shell harness |
-| T6.4 | test | T6.3 | pending | — | swim refine/refine-run CLI + determinism tests |
+| T6.4 | test | T6.3 | done | `d807f90` | `swim refine` + `swim refine-run` CLI subcommands; determinism: byte-identical across 2 compile runs; missing-arg exit 2; dry-run refine-run round-trip; 22/22 shell tests green |
 
 ## Wave 6 — MCP refine parity (0/1)
 
