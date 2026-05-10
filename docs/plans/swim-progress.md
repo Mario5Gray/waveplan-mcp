@@ -61,7 +61,7 @@ Update protocol — when a unit lands, edit its row to `done` with the commit sh
 
 | unit | kind | deps | status | commit | notes |
 |---|---|---|---|---|---|
-| T7.1 | impl | T5.2, T6.4 | pending | — | MCP tools: waveplan_swim_refine / waveplan_swim_refine_run |
+| T7.1 | impl | T5.2, T6.4 | done | `1ab584e` | waveplan_swim_refine + waveplan_swim_refine_run; targets as string array; dry_run/refine_journal/coarse_journal/work_dir support; requiredStringSliceParam with CSV fallback; 2 Go unit tests + T7.1 shell harness; 23/23 shell tests green |
 
 ---
 
