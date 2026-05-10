@@ -346,6 +346,34 @@ func (s *WaveplanServer) createTools() []server.ServerTool {
 			),
 			Handler: s.handleSwimJournal,
 		},
+		{
+			Tool: mcp.NewTool("waveplan_swim_refine",
+				mcp.WithDescription("Compile a coarse SWIM plan into a deterministic refinement sidecar"),
+				mcp.WithString("plan", mcp.Required(), mcp.Description("Input coarse *-execution-waves.json path")),
+				mcp.WithArray("targets",
+					mcp.Required(),
+					mcp.Description("Unit IDs to refine"),
+					mcp.WithStringItems(),
+					mcp.MinItems(1),
+				),
+				mcp.WithString("profile", mcp.Description("Refinement profile (v1: 8k only)")),
+				mcp.WithString("out", mcp.Description("Optional output refine JSON path")),
+				mcp.WithString("invoker", mcp.Description("Invoker script path used in emitted invoke.argv")),
+			),
+			Handler: s.handleSwimRefine,
+		},
+		{
+			Tool: mcp.NewTool("waveplan_swim_refine_run",
+				mcp.WithDescription("Execute a refinement sidecar's fine steps with parent rollup"),
+				mcp.WithString("refine", mcp.Required(), mcp.Description("Path to refinement sidecar JSON")),
+				mcp.WithString("refine_journal", mcp.Description("Fine journal path (default: <refine>.journal.json)")),
+				mcp.WithString("coarse_journal", mcp.Description("Coarse journal path for parent rollup events")),
+				mcp.WithString("state", mcp.Description("Live waveplan state file")),
+				mcp.WithBoolean("dry_run", mcp.Description("Resolve without lock, invoke, or journal mutation")),
+				mcp.WithString("work_dir", mcp.Description("Working directory passed to invoke")),
+			),
+			Handler: s.handleSwimRefineRun,
+		},
 	}
 	return tools
 }
@@ -1012,6 +1040,80 @@ func (s *WaveplanServer) handleSwimJournal(ctx context.Context, request mcp.Call
 	return swimJSONResult(view), nil
 }
 
+func (s *WaveplanServer) handleSwimRefine(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	plan, err := requiredStringParam(request.Params.Arguments, "plan")
+	if err != nil {
+		return swimErrorResult(2, err.Error()), nil
+	}
+	targets, err := requiredStringSliceParam(request.Params.Arguments, "targets")
+	if err != nil {
+		return swimErrorResult(2, err.Error()), nil
+	}
+	profile := optionalOrDefault(request.Params.Arguments, "profile", string(swim.ProfileEightK))
+	out, _ := optionalStringParam(request.Params.Arguments, "out")
+	invoker, _ := optionalStringParam(request.Params.Arguments, "invoker")
+
+	sidecar, err := swim.Refine(swim.RefineOptions{
+		CoarsePlanPath: plan,
+		Profile:        swim.RefineProfile(profile),
+		Targets:        targets,
+		InvokerBin:     invoker,
+	})
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	body, err := swim.MarshalSidecar(sidecar)
+	if err != nil {
+		return swimErrorResult(3, "marshal: "+err.Error()), nil
+	}
+	if out != "" {
+		if err := os.WriteFile(out, body, 0o644); err != nil {
+			return swimErrorResult(3, "write: "+err.Error()), nil
+		}
+		return swimJSONResult(map[string]any{
+			"ok":         true,
+			"input":      plan,
+			"output":     out,
+			"profile":    profile,
+			"targets":    sidecar.Targets,
+			"unit_count": len(sidecar.Units),
+		}), nil
+	}
+	var payload any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return swimErrorResult(3, fmt.Sprintf("refine output was not JSON: %v", err)), nil
+	}
+	return swimJSONResult(payload), nil
+}
+
+func (s *WaveplanServer) handleSwimRefineRun(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	refine, err := requiredStringParam(request.Params.Arguments, "refine")
+	if err != nil {
+		return swimErrorResult(2, err.Error()), nil
+	}
+	dryRun := mcp.ParseBoolean(request, "dry_run", false)
+	state, _ := optionalStringParam(request.Params.Arguments, "state")
+	if state == "" && !dryRun {
+		return swimErrorResult(2, "missing required parameter: state"), nil
+	}
+	refineJournal, _ := optionalStringParam(request.Params.Arguments, "refine_journal")
+	coarseJournal, _ := optionalStringParam(request.Params.Arguments, "coarse_journal")
+	workDir, _ := optionalStringParam(request.Params.Arguments, "work_dir")
+
+	report, err := swim.RefineRun(swim.RefineRunOptions{
+		RefinePath:        refine,
+		RefineJournalPath: refineJournal,
+		CoarseJournalPath: coarseJournal,
+		StatePath:         state,
+		WorkDir:           workDir,
+		DryRun:            dryRun,
+	})
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	return swimJSONResult(report), nil
+}
+
 // Helper functions
 func requiredStringParam(args any, name string) (string, error) {
 	argsMap, ok := args.(map[string]any)
@@ -1042,6 +1144,55 @@ func optionalStringParam(args any, name string) (string, bool) {
 	return str, ok
 }
 
+func requiredStringSliceParam(args any, name string) ([]string, error) {
+	argsMap, ok := args.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("invalid arguments type")
+	}
+	val, ok := argsMap[name]
+	if !ok {
+		return nil, fmt.Errorf("missing required parameter: %s", name)
+	}
+	switch vv := val.(type) {
+	case []string:
+		if len(vv) == 0 {
+			return nil, fmt.Errorf("parameter %s must be a non-empty string array", name)
+		}
+		return append([]string{}, vv...), nil
+	case []any:
+		if len(vv) == 0 {
+			return nil, fmt.Errorf("parameter %s must be a non-empty string array", name)
+		}
+		out := make([]string, 0, len(vv))
+		for _, item := range vv {
+			s, ok := item.(string)
+			if !ok || s == "" {
+				return nil, fmt.Errorf("parameter %s must be a string array", name)
+			}
+			out = append(out, s)
+		}
+		return out, nil
+	case string:
+		if strings.TrimSpace(vv) == "" {
+			return nil, fmt.Errorf("parameter %s must be a non-empty string array", name)
+		}
+		parts := strings.Split(vv, ",")
+		out := make([]string, 0, len(parts))
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				out = append(out, part)
+			}
+		}
+		if len(out) == 0 {
+			return nil, fmt.Errorf("parameter %s must be a non-empty string array", name)
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("parameter %s must be a string array", name)
+	}
+}
+
 func optionalOrDefault(args any, name, fallback string) string {
 	if v, ok := optionalStringParam(args, name); ok && v != "" {
 		return v
@@ -1056,9 +1207,9 @@ func swimJSONResult(v any) *mcp.CallToolResult {
 
 func swimErrorResult(code int, message string) *mcp.CallToolResult {
 	return swimJSONResult(map[string]any{
-		"ok":         false,
-		"exit_code":  code,
-		"error":      message,
+		"ok":        false,
+		"exit_code": code,
+		"error":     message,
 	})
 }
 

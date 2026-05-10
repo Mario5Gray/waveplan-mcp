@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/internal/swim"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -345,6 +346,8 @@ func TestCreateTools_IncludesSwimTools(t *testing.T) {
 		"waveplan_swim_step",
 		"waveplan_swim_run",
 		"waveplan_swim_journal",
+		"waveplan_swim_refine",
+		"waveplan_swim_refine_run",
 	} {
 		if !names[want] {
 			t.Fatalf("missing tool %s", want)
@@ -572,6 +575,142 @@ func TestHandleSwimCompile(t *testing.T) {
 	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
 	if got["schema_version"] != float64(2) {
 		t.Fatalf("schema_version = %v, want 2", got["schema_version"])
+	}
+}
+
+func TestHandleSwimRefine(t *testing.T) {
+	dir := t.TempDir()
+	coarsePath := filepath.Join(dir, "coarse.json")
+	coarse := `{
+  "schema_version": 1,
+  "generated_on": "2026-05-09",
+  "plan_version": 1,
+  "plan_generation": "2026-05-09T00:00:00Z",
+  "plan": {"id": "t7-1-refine"},
+  "fp_index": {},
+  "doc_index": {},
+  "tasks": {
+    "T1": {"title": "task one", "files": ["a.go","b.go","c.go","d.go","e.go","f.go","g.go"]}
+  },
+  "units": {
+    "T1.1": {
+      "task": "T1",
+      "title": "impl unit",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 1,
+      "depends_on": [],
+      "files": ["a.go","b.go","c.go","d.go","e.go","f.go","g.go"]
+    }
+  }
+}`
+	if err := os.WriteFile(coarsePath, []byte(coarse), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"plan":    coarsePath,
+			"targets": []any{"T1.1"},
+		}},
+	}
+	res, err := srv.handleSwimRefine(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRefine: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["schema_version"] != float64(1) {
+		t.Fatalf("schema_version = %v, want 1", got["schema_version"])
+	}
+	targets := got["targets"].([]any)
+	if len(targets) != 1 || targets[0] != "T1.1" {
+		t.Fatalf("targets = %v, want [T1.1]", targets)
+	}
+	units := got["units"].([]any)
+	if len(units) != 2 {
+		t.Fatalf("units len = %d, want 2", len(units))
+	}
+}
+
+func TestHandleSwimRefineRunDryRun(t *testing.T) {
+	dir := t.TempDir()
+	coarsePath := filepath.Join(dir, "coarse.json")
+	coarse := `{
+  "schema_version": 1,
+  "generated_on": "2026-05-09",
+  "plan_version": 1,
+  "plan_generation": "2026-05-09T00:00:00Z",
+  "plan": {"id": "t7-1-refine-run"},
+  "fp_index": {},
+  "doc_index": {},
+  "tasks": {
+    "T1": {"title": "task one", "files": ["a.go","b.go","c.go","d.go","e.go","f.go","g.go"]}
+  },
+  "units": {
+    "T1.1": {
+      "task": "T1",
+      "title": "impl unit",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 1,
+      "depends_on": [],
+      "files": ["a.go","b.go","c.go","d.go","e.go","f.go","g.go"]
+    }
+  }
+}`
+	if err := os.WriteFile(coarsePath, []byte(coarse), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sidecar, err := swim.Refine(swim.RefineOptions{
+		CoarsePlanPath: coarsePath,
+		Profile:        swim.ProfileEightK,
+		Targets:        []string{"T1.1"},
+	})
+	if err != nil {
+		t.Fatalf("Refine: %v", err)
+	}
+	body, err := swim.MarshalSidecar(sidecar)
+	if err != nil {
+		t.Fatalf("MarshalSidecar: %v", err)
+	}
+	refinePath := filepath.Join(dir, "refine.json")
+	if err := os.WriteFile(refinePath, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "state.json")
+	state := `{
+  "plan": "demo",
+  "taken": {
+    "T1.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-09 10:00",
+      "review_entered_at": "2026-05-09 10:30"
+    }
+  },
+  "completed": {}
+}`
+	if err := os.WriteFile(statePath, []byte(state), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"refine":  refinePath,
+			"state":   statePath,
+			"dry_run": true,
+		}},
+	}
+	res, err := srv.handleSwimRefineRun(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRefineRun: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["dry_run"] != true {
+		t.Fatalf("dry_run = %v, want true", got["dry_run"])
+	}
+	steps := got["steps"].([]any)
+	if len(steps) == 0 {
+		t.Fatal("expected non-empty steps in dry-run report")
 	}
 }
 
