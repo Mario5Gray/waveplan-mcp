@@ -387,6 +387,35 @@ def _handle_swim_compile_schedule(args: argparse.Namespace) -> None:
     print(proc.stdout, end="")
 
 
+def _handle_swim_refine(args: argparse.Namespace) -> None:
+    tool_args = [
+        "--plan", args.plan,
+        "--targets", ",".join(args.targets),
+    ]
+    if args.profile:
+        tool_args.extend(["--profile", args.profile])
+    if args.out:
+        tool_args.extend(["--out", args.out])
+    if getattr(args, "invoker", None):
+        tool_args.extend(["--invoker", args.invoker])
+    _handle_swim_subprocess("refine-compile", tool_args, "refine")
+
+
+def _handle_swim_refine_run(args: argparse.Namespace) -> None:
+    tool_args = ["--refine", args.refine]
+    if getattr(args, "refine_journal", None):
+        tool_args.extend(["--refine-journal", args.refine_journal])
+    if getattr(args, "coarse_journal", None):
+        tool_args.extend(["--coarse-journal", args.coarse_journal])
+    if getattr(args, "state", None):
+        tool_args.extend(["--state", args.state])
+    if getattr(args, "dry_run", False):
+        tool_args.append("--dry-run")
+    if getattr(args, "work_dir", None):
+        tool_args.extend(["--work-dir", args.work_dir])
+    _handle_swim_subprocess("refine-run", tool_args, "refine-run")
+
+
 def _handle_swim_validate(args: argparse.Namespace) -> None:
     if args.kind == "plan":
         try:
@@ -599,6 +628,32 @@ def main() -> None:
     )
     swim_validate.add_argument("--kind", choices=("schedule", "journal", "plan"), required=True, help="Artifact kind")
     swim_validate.add_argument("--in", dest="input_path", required=True, help="Input artifact path")
+    swim_refine_p = swim_sub.add_parser(
+        "refine",
+        help="Compile a coarse plan into a refinement sidecar (deterministic)",
+    )
+    swim_refine_p.add_argument("--plan", required=True, help="Input coarse *-execution-waves.json path")
+    swim_refine_p.add_argument("--targets", required=True, nargs="+", metavar="UNIT_ID",
+                               help="Unit IDs to refine (space-separated)")
+    swim_refine_p.add_argument("--profile", default="8k", help="Refinement profile (v1: 8k only)")
+    swim_refine_p.add_argument("--out", required=False, help="Output path (prints to stdout if omitted)")
+    swim_refine_p.add_argument("--invoker", required=False,
+                               help="Invoker script path used in emitted invoke.argv")
+    swim_refine_run_p = swim_sub.add_parser(
+        "refine-run",
+        help="Execute a refinement sidecar's fine steps with parent rollup",
+    )
+    swim_refine_run_p.add_argument("--refine", required=True, help="Path to refinement sidecar JSON")
+    swim_refine_run_p.add_argument("--refine-journal", dest="refine_journal", required=False,
+                                   help="Fine journal path (default: <refine>.journal.json)")
+    swim_refine_run_p.add_argument("--coarse-journal", dest="coarse_journal", required=False,
+                                   help="Coarse journal path for rollup events")
+    swim_refine_run_p.add_argument("--state", required=False,
+                                   help="Live waveplan state file (required unless --dry-run)")
+    swim_refine_run_p.add_argument("--dry-run", dest="dry_run", action="store_true",
+                                   help="Resolve path without lock, invoke, or journal mutation")
+    swim_refine_run_p.add_argument("--work-dir", dest="work_dir", required=False,
+                                   help="Working directory passed to invoke")
 
     args = parser.parse_args()
 
@@ -673,6 +728,10 @@ def main() -> None:
             _handle_swim_subprocess("journal", tool_args, "journal")
         elif args.swim_command == "validate":
             _handle_swim_validate(args)
+        elif args.swim_command == "refine":
+            _handle_swim_refine(args)
+        elif args.swim_command == "refine-run":
+            _handle_swim_refine_run(args)
         else:
             _swim_not_wired(args.swim_command)
         return
