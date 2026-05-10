@@ -25,8 +25,9 @@ The recommended toolchain combines these four components into a cohesive agent-f
 2. **Fiberplane** — Agent Task/Project Management.
 3. **Drift** — Bind Specs/Document <-> Code management.
 4. **Waveplan** — Implementation step execution.
+5. **txtstore** — Sectioned markdown file store for artifacts.
 
-Together they form a complete stack: Superpowers keeps Agents disciplined and predictable. Plan with Fibreplane; break problem into issues and collaborate. Drift for Documentation Spec to Code Integrity. Waveplan turns specs and plans into code steps for execution with DAG ordering.  
+Together they form a complete stack: Superpowers keeps Agents disciplined and predictable. Plan with Fibreplane; break problem into issues and collaborate. Drift for Documentation Spec to Code Integrity. Waveplan turns specs and plans into code steps for execution with DAG ordering. txtstore provides sectioned markdown storage for implementation notes and review artifacts.  
 
 For a detailed guide on how to use this stack together, see [planstack.md](planstack.md).
 
@@ -237,6 +238,61 @@ Runtime artifact layout (per plan):
     <step_id>.<attempt>.stderr.log
 ```
 
+## txtstore
+
+`txtstore` is a sectioned markdown file store for waveplan artifacts (implementation notes, review notes, etc.). It uses an MCP server architecture: `txtstore-mcp` (Go MCP server) + `txtstore` (Go CLI proxy).
+
+### Build & Install
+
+```bash
+make build-mcp          # builds txtstore-mcp and txtstore
+make install-mcp        # installs both to ~/.local/bin/
+```
+
+### CLI Usage
+
+```bash
+# Append a new section (auto-renames duplicates with -2, -3, ...)
+txtstore append notes.md "Section Title" "content here"
+
+# Append with unit/section hierarchy
+txtstore append notes.md "OAuth" "notes" --unit "Auth" --section "Security"
+
+# Edit an existing section (replaces content)
+txtstore edit notes.md "Section Title" "updated content"
+
+# Help
+txtstore --help
+```
+
+Environment override: `TXTSTORE_MCP_BIN=/path/to/txtstore-mcp`
+
+### MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `txtstore_append` | Append a new section to a markdown file. Auto-renames duplicates with `-2`, `-3`, etc. |
+| `txtstore_edit` | Replace an existing section with new content. Creates the section if it doesn't exist. |
+
+### File Format
+
+Sections are stored in markdown with an embedded TOC index between `<!-- INDEX -->` markers:
+
+```markdown
+<!-- INDEX -->
+- [Section Title](#section-title)
+- [Section Title-2](#section-title-2)
+<!-- /INDEX -->
+
+## Section Title
+Content...
+
+## Section Title-2
+More content...
+```
+
+Headings use `##` for top-level sections. Optional `--unit` and `--section` create nested hierarchy: `## Auth > Security > OAuth`. The index anchors use the last heading component (after ` > `).
+
 ## Tools
 
 | Tool | Description |
@@ -346,7 +402,9 @@ get [mode]                          → check status
 go test -v ./...
 ```
 
-15 tests covering:
+Tests covering:
+- waveplan: helper functions, taskInfo, topologicalSort, handleFin, deterministic output, deptree ordering
+- txtstore: anchor generation, heading hierarchy, index building, append/edit operations, parent directory creation
 - Helper functions: `findPlanRef`, `resolveDocRefs`, `resolveFpRefs`, `nilIfEmpty`
 - `taskInfo` JSON structure and marshaling
 - `topologicalSort`: no-deps, wave ordering, multi-level dependency chains
