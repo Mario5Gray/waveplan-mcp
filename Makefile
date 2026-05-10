@@ -1,6 +1,7 @@
-.PHONY: build install install-bin install-helpers uninstall-helpers test clean
+.PHONY: build install install-bin install-helpers uninstall-helpers test clean build-mcp install-mcp
 
 BINARY_NAME := waveplan-mcp
+MCP_BINARY  := txtstore-mcp
 INSTALL_DIR  := $(HOME)/.local/bin
 SHARE_DIR    := $(HOME)/.local/share/waveplan
 GIT_SHA      := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -10,6 +11,10 @@ LDFLAGS := -X main.gitSha=$(GIT_SHA)
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY_NAME)
+
+build-mcp:
+	go build -o $(MCP_BINARY) ./cmd/txtstore-mcp/
+	go build -o txtstore ./cmd/txtstore/
 
 install: install-bin install-helpers
 
@@ -23,6 +28,12 @@ install-bin: build
 	else \
 		echo "Skipping $(SHARE_DIR)/plans - already exists"; \
 	fi
+
+install-mcp: build-mcp
+	@mkdir -p $(INSTALL_DIR)
+	install -m 755 $(MCP_BINARY) $(INSTALL_DIR)/$(MCP_BINARY)
+	install -m 755 txtstore $(INSTALL_DIR)/txtstore
+	@echo "Installed $(MCP_BINARY) and txtstore to $(INSTALL_DIR)/"
 
 install-helpers:
 	@mkdir -p $(INSTALL_DIR)
@@ -41,4 +52,4 @@ test:
 	go test -v ./...
 
 clean:
-	rm -f $(BINARY_NAME)
+	rm -f $(BINARY_NAME) $(MCP_BINARY) txtstore
