@@ -5,7 +5,7 @@
   "plan_generation": "2026-05-07T00:00:00Z",
   "plan": {
     "id": "swim-implementation",
-    "title": "Swim \u2014 Durable Execution State Machine for Waveplan",
+    "title": "Swim : Durable Execution State Machine for Waveplan",
     "plan_doc": {
       "path": "docs/specs/2026-05-05-swim-implementation-plan.md",
       "line": 1
@@ -106,7 +106,7 @@
   },
   "tasks": {
     "T1": {
-      "title": "Phase 1 \u2014 Contracts and compiler hardening (schedule v2 + locked decisions)",
+      "title": "Phase 1 : Contracts and compiler hardening (schedule v2 + locked decisions)",
       "plan_line": 270,
       "doc_refs": [
         "spec",
@@ -123,7 +123,7 @@
       ]
     },
     "T2": {
-      "title": "Phase 2 \u2014 Swim core + journal engine + race-closure protocol",
+      "title": "Phase 2 : Swim core + journal engine + race-closure protocol",
       "plan_line": 290,
       "doc_refs": [
         "spec",
@@ -138,7 +138,7 @@
       ]
     },
     "T3": {
-      "title": "Phase 3 \u2014 Step runner, logging, dry-run, --apply / run --until",
+      "title": "Phase 3 : Step runner, logging, dry-run, --apply / run --until",
       "plan_line": 310,
       "doc_refs": [
         "spec",
@@ -152,7 +152,7 @@
       ]
     },
     "T4": {
-      "title": "Phase 4 \u2014 CLI swim command group + ops documentation",
+      "title": "Phase 4 : CLI swim command group + ops documentation",
       "plan_line": 327,
       "doc_refs": [
         "spec",
@@ -165,7 +165,7 @@
       ]
     },
     "T5": {
-      "title": "Phase 5 \u2014 MCP swim tooling + CLI/MCP parity",
+      "title": "Phase 5 : MCP swim tooling + CLI/MCP parity",
       "plan_line": 342,
       "doc_refs": [
         "spec",
@@ -177,7 +177,7 @@
       ]
     },
     "T6": {
-      "title": "Phase 6 \u2014 Deterministic coarse->fine refinement layer (profile-driven)",
+      "title": "Phase 6 : Deterministic coarse->fine refinement layer (profile-driven)",
       "plan_line": 355,
       "doc_refs": [
         "spec",
@@ -193,7 +193,7 @@
       ]
     },
     "T7": {
-      "title": "Phase 7 \u2014 MCP refine parity (swim_refine / swim_refine_run)",
+      "title": "Phase 7 : MCP refine parity (swim_refine / swim_refine_run)",
       "plan_line": 370,
       "doc_refs": [
         "spec",

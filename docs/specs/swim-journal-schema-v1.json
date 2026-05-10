@@ -63,7 +63,7 @@
         },
         "step_id": {
           "type": "string",
-          "pattern": "^S[0-9]+_[A-Za-z0-9._\\-]+_(implement|review|end_review|finish)$"
+          "pattern": "^(S[0-9]+_[A-Za-z0-9._\\-]+_(implement|review|end_review|finish)|F[0-9]+_[A-Z][0-9]+\\.[0-9]+_s[0-9]+|PARENT_[A-Z][0-9]+\\.[0-9]+_rollup)$"
         },
         "seq": {
           "type": "integer",

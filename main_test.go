@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -328,6 +329,249 @@ func TestTopologicalSort_NoDeps(t *testing.T) {
 	}
 	if !foundT2 || !foundT3 {
 		t.Error("missing T2.1 or T3.1 in sorted output")
+	}
+}
+
+func TestCreateTools_IncludesSwimTools(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	tools := srv.createTools()
+	names := map[string]bool{}
+	for _, tool := range tools {
+		names[tool.Tool.Name] = true
+	}
+	for _, want := range []string{
+		"waveplan_swim_compile",
+		"waveplan_swim_next",
+		"waveplan_swim_step",
+		"waveplan_swim_run",
+		"waveplan_swim_journal",
+	} {
+		if !names[want] {
+			t.Fatalf("missing tool %s", want)
+		}
+	}
+}
+
+func TestHandleSwimNext(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"journal":  filepath.Join(dir, "journal.json"),
+			"state":    statePath,
+		}},
+	}
+	res, err := srv.handleSwimNext(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimNext: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["action"] != "ready" {
+		t.Fatalf("action = %v, want ready", got["action"])
+	}
+	row := got["row"].(map[string]any)
+	if row["step_id"] != "S1_T1.1_implement" {
+		t.Fatalf("step_id = %v", row["step_id"])
+	}
+}
+
+func TestHandleSwimStepApply(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	schedulePath := filepath.Join(dir, "apply-schedule.json")
+	schedule := `{
+  "schema_version": 2,
+  "execution": [
+    {
+      "seq": 1,
+      "step_id": "S1_T1.1_implement",
+      "task_id": "T1.1",
+      "action": "implement",
+      "requires": {"task_status": "available"},
+      "produces": {"task_status": "taken"},
+      "invoke": {"argv": ["/bin/sh", "-c", "python3 - <<'PY'\nimport json\npath = r'` + statePath + `'\nwith open(path, 'r', encoding='utf-8') as f:\n    data = json.load(f)\ndata['taken']['T1.1'] = {'taken_by': 'phi', 'started_at': '2026-05-09T00:00:00Z'}\nwith open(path, 'w', encoding='utf-8') as f:\n    json.dump(data, f)\nPY"]}
+    }
+  ]
+}`
+	if err := os.WriteFile(schedulePath, []byte(schedule), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": schedulePath,
+			"journal":  filepath.Join(dir, "journal.json"),
+			"state":    statePath,
+			"apply":    true,
+		}},
+	}
+	res, err := srv.handleSwimStep(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimStep: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["status"] != "applied" {
+		t.Fatalf("status = %v, want applied", got["status"])
+	}
+}
+
+func TestHandleSwimStepAckUnknown(t *testing.T) {
+	dir := t.TempDir()
+	journalPath := filepath.Join(dir, "journal.json")
+	body := `{
+  "schema_version": 1,
+  "schedule_path": "demo-schedule.json",
+  "cursor": 0,
+  "events": [
+    {
+      "event_id": "E0001",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 1,
+      "started_on": "2026-05-09T00:00:00Z",
+      "completed_on": "2026-05-09T00:00:01Z",
+      "outcome": "unknown",
+      "state_before": {"task_status": "available"},
+      "state_after": {"task_status": "taken"}
+    }
+  ]
+}`
+	if err := os.WriteFile(journalPath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"journal":     journalPath,
+			"ack_unknown": "S1_T1.1_implement",
+			"as":          "waived",
+		}},
+	}
+	res, err := srv.handleSwimStep(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimStep ack: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["outcome"] != "waived" {
+		t.Fatalf("outcome = %v, want waived", got["outcome"])
+	}
+	after, err := os.ReadFile(journalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(after), `"outcome": "waived"`) {
+		t.Fatalf("journal not updated: %s", after)
+	}
+}
+
+func TestHandleSwimRunDryRun(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"journal":  filepath.Join(dir, "journal.json"),
+			"state":    statePath,
+			"until":    "finish",
+			"dry_run":  true,
+		}},
+	}
+	res, err := srv.handleSwimRun(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRun: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["dry_run"] != true {
+		t.Fatalf("dry_run = %v, want true", got["dry_run"])
+	}
+	steps := got["steps"].([]any)
+	if len(steps) != 4 {
+		t.Fatalf("steps len = %d, want 4", len(steps))
+	}
+}
+
+func TestHandleSwimJournalTail(t *testing.T) {
+	dir := t.TempDir()
+	journalPath := filepath.Join(dir, "journal.json")
+	body := `{
+  "schema_version": 1,
+  "schedule_path": "demo-schedule.json",
+  "cursor": 5,
+  "events": [
+    {"event_id":"E0001","step_id":"S1_T1.1_implement","seq":1,"task_id":"T1.1","action":"implement","attempt":1,"started_on":"2026-05-09T00:00:00Z","completed_on":"2026-05-09T00:00:01Z","outcome":"applied","state_before":{"task_status":"available"},"state_after":{"task_status":"taken"}},
+    {"event_id":"E0002","step_id":"S1_T1.1_review","seq":2,"task_id":"T1.1","action":"review","attempt":1,"started_on":"2026-05-09T00:00:00Z","completed_on":"2026-05-09T00:00:01Z","outcome":"applied","state_before":{"task_status":"taken"},"state_after":{"task_status":"review_taken"}},
+    {"event_id":"E0003","step_id":"S1_T1.1_end_review","seq":3,"task_id":"T1.1","action":"end_review","attempt":1,"started_on":"2026-05-09T00:00:00Z","completed_on":"2026-05-09T00:00:01Z","outcome":"applied","state_before":{"task_status":"review_taken"},"state_after":{"task_status":"review_ended"}},
+    {"event_id":"E0004","step_id":"S1_T1.1_finish","seq":4,"task_id":"T1.1","action":"finish","attempt":1,"started_on":"2026-05-09T00:00:00Z","completed_on":"2026-05-09T00:00:01Z","outcome":"applied","state_before":{"task_status":"review_ended"},"state_after":{"task_status":"completed"}},
+    {"event_id":"E0005","step_id":"S1_T1.2_implement","seq":5,"task_id":"T1.2","action":"implement","attempt":1,"started_on":"2026-05-09T00:00:00Z","completed_on":"2026-05-09T00:00:01Z","outcome":"applied","state_before":{"task_status":"available"},"state_after":{"task_status":"taken"}}
+  ]
+}`
+	if err := os.WriteFile(journalPath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"journal":  journalPath,
+			"tail":     3.0,
+		}},
+	}
+	res, err := srv.handleSwimJournal(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimJournal: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	events := got["events"].([]any)
+	if len(events) != 3 {
+		t.Fatalf("events len = %d, want 3", len(events))
+	}
+	first := events[0].(map[string]any)
+	if first["event_id"] != "E0003" {
+		t.Fatalf("first event_id = %v, want E0003", first["event_id"])
+	}
+}
+
+func TestHandleSwimCompile(t *testing.T) {
+	dir := t.TempDir()
+	agentsPath := filepath.Join(dir, "waveagents.json")
+	if err := os.WriteFile(agentsPath, []byte(`{
+  "agents": [
+    {"name": "phi", "provider": "codex"},
+    {"name": "sigma", "provider": "claude"}
+  ],
+  "schedule": ["phi", "sigma"]
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"plan":       filepath.Join("docs", "plans", "2026-05-05-swim-execution-waves.json"),
+			"agents":     agentsPath,
+			"task_scope": "all",
+		}},
+	}
+	res, err := srv.handleSwimCompile(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimCompile: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["schema_version"] != float64(2) {
+		t.Fatalf("schema_version = %v, want 2", got["schema_version"])
 	}
 }
 

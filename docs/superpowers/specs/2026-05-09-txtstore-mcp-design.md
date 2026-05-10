@@ -4,12 +4,12 @@
 
 ## Overview
 
-Convert the existing `txtstore` CLI into an MCP server (Go binary) with a thin Python CLI wrapper, following the waveplan pattern: Go MCP server + Python CLI proxy.
+Convert the existing `txtstore` CLI into an MCP server (Go binary) with a thin Go CLI proxy, following the waveplan pattern: Go MCP server + Go CLI proxy.
 
 ## Architecture
 
 ```
-txtstore-cli (Python)
+txtstore (Go CLI proxy)
   └─ spawns ─► txtstore-mcp (Go binary, stdio MCP server)
 ```
 
@@ -50,26 +50,25 @@ Content...
 More content...
 ```
 
-## CLI Wrapper (`txtstore-cli`)
+## CLI Proxy (`txtstore`)
 
-Python script following waveplan-cli pattern:
-- `txtstore-cli append <filepath> <title> <content> [--unit U] [--section S]`
-- `txtstore-cli edit <filepath> <title> <content> [--unit U] [--section S]`
+Go CLI following waveplan-cli proxy pattern:
+- `txtstore append <filepath> <title> <content> [--unit U] [--section S]`
+- `txtstore edit <filepath> <title> <content> [--unit U] [--section S]`
 - Auto-detects `txtstore-mcp` binary from `~/.local/bin/` or `TXTSTORE_MCP_BIN` env var
 - Outputs JSON to stdout
+- Shows usage/help on `-h`, `--help`, `help`, missing args, invalid commands
 
 ## File Structure
 
 - `cmd/txtstore-mcp/main.go` — MCP server (Go)
-- `internal/txtstore/filestore.go` — Core logic (shared with CLI, already exists)
+- `cmd/txtstore/main.go` — CLI proxy (Go) — replaces existing `cmd/txtstore/main.go`
+- `internal/txtstore/filestore.go` — Core logic (already exists)
 - `internal/txtstore/filestore_test.go` — Tests (already exists)
-- `txtstore-cli` — Python CLI wrapper
-- `txtstore-mcp` — Go binary (built from cmd/)
 
 ## Implementation Approach
 
-1. Extract `internal/txtstore` logic into a reusable package (already done)
+1. Refactor `cmd/txtstore/main.go` from standalone CLI to MCP proxy
 2. Create `cmd/txtstore-mcp/main.go` — MCP server using `mcp-go` library
-3. Create `txtstore-cli` — Python wrapper using `MCPPhone` pattern from waveplan-cli
-4. Update `Makefile` to build `txtstore-mcp`
-5. Tests: reuse existing `internal/txtstore` tests
+3. Update `Makefile` to build both binaries
+4. Tests: reuse existing `internal/txtstore` tests

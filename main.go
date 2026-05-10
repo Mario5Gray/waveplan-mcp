@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"sort"
@@ -14,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/internal/swim"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -289,6 +291,60 @@ func (s *WaveplanServer) createTools() []server.ServerTool {
 				mcp.WithDescription("Show the version (git SHA) of this server"),
 			),
 			Handler: s.handleVersion,
+		},
+		{
+			Tool: mcp.NewTool("waveplan_swim_compile",
+				mcp.WithDescription("Compile a SWIM execution schedule from a plan and waveagents file"),
+				mcp.WithString("plan", mcp.Required(), mcp.Description("Input plan JSON path")),
+				mcp.WithString("agents", mcp.Required(), mcp.Description("Input waveagents JSON path")),
+				mcp.WithString("out", mcp.Description("Optional output schedule JSON path")),
+				mcp.WithString("task_scope", mcp.Description("Task scope: all|open")),
+			),
+			Handler: s.handleSwimCompile,
+		},
+		{
+			Tool: mcp.NewTool("waveplan_swim_next",
+				mcp.WithDescription("Resolve the next SWIM step"),
+				mcp.WithString("schedule", mcp.Required(), mcp.Description("Input schedule JSON path")),
+				mcp.WithString("journal", mcp.Description("Optional journal JSON path")),
+				mcp.WithString("state", mcp.Description("Optional state JSON path")),
+			),
+			Handler: s.handleSwimNext,
+		},
+		{
+			Tool: mcp.NewTool("waveplan_swim_step",
+				mcp.WithDescription("Inspect, apply, or acknowledge a single SWIM step"),
+				mcp.WithString("schedule", mcp.Description("Input schedule JSON path")),
+				mcp.WithString("journal", mcp.Description("Optional journal JSON path")),
+				mcp.WithString("state", mcp.Description("Optional state JSON path")),
+				mcp.WithNumber("seq", mcp.Description("Target sequence number")),
+				mcp.WithString("step_id", mcp.Description("Target step ID")),
+				mcp.WithBoolean("apply", mcp.Description("Apply the selected step")),
+				mcp.WithString("ack_unknown", mcp.Description("Acknowledge unknown step by ID")),
+				mcp.WithString("as", mcp.Description("Ack outcome: failed|waived")),
+			),
+			Handler: s.handleSwimStep,
+		},
+		{
+			Tool: mcp.NewTool("waveplan_swim_run",
+				mcp.WithDescription("Run SWIM steps until a stop condition is met"),
+				mcp.WithString("schedule", mcp.Required(), mcp.Description("Input schedule JSON path")),
+				mcp.WithString("journal", mcp.Description("Optional journal JSON path")),
+				mcp.WithString("state", mcp.Description("Optional state JSON path")),
+				mcp.WithString("until", mcp.Required(), mcp.Description("Stop condition: action, seq:N, or step:<id>")),
+				mcp.WithBoolean("dry_run", mcp.Description("Resolve without mutation")),
+				mcp.WithNumber("max_steps", mcp.Description("Maximum number of steps to process")),
+			),
+			Handler: s.handleSwimRun,
+		},
+		{
+			Tool: mcp.NewTool("waveplan_swim_journal",
+				mcp.WithDescription("Inspect a SWIM journal"),
+				mcp.WithString("schedule", mcp.Required(), mcp.Description("Input schedule JSON path")),
+				mcp.WithString("journal", mcp.Description("Optional journal JSON path")),
+				mcp.WithNumber("tail", mcp.Description("Show the last N journal events")),
+			),
+			Handler: s.handleSwimJournal,
 		},
 	}
 	return tools
@@ -794,6 +850,168 @@ func (s *WaveplanServer) handleVersion(ctx context.Context, request mcp.CallTool
 	return mcp.NewToolResultText(string(data)), nil
 }
 
+func (s *WaveplanServer) handleSwimCompile(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	plan, err := requiredStringParam(request.Params.Arguments, "plan")
+	if err != nil {
+		return swimErrorResult(2, err.Error()), nil
+	}
+	agents, err := requiredStringParam(request.Params.Arguments, "agents")
+	if err != nil {
+		return swimErrorResult(2, err.Error()), nil
+	}
+	out, _ := optionalStringParam(request.Params.Arguments, "out")
+	taskScope, _ := optionalStringParam(request.Params.Arguments, "task_scope")
+	if taskScope == "" {
+		taskScope = "all"
+	}
+	root, err := swimRepoRoot()
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	cmd := exec.Command(filepath.Join(root, "wp-emit-wave-execution.sh"),
+		"--plan", plan,
+		"--agents", agents,
+		"--task-scope", taskScope,
+	)
+	if out != "" {
+		cmd.Args = append(cmd.Args, "--out", out)
+	}
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "WAVEPLAN_CLI_BIN="+filepath.Join(root, "waveplan-cli"))
+	raw, err := cmd.CombinedOutput()
+	if err != nil {
+		return swimErrorResult(3, strings.TrimSpace(string(raw))), nil
+	}
+	if out != "" {
+		return swimJSONResult(map[string]any{"ok": true, "output": out, "task_scope": taskScope}), nil
+	}
+	var payload any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return swimErrorResult(3, fmt.Sprintf("compile output was not JSON: %v", err)), nil
+	}
+	return swimJSONResult(payload), nil
+}
+
+func (s *WaveplanServer) handleSwimNext(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	schedule, err := requiredStringParam(request.Params.Arguments, "schedule")
+	if err != nil {
+		return swimErrorResult(2, err.Error()), nil
+	}
+	journal := optionalOrDefault(request.Params.Arguments, "journal", schedule+".journal.json")
+	state, err := s.resolveSwimStatePath(request.Params.Arguments, schedule)
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	decision, err := swim.ResolveNextFromPaths(swim.NextOptions{
+		SchedulePath: schedule,
+		JournalPath:  journal,
+		StatePath:    state,
+	})
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	return swimJSONResult(decision), nil
+}
+
+func (s *WaveplanServer) handleSwimStep(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ackUnknown, _ := optionalStringParam(request.Params.Arguments, "ack_unknown")
+	journal, _ := optionalStringParam(request.Params.Arguments, "journal")
+	if ackUnknown != "" {
+		if journal == "" {
+			return swimErrorResult(2, "missing required parameter: journal"), nil
+		}
+		outcome, ok := optionalStringParam(request.Params.Arguments, "as")
+		if !ok || outcome == "" {
+			return swimErrorResult(2, "missing required parameter: as"), nil
+		}
+		if err := swim.AckUnknown(journal, ackUnknown, outcome); err != nil {
+			return swimErrorResult(3, err.Error()), nil
+		}
+		return swimJSONResult(map[string]any{"ok": true, "step_id": ackUnknown, "outcome": outcome}), nil
+	}
+
+	schedule, err := requiredStringParam(request.Params.Arguments, "schedule")
+	if err != nil {
+		return swimErrorResult(2, err.Error()), nil
+	}
+	if journal == "" {
+		journal = schedule + ".journal.json"
+	}
+	state, err := s.resolveSwimStatePath(request.Params.Arguments, schedule)
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	decision, err := swim.ResolveNextFromPaths(swim.NextOptions{
+		SchedulePath: schedule,
+		JournalPath:  journal,
+		StatePath:    state,
+	})
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	seq := mcp.ParseInt(request, "seq", 0)
+	if seq > 0 && decision.Row.Seq != seq {
+		return swimErrorResult(3, "current cursor step does not match seq"), nil
+	}
+	stepID, _ := optionalStringParam(request.Params.Arguments, "step_id")
+	if stepID != "" && decision.Row.StepID != stepID {
+		return swimErrorResult(3, "current cursor step does not match step_id"), nil
+	}
+	if !mcp.ParseBoolean(request, "apply", false) {
+		return swimJSONResult(decision), nil
+	}
+	report, err := swim.Apply(swim.ApplyOptions{
+		SchedulePath: schedule,
+		JournalPath:  journal,
+		StatePath:    state,
+	})
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	return swimJSONResult(report), nil
+}
+
+func (s *WaveplanServer) handleSwimRun(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	schedule, err := requiredStringParam(request.Params.Arguments, "schedule")
+	if err != nil {
+		return swimErrorResult(2, err.Error()), nil
+	}
+	until, err := requiredStringParam(request.Params.Arguments, "until")
+	if err != nil {
+		return swimErrorResult(2, err.Error()), nil
+	}
+	journal := optionalOrDefault(request.Params.Arguments, "journal", schedule+".journal.json")
+	state, err := s.resolveSwimStatePath(request.Params.Arguments, schedule)
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	report, err := swim.Run(swim.RunOptions{
+		SchedulePath: schedule,
+		JournalPath:  journal,
+		StatePath:    state,
+		Until:        until,
+		DryRun:       mcp.ParseBoolean(request, "dry_run", false),
+		MaxSteps:     mcp.ParseInt(request, "max_steps", 0),
+	})
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	return swimJSONResult(report), nil
+}
+
+func (s *WaveplanServer) handleSwimJournal(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	schedule, err := requiredStringParam(request.Params.Arguments, "schedule")
+	if err != nil {
+		return swimErrorResult(2, err.Error()), nil
+	}
+	journal := optionalOrDefault(request.Params.Arguments, "journal", schedule+".journal.json")
+	view, err := swim.ReadJournalView(journal, schedule, mcp.ParseInt(request, "tail", 0))
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	return swimJSONResult(view), nil
+}
+
 // Helper functions
 func requiredStringParam(args any, name string) (string, error) {
 	argsMap, ok := args.(map[string]any)
@@ -822,6 +1040,87 @@ func optionalStringParam(args any, name string) (string, bool) {
 	}
 	str, ok := val.(string)
 	return str, ok
+}
+
+func optionalOrDefault(args any, name, fallback string) string {
+	if v, ok := optionalStringParam(args, name); ok && v != "" {
+		return v
+	}
+	return fallback
+}
+
+func swimJSONResult(v any) *mcp.CallToolResult {
+	data, _ := json.Marshal(v)
+	return mcp.NewToolResultText(string(data))
+}
+
+func swimErrorResult(code int, message string) *mcp.CallToolResult {
+	return swimJSONResult(map[string]any{
+		"ok":         false,
+		"exit_code":  code,
+		"error":      message,
+	})
+}
+
+func swimRepoRoot() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("getwd: %w", err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
+			return wd, nil
+		}
+		parent := filepath.Dir(wd)
+		if parent == wd {
+			break
+		}
+		wd = parent
+	}
+	return "", fmt.Errorf("could not locate repo root")
+}
+
+func (s *WaveplanServer) resolveSwimStatePath(args any, schedule string) (string, error) {
+	if v, ok := optionalStringParam(args, "state"); ok && v != "" {
+		return v, nil
+	}
+	if s.statePath != "" {
+		return s.statePath, nil
+	}
+	raw, err := os.ReadFile(schedule)
+	if err != nil {
+		return "", fmt.Errorf("read schedule: %w", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return "", fmt.Errorf("decode schedule: %w", err)
+	}
+	execRows, ok := payload["execution"].([]any)
+	if !ok {
+		return "", fmt.Errorf("could not derive state path")
+	}
+	for _, rowAny := range execRows {
+		row, ok := rowAny.(map[string]any)
+		if !ok {
+			continue
+		}
+		invoke, ok := row["invoke"].(map[string]any)
+		if !ok {
+			continue
+		}
+		argv, ok := invoke["argv"].([]any)
+		if !ok {
+			continue
+		}
+		for i := 0; i+1 < len(argv); i++ {
+			cur, ok := argv[i].(string)
+			next, okNext := argv[i+1].(string)
+			if ok && okNext && cur == "--plan" {
+				return next + ".state.json", nil
+			}
+		}
+	}
+	return "", fmt.Errorf("could not derive state path")
 }
 
 // findPlanRef resolves a task to its plan document reference.
