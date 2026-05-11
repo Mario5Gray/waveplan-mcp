@@ -70,7 +70,7 @@ func main() {
 	switch report.Status {
 	case "unknown_pending":
 		writeJSON(4, report)
-	case "blocked", "lock_busy":
+	case "blocked", "lock_busy", "incomplete_dispatch":
 		writeJSON(3, report)
 	default:
 		writeJSON(0, report)

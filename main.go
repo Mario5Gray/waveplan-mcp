@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -296,9 +297,10 @@ func (s *WaveplanServer) createTools() []server.ServerTool {
 			Tool: mcp.NewTool("waveplan_swim_compile",
 				mcp.WithDescription("Compile a SWIM execution schedule from a plan and waveagents file"),
 				mcp.WithString("plan", mcp.Required(), mcp.Description("Input plan JSON path")),
-				mcp.WithString("agents", mcp.Required(), mcp.Description("Input waveagents JSON path")),
+				mcp.WithString("agents", mcp.Description("Input waveagents JSON path (default: ~/.config/waveplan-mcp/waveagents.json)")),
 				mcp.WithString("out", mcp.Description("Optional output schedule JSON path")),
 				mcp.WithString("task_scope", mcp.Description("Task scope: all|open")),
+				mcp.WithBoolean("bootstrap_state", mcp.Description("Create <plan>.state.json if it does not already exist")),
 			),
 			Handler: s.handleSwimCompile,
 		},
@@ -883,20 +885,24 @@ func (s *WaveplanServer) handleSwimCompile(ctx context.Context, request mcp.Call
 	if err != nil {
 		return swimErrorResult(2, err.Error()), nil
 	}
-	agents, err := requiredStringParam(request.Params.Arguments, "agents")
-	if err != nil {
-		return swimErrorResult(2, err.Error()), nil
+	agents, ok := optionalStringParam(request.Params.Arguments, "agents")
+	if !ok || agents == "" {
+		agents = defaultWaveagentsPath()
 	}
 	out, _ := optionalStringParam(request.Params.Arguments, "out")
 	taskScope, _ := optionalStringParam(request.Params.Arguments, "task_scope")
 	if taskScope == "" {
 		taskScope = "all"
 	}
-	root, err := swimRepoRoot()
+	emitter, err := resolveSupportArtifact("wp-emit-wave-execution.sh")
 	if err != nil {
 		return swimErrorResult(3, err.Error()), nil
 	}
-	cmd := exec.Command(filepath.Join(root, "wp-emit-wave-execution.sh"),
+	cliPath, err := resolveSupportArtifact("waveplan-cli")
+	if err != nil {
+		return swimErrorResult(3, err.Error()), nil
+	}
+	cmd := exec.Command(emitter,
 		"--plan", plan,
 		"--agents", agents,
 		"--task-scope", taskScope,
@@ -904,14 +910,29 @@ func (s *WaveplanServer) handleSwimCompile(ctx context.Context, request mcp.Call
 	if out != "" {
 		cmd.Args = append(cmd.Args, "--out", out)
 	}
-	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "WAVEPLAN_CLI_BIN="+filepath.Join(root, "waveplan-cli"))
+	cmd.Env = append(os.Environ(), "WAVEPLAN_CLI_BIN="+cliPath)
 	raw, err := cmd.CombinedOutput()
 	if err != nil {
 		return swimErrorResult(3, strings.TrimSpace(string(raw))), nil
 	}
+	statePath := plan + ".state.json"
+	stateBootstrapped := false
+	if mcp.ParseBoolean(request, "bootstrap_state", false) {
+		var err error
+		stateBootstrapped, err = bootstrapStateFile(statePath, filepath.Base(plan))
+		if err != nil {
+			return swimErrorResult(3, err.Error()), nil
+		}
+	}
 	if out != "" {
-		return swimJSONResult(map[string]any{"ok": true, "output": out, "task_scope": taskScope}), nil
+		return swimJSONResult(map[string]any{
+			"ok":                 true,
+			"output":             out,
+			"task_scope":         taskScope,
+			"state_bootstrapped": stateBootstrapped,
+			"state_path":         statePath,
+			"agents":             agents,
+		}), nil
 	}
 	var payload any
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -1229,6 +1250,63 @@ func swimRepoRoot() (string, error) {
 		wd = parent
 	}
 	return "", fmt.Errorf("could not locate repo root")
+}
+
+func bootstrapStateFile(path, planBase string) (bool, error) {
+	if _, err := os.Stat(path); err == nil {
+		return false, nil
+	} else if !os.IsNotExist(err) {
+		return false, fmt.Errorf("stat state file %q: %w", path, err)
+	}
+	body, err := json.MarshalIndent(map[string]any{
+		"plan":      planBase,
+		"taken":     map[string]any{},
+		"completed": map[string]any{},
+	}, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	body = append(body, '\n')
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		return false, fmt.Errorf("write state file %q: %w", path, err)
+	}
+	return true, nil
+}
+
+func resolveSupportArtifact(name string) (string, error) {
+	exePath, err := os.Executable()
+	if err == nil && exePath != "" {
+		sibling := filepath.Join(filepath.Dir(exePath), name)
+		if st, statErr := os.Stat(sibling); statErr == nil && !st.IsDir() {
+			return sibling, nil
+		}
+	}
+	if resolved, lookErr := exec.LookPath(name); lookErr == nil {
+		return resolved, nil
+	}
+	root, rootErr := swimRepoRoot()
+	if rootErr == nil {
+		candidate := filepath.Join(root, name)
+		if st, statErr := os.Stat(candidate); statErr == nil && !st.IsDir() {
+			return candidate, nil
+		}
+	}
+	var pathErr *exec.Error
+	if errors.As(err, &pathErr) {
+		return "", pathErr
+	}
+	return "", fmt.Errorf("%s not found beside executable, in PATH, or repo root", name)
+}
+
+func defaultWaveagentsPath() string {
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "waveplan-mcp", "waveagents.json")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return filepath.Join(".config", "waveplan-mcp", "waveagents.json")
+	}
+	return filepath.Join(home, ".config", "waveplan-mcp", "waveagents.json")
 }
 
 func (s *WaveplanServer) resolveSwimStatePath(args any, schedule string) (string, error) {

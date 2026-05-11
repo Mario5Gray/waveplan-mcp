@@ -122,6 +122,16 @@ func TestReadStateSnapshot_BadPath(t *testing.T) {
 	}
 }
 
+func TestReadStateSnapshotOrEmpty_MissingFile(t *testing.T) {
+	s, err := ReadStateSnapshotOrEmpty("/nonexistent/state.json")
+	if err != nil {
+		t.Fatalf("ReadStateSnapshotOrEmpty: %v", err)
+	}
+	if got := s.StatusOf("T1.1"); got != StatusAvailable {
+		t.Fatalf("StatusOf missing snapshot = %q, want %q", got, StatusAvailable)
+	}
+}
+
 func TestReadStateSnapshot_InvalidJSON(t *testing.T) {
 	if _, err := ReadStateSnapshotBytes([]byte("not json")); err == nil {
 		t.Fatal("expected error on invalid JSON")

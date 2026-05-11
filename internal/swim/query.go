@@ -36,7 +36,7 @@ func ResolveNextFromPaths(opts NextOptions) (*Decision, error) {
 	if err != nil {
 		return nil, err
 	}
-	snap, err := ReadStateSnapshot(opts.StatePath)
+	snap, err := ReadStateSnapshotOrEmpty(opts.StatePath)
 	if err != nil {
 		return nil, err
 	}

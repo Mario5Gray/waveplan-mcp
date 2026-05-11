@@ -93,8 +93,13 @@ func Apply(opts ApplyOptions) (*ApplyReport, error) {
 		report.Reason = fmt.Sprintf("invoke_exit: step_id=%s exit_code=%d", event.StepID, report.ExitCode)
 		return report, nil
 	case "blocked":
-		report.Status = "blocked"
 		report.Reason = normalizeBlockedReason(event.Reason)
+		if strings.Contains(report.Reason, "incomplete_dispatch:") {
+			report.Status = "incomplete_dispatch"
+			report.Hint = "Re-run the same swim step to continue dispatch without re-claiming the task."
+			return report, nil
+		}
+		report.Status = "blocked"
 		return report, nil
 	default:
 		report.Status = "blocked"

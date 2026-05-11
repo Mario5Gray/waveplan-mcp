@@ -1,6 +1,6 @@
-# The Optimal Stack: Fiberplane, Drift, Waveplan, Superpowers
+# The Optimal Stack: Fiberplane, Drift, Waveplan, Superpowers, txtstore
 
-This guide describes how to use the four components together as a cohesive agent-first development workflow.
+This guide describes how to use the five components together as a cohesive agent-first development workflow.
 
 ## Architecture
 
@@ -12,6 +12,8 @@ Waveplan (execution waves)
 Drift (infrastructure state)
     ↓ observes
 Fiberplane (API & observability)
+    ↑ journals (plan mode only)
+txtstore (agent notes / planning journal)
 ```
 
 ## How It Works
@@ -44,6 +46,41 @@ Superpowers skills are invoked contextually to ensure agents follow disciplined 
 - **subagent-driven-development** — coordinate parallel agent work
 - **verification-before-completion** — confirm work is actually done
 - **test-driven-development** — write tests before code
+
+### 5. Journal with txtstore
+
+txtstore is a note-taking MCP that agents use as a planning journal. It writes sectioned markdown files with an embedded index (TOC), making it easy to accumulate structured notes across a planning session.
+
+**When it is active:**
+
+- **Disabled by default** — not loaded unless explicitly configured
+- **Enabled in plan mode** — automatically active when an agent enters a planning phase
+- **Enabled on request** — activated when the user or agent explicitly asks for note-taking
+
+**File naming convention:**
+
+Notes are stored under `docs/agent_notes/` using this pattern:
+
+```text
+docs/agent_notes/{AGENT_NAME}_{SHORT_PLAN_NAME}_{PHASE}_{SECTION}_{ETC}_{DATE:yymmdd}.md
+```
+
+Examples:
+
+```text
+docs/agent_notes/claude_auth-refactor_planning_260509.md
+docs/agent_notes/claude_auth-refactor_implementation_wave1_260509.md
+docs/agent_notes/subagent-2_txtstore-mcp_review_260509.md
+```
+
+Fields after `AGENT_NAME` and `SHORT_PLAN_NAME` are optional and positional — include `PHASE`, `SECTION`, and additional qualifiers only when they add meaningful disambiguation.
+
+**Tools provided by `txtstore-mcp`:**
+
+- `txtstore_append` — add a new section (auto-renames duplicate titles with `-2`, `-3`, …)
+- `txtstore_edit` — replace an existing section
+
+Both tools accept `unit` and `section` flags for heading hierarchy (e.g. `## Wave1 > OAuth > Notes`).
 
 ## Typical Workflow
 

@@ -383,6 +383,26 @@ func TestHandleSwimNext(t *testing.T) {
 	}
 }
 
+func TestHandleSwimNext_MissingStateBehavesAsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"journal":  filepath.Join(dir, "journal.json"),
+			"state":    filepath.Join(dir, "missing.state.json"),
+		}},
+	}
+	res, err := srv.handleSwimNext(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimNext: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["action"] != "ready" {
+		t.Fatalf("action = %v, want ready", got["action"])
+	}
+}
+
 func TestHandleSwimStepApply(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -400,7 +420,7 @@ func TestHandleSwimStepApply(t *testing.T) {
       "action": "implement",
       "requires": {"task_status": "available"},
       "produces": {"task_status": "taken"},
-      "invoke": {"argv": ["/bin/sh", "-c", "python3 - <<'PY'\nimport json\npath = r'` + statePath + `'\nwith open(path, 'r', encoding='utf-8') as f:\n    data = json.load(f)\ndata['taken']['T1.1'] = {'taken_by': 'phi', 'started_at': '2026-05-09T00:00:00Z'}\nwith open(path, 'w', encoding='utf-8') as f:\n    json.dump(data, f)\nPY"]}
+	      "invoke": {"argv": ["/bin/sh", "-c", "python3 - <<'PY'\nimport json\nimport os\npath = r'` + statePath + `'\nwith open(path, 'r', encoding='utf-8') as f:\n    data = json.load(f)\ndata['taken']['T1.1'] = {'taken_by': 'phi', 'started_at': '2026-05-09T00:00:00Z'}\nwith open(path, 'w', encoding='utf-8') as f:\n    json.dump(data, f)\nreceipt_path = os.environ.get('SWIM_DISPATCH_RECEIPT_PATH', '')\nif receipt_path:\n    os.makedirs(os.path.dirname(receipt_path), exist_ok=True)\n    with open(receipt_path, 'w', encoding='utf-8') as f:\n        json.dump({'ok': True}, f)\n        f.write('\\n')\nPY"]}
     }
   ]
 }`
@@ -566,6 +586,100 @@ func TestHandleSwimCompile(t *testing.T) {
 			"plan":       filepath.Join("docs", "plans", "2026-05-05-swim-execution-waves.json"),
 			"agents":     agentsPath,
 			"task_scope": "all",
+		}},
+	}
+	res, err := srv.handleSwimCompile(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimCompile: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["schema_version"] != float64(2) {
+		t.Fatalf("schema_version = %v, want 2", got["schema_version"])
+	}
+}
+
+func TestHandleSwimCompile_BootstrapState(t *testing.T) {
+	dir := t.TempDir()
+	planPath := filepath.Join(dir, "plan.json")
+	if err := os.WriteFile(planPath, []byte(`{
+  "schema_version": 1,
+  "generated_on": "2026-05-05",
+  "plan": {"name": "swim-test"},
+  "doc_index": {},
+  "fp_index": {},
+  "tasks": {"T1": {"title": "Base task", "plan_line": 1, "doc_refs": []}},
+  "units": {"T1.1": {"task": "T1", "title": "Base unit", "kind": "impl", "wave": 1, "plan_line": 2, "depends_on": [], "doc_refs": [], "fp_refs": []}},
+  "waves": [{"wave": 1, "units": ["T1.1"]}]
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	agentsPath := filepath.Join(dir, "waveagents.json")
+	if err := os.WriteFile(agentsPath, []byte(`{
+  "agents": [
+    {"name": "phi", "provider": "codex"},
+    {"name": "sigma", "provider": "claude"}
+  ],
+  "schedule": ["phi", "sigma"]
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outPath := filepath.Join(dir, "schedule.json")
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"plan":            planPath,
+			"agents":          agentsPath,
+			"out":             outPath,
+			"bootstrap_state": true,
+		}},
+	}
+	res, err := srv.handleSwimCompile(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimCompile: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["state_bootstrapped"] != true {
+		t.Fatalf("state_bootstrapped = %v, want true", got["state_bootstrapped"])
+	}
+	stateBody, err := os.ReadFile(planPath + ".state.json")
+	if err != nil {
+		t.Fatalf("read bootstrapped state: %v", err)
+	}
+	state := parseJSONMap(t, string(stateBody))
+	if state["plan"] != filepath.Base(planPath) {
+		t.Fatalf("state plan = %v, want %v", state["plan"], filepath.Base(planPath))
+	}
+}
+
+func TestHandleSwimCompile_DefaultAgentsFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	homeDir := filepath.Join(dir, "home")
+	configDir := filepath.Join(homeDir, ".config", "waveplan-mcp")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	agentsPath := filepath.Join(configDir, "waveagents.json")
+	if err := os.WriteFile(agentsPath, []byte(`{
+  "agents": [
+    {"name": "phi", "provider": "codex"},
+    {"name": "sigma", "provider": "claude"}
+  ],
+  "schedule": ["phi", "sigma"]
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldHome := os.Getenv("HOME")
+	if err := os.Setenv("HOME", homeDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+	}()
+
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"plan": filepath.Join("docs", "plans", "2026-05-05-swim-execution-waves.json"),
 		}},
 	}
 	res, err := srv.handleSwimCompile(nil, req)

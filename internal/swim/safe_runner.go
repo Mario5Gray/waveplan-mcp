@@ -64,7 +64,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 
 	readSnapshot := opts.ReadSnapshotFn
 	if readSnapshot == nil {
-		readSnapshot = ReadStateSnapshot
+		readSnapshot = ReadStateSnapshotOrEmpty
 	}
 
 	snapA, err := readSnapshot(opts.StatePath)
@@ -73,6 +73,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 	}
 
 	decision := ResolveNext(schedule, journal, snapA)
+	recoverDispatch := false
 	switch decision.Action {
 	case ActionDone:
 		if err := saveJournal(opts.JournalPath, journal); err != nil {
@@ -96,6 +97,16 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 				Schedule: opts.SchedulePath,
 			}, nil
 		}
+		if decision.Action == ActionDrift {
+			actual := snapA.StatusOf(decision.Row.TaskID)
+			if actual == Predict(decision.Row) {
+				if isDispatchAction(decision.Row.Action) && !anyDispatchReceiptExists(opts.SchedulePath, decision.Row.StepID) {
+					recoverDispatch = true
+					break
+				}
+				return appendAdoptedAppliedResult(opts, journal, decision.Row, actual)
+			}
+		}
 		return appendBlockedResult(opts, journal, decision.Row, decision.Reason, snapA.StatusOf(decision.Row.TaskID))
 	default:
 		return nil, fmt.Errorf("unsupported resolver action: %s", decision.Action)
@@ -116,10 +127,43 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 		)
 		return appendBlockedResult(opts, journal, decision.Row, reason, actual)
 	}
+	if recoverDispatch && snapB.StatusOf(decision.Row.TaskID) != Predict(decision.Row) {
+		actual := snapB.StatusOf(decision.Row.TaskID)
+		reason := fmt.Sprintf(
+			"dispatch_recovery_lost_state: action=%s produces=%s actual=%s",
+			decision.Row.Action,
+			Predict(decision.Row),
+			actual,
+		)
+		return appendBlockedResult(opts, journal, decision.Row, reason, actual)
+	}
 
 	eventIndex := len(journal.Events)
 	event := makeInFlightEvent(journal, decision.Row)
 	event.StdoutPath, event.StderrPath = deriveLogPaths(opts.SchedulePath, decision.Row.StepID, event.Attempt)
+	receiptPath := ""
+	extraEnv := map[string]string{}
+	if isDispatchAction(decision.Row.Action) {
+		receiptPath = deriveDispatchReceiptPath(opts.SchedulePath, decision.Row.StepID, event.Attempt)
+		extraEnv["SWIM_DISPATCH_RECEIPT_PATH"] = dispatchReceiptAbsPath(opts.SchedulePath, decision.Row.StepID, event.Attempt)
+		extraEnv["SWIM_STEP_ID"] = decision.Row.StepID
+		extraEnv["SWIM_TASK_ID"] = decision.Row.TaskID
+		extraEnv["SWIM_ACTION"] = decision.Row.Action
+	}
+	if decision.Row.Action == "fix" {
+		for i := len(journal.Events) - 1; i >= 0; i-- {
+			ev := journal.Events[i]
+			if ev.Action != "review" || ev.TaskID != decision.Row.TaskID || ev.StdoutPath == "" {
+				continue
+			}
+			if filepath.IsAbs(ev.StdoutPath) {
+				extraEnv["SWIM_PRIOR_STDOUT_PATH"] = ev.StdoutPath
+			} else {
+				extraEnv["SWIM_PRIOR_STDOUT_PATH"] = filepath.Join(filepath.Dir(opts.SchedulePath), ev.StdoutPath)
+			}
+			break
+		}
+	}
 	journal.Events = append(journal.Events, event)
 	last := journal.Events[eventIndex]
 	journal.LastEvent = &last
@@ -130,16 +174,40 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 		return nil, err
 	}
 
-	runErr := invokeArgv(decision.Row.Invoke.Argv, opts.WorkDir, filepath.Dir(opts.SchedulePath), event.StdoutPath, event.StderrPath, opts.InvokeFn)
+	runErr := invokeArgv(decision.Row.Invoke.Argv, opts.WorkDir, filepath.Dir(opts.SchedulePath), event.StdoutPath, event.StderrPath, extraEnv, opts.InvokeFn)
 	exitCode := 0
 	outcome := "applied"
 	reason := ""
 	stateAfter := Predict(decision.Row)
 	if runErr != nil {
-		outcome = "failed"
 		exitCode = exitCodeFromErr(runErr)
-		reason = runErr.Error()
-		stateAfter = Status(decision.Row.Requires.TaskStatus)
+		if isDispatchAction(decision.Row.Action) {
+			snapC, err := readSnapshot(opts.StatePath)
+			if err != nil {
+				return nil, err
+			}
+			actual := snapC.StatusOf(decision.Row.TaskID)
+			if actual == Predict(decision.Row) && !dispatchReceiptExists(opts.SchedulePath, decision.Row.StepID, event.Attempt) {
+				outcome = "blocked"
+				reason = fmt.Sprintf(
+					"incomplete_dispatch: action=%s produces=%s actual=%s receipt_missing=%s invoke_error=%s",
+					decision.Row.Action,
+					Predict(decision.Row),
+					actual,
+					receiptPath,
+					runErr.Error(),
+				)
+				stateAfter = actual
+			} else {
+				outcome = "failed"
+				reason = runErr.Error()
+				stateAfter = Status(decision.Row.Requires.TaskStatus)
+			}
+		} else {
+			outcome = "failed"
+			reason = runErr.Error()
+			stateAfter = Status(decision.Row.Requires.TaskStatus)
+		}
 	} else {
 		snapC, err := readSnapshot(opts.StatePath)
 		if err != nil {
@@ -153,6 +221,16 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 				decision.Row.Action,
 				Predict(decision.Row),
 				actual,
+			)
+			stateAfter = actual
+		} else if isDispatchAction(decision.Row.Action) && !dispatchReceiptExists(opts.SchedulePath, decision.Row.StepID, event.Attempt) {
+			outcome = "blocked"
+			reason = fmt.Sprintf(
+				"incomplete_dispatch: action=%s produces=%s actual=%s receipt_missing=%s",
+				decision.Row.Action,
+				Predict(decision.Row),
+				actual,
+				receiptPath,
 			)
 			stateAfter = actual
 		}
@@ -239,6 +317,45 @@ func appendBlockedResult(opts SafeExecOptions, journal *Journal, row ScheduleRow
 		TaskID:   row.TaskID,
 		Action:   row.Action,
 		Outcome:  "blocked",
+		EventID:  event.EventID,
+		Journal:  opts.JournalPath,
+		Schedule: opts.SchedulePath,
+	}, nil
+}
+
+func appendAdoptedAppliedResult(opts SafeExecOptions, journal *Journal, row ScheduleRow, actual Status) (*ExecNextResult, error) {
+	event := JournalEvent{
+		EventID:     nextEventID(journal),
+		StepID:      row.StepID,
+		Seq:         row.Seq,
+		TaskID:      row.TaskID,
+		Action:      row.Action,
+		Attempt:     nextAttempt(journal, row.StepID),
+		StartedOn:   time.Now().UTC().Format(time.RFC3339),
+		CompletedOn: time.Now().UTC().Format(time.RFC3339),
+		Outcome:     "applied",
+		StateBefore: StatusWrapper{TaskStatus: row.Requires.TaskStatus},
+		StateAfter:  StatusWrapper{TaskStatus: string(actual)},
+		Reason: fmt.Sprintf(
+			"idempotent_adopt: action=%s actual=%s matches_produces=%s",
+			row.Action,
+			actual,
+			Predict(row),
+		),
+	}
+	journal.Events = append(journal.Events, event)
+	journal.Cursor++
+	journal.LastEvent = &event
+	if err := saveJournal(opts.JournalPath, journal); err != nil {
+		return nil, err
+	}
+	return &ExecNextResult{
+		Done:     false,
+		Cursor:   journal.Cursor,
+		StepID:   row.StepID,
+		TaskID:   row.TaskID,
+		Action:   row.Action,
+		Outcome:  "applied",
 		EventID:  event.EventID,
 		Journal:  opts.JournalPath,
 		Schedule: opts.SchedulePath,

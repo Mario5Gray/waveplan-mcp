@@ -21,6 +21,7 @@ grep -q -- '--plan' "$TMP_DIR/compile-schedule-help.txt"
 grep -q -- '--agents' "$TMP_DIR/compile-schedule-help.txt"
 grep -q -- '--out' "$TMP_DIR/compile-schedule-help.txt"
 grep -q -- '--task-scope' "$TMP_DIR/compile-schedule-help.txt"
+grep -q -- '--bootstrap-state' "$TMP_DIR/compile-schedule-help.txt"
 
 "$CLI" swim next --help >"$TMP_DIR/next-help.txt"
 grep -q -- '--schedule' "$TMP_DIR/next-help.txt"

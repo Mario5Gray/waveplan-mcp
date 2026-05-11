@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -49,8 +50,40 @@ def _ordered(d: dict, known: tuple[str, ...]) -> dict:
     return out
 
 # Where the repo keeps its execution-wave plan files.
-_REPO_PLAN_DIR = Path(__file__).resolve().parent.parent / "docs" / "superpowers" / "plans"
-_REPO_ROOT = Path(__file__).resolve().parent
+_SCRIPT_PATH = Path(__file__).resolve()
+_SCRIPT_DIR = _SCRIPT_PATH.parent
+_REPO_PLAN_DIR = _SCRIPT_DIR.parent / "docs" / "superpowers" / "plans"
+_REPO_ROOT = _SCRIPT_DIR
+
+
+def _waveplan_config_dir() -> Path:
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        return Path(xdg) / "waveplan-mcp"
+    return Path.home() / ".config" / "waveplan-mcp"
+
+
+def _default_waveagents_path() -> str:
+    return str(_waveplan_config_dir() / "waveagents.json")
+
+
+def _abs_user_path(path: str | None) -> str | None:
+    if not path:
+        return path
+    p = Path(path)
+    if p.is_absolute():
+        return str(p)
+    return str((Path.cwd() / p).resolve())
+
+
+def _resolve_local_tool(name: str) -> str | None:
+    sibling = _SCRIPT_DIR / name
+    if sibling.exists():
+        return str(sibling)
+    found = shutil.which(name)
+    if found:
+        return found
+    return None
 
 
 def _find_auto_plan() -> Path | None:
@@ -339,12 +372,23 @@ def _derive_swim_state(schedule_path: str) -> str | None:
 
 
 def _run_swim_go(tool: str, tool_args: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["go", "run", f"./cmd/swim-{tool}", *tool_args],
-        cwd=_REPO_ROOT,
-        capture_output=True,
-        text=True,
-    )
+    bin_name = f"swim-{tool}"
+    cmd_main = _REPO_ROOT / "cmd" / bin_name / "main.go"
+    if cmd_main.exists():
+        return subprocess.run(
+            ["go", "run", f"./cmd/{bin_name}", *tool_args],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+    resolved = _resolve_local_tool(bin_name)
+    if resolved:
+        return subprocess.run(
+            [resolved, *tool_args],
+            capture_output=True,
+            text=True,
+        )
+    return subprocess.CompletedProcess([bin_name, *tool_args], 3, "", f"{bin_name} not found")
 
 
 def _handle_swim_subprocess(tool: str, tool_args: list[str], subcommand: str) -> None:
@@ -365,54 +409,102 @@ def _handle_swim_subprocess(tool: str, tool_args: list[str], subcommand: str) ->
     }, proc.returncode if proc.returncode in (2, 3, 4) else 3)
 
 
+def _tail_apply_logs(payload_text: str, schedule_path: str, tail_lines: int) -> None:
+    try:
+        payload = json.loads(payload_text)
+    except Exception:
+        return
+    if not isinstance(payload, dict):
+        return
+    for label, key in (("stdout", "stdout_path"), ("stderr", "stderr_path")):
+        path = payload.get(key)
+        if not isinstance(path, str) or not path:
+            continue
+        log_path = Path(path)
+        if not log_path.is_absolute():
+            log_path = Path(schedule_path).resolve().parent / log_path
+        if not log_path.exists():
+            print(f"==> {label}: {log_path} (missing)", file=sys.stderr)
+            continue
+        try:
+            lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except Exception as e:
+            print(f"==> {label}: {log_path} (read failed: {e})", file=sys.stderr)
+            continue
+        print(f"==> {label}: {log_path}", file=sys.stderr)
+        tail = lines[-tail_lines:] if tail_lines > 0 else lines
+        for line in tail:
+            print(line, file=sys.stderr)
+
+
 def _handle_swim_compile_schedule(args: argparse.Namespace) -> None:
+    plan_path = _abs_user_path(args.plan)
+    agents_path = _abs_user_path(args.agents or _default_waveagents_path())
+    out_path = _abs_user_path(args.out)
+    emitter = _resolve_local_tool("wp-emit-wave-execution.sh") or str(_REPO_ROOT / "wp-emit-wave-execution.sh")
     cmd = [
-        str(_REPO_ROOT / "wp-emit-wave-execution.sh"),
-        "--plan", args.plan,
-        "--agents", args.agents,
+        emitter,
+        "--plan", plan_path,
+        "--agents", agents_path,
         "--task-scope", args.task_scope,
     ]
-    if args.out:
-        cmd.extend(["--out", args.out])
-    env = {**os.environ, "WAVEPLAN_CLI_BIN": str(_REPO_ROOT / "waveplan-cli")}
-    proc = subprocess.run(cmd, cwd=_REPO_ROOT, capture_output=True, text=True, env=env)
+    if out_path:
+        cmd.extend(["--out", out_path])
+    env = {**os.environ, "WAVEPLAN_CLI_BIN": str(_SCRIPT_PATH)}
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if proc.returncode != 0:
         _emit_json({
             "ok": False,
             "error": proc.stderr.strip() or proc.stdout.strip() or "compile-schedule failed",
             "subcommand": "compile-schedule",
         }, proc.returncode if proc.returncode in (2, 3, 4) else 3)
-    if args.out:
-        _emit_json({"ok": True, "output": args.out, "subcommand": "compile-schedule"})
+    state_path = plan_path + ".state.json"
+    state_bootstrapped = False
+    if getattr(args, "bootstrap_state", False) and not Path(state_path).exists():
+        Path(state_path).write_text(json.dumps({
+            "plan": Path(plan_path).name,
+            "taken": {},
+            "completed": {},
+        }, indent=2) + "\n", encoding="utf-8")
+        state_bootstrapped = True
+    if out_path:
+        _emit_json({
+            "ok": True,
+            "output": out_path,
+            "subcommand": "compile-schedule",
+            "state_bootstrapped": state_bootstrapped,
+            "state_path": state_path,
+            "agents": agents_path,
+        })
     print(proc.stdout, end="")
 
 
 def _handle_swim_refine(args: argparse.Namespace) -> None:
     tool_args = [
-        "--plan", args.plan,
+        "--plan", _abs_user_path(args.plan),
         "--targets", ",".join(args.targets),
     ]
     if args.profile:
         tool_args.extend(["--profile", args.profile])
     if args.out:
-        tool_args.extend(["--out", args.out])
+        tool_args.extend(["--out", _abs_user_path(args.out)])
     if getattr(args, "invoker", None):
         tool_args.extend(["--invoker", args.invoker])
     _handle_swim_subprocess("refine-compile", tool_args, "refine")
 
 
 def _handle_swim_refine_run(args: argparse.Namespace) -> None:
-    tool_args = ["--refine", args.refine]
+    tool_args = ["--refine", _abs_user_path(args.refine)]
     if getattr(args, "refine_journal", None):
-        tool_args.extend(["--refine-journal", args.refine_journal])
+        tool_args.extend(["--refine-journal", _abs_user_path(args.refine_journal)])
     if getattr(args, "coarse_journal", None):
-        tool_args.extend(["--coarse-journal", args.coarse_journal])
+        tool_args.extend(["--coarse-journal", _abs_user_path(args.coarse_journal)])
     if getattr(args, "state", None):
-        tool_args.extend(["--state", args.state])
+        tool_args.extend(["--state", _abs_user_path(args.state)])
     if getattr(args, "dry_run", False):
         tool_args.append("--dry-run")
     if getattr(args, "work_dir", None):
-        tool_args.extend(["--work-dir", args.work_dir])
+        tool_args.extend(["--work-dir", _abs_user_path(args.work_dir)])
     _handle_swim_subprocess("refine-run", tool_args, "refine-run")
 
 
@@ -575,13 +667,22 @@ def main() -> None:
         help="Compile a SWIM execution schedule from a plan and waveagents file",
     )
     swim_compile_schedule.add_argument("--plan", required=True, help="Input plan JSON path")
-    swim_compile_schedule.add_argument("--agents", required=True, help="Input waveagents JSON path")
+    swim_compile_schedule.add_argument(
+        "--agents",
+        required=False,
+        help="Input waveagents JSON path (default: ~/.config/waveplan-mcp/waveagents.json)",
+    )
     swim_compile_schedule.add_argument("--out", required=False, help="Optional output schedule JSON path")
     swim_compile_schedule.add_argument(
         "--task-scope",
         choices=("all", "open"),
         default="all",
         help="Task scope to compile into the schedule",
+    )
+    swim_compile_schedule.add_argument(
+        "--bootstrap-state",
+        action="store_true",
+        help="Create <plan>.state.json if it does not already exist",
     )
     swim_next = swim_sub.add_parser(
         "next",
@@ -602,6 +703,10 @@ def main() -> None:
     seq_or_step.add_argument("--step-id", required=False, help="Target step_id")
     step_mode = swim_step.add_mutually_exclusive_group()
     step_mode.add_argument("--apply", action="store_true", help="Apply the selected step")
+    swim_step.add_argument("--tail-logs", action="store_true",
+                           help="After --apply, print tailed stdout/stderr logs to stderr")
+    swim_step.add_argument("--tail-lines", type=int, default=40,
+                           help="Number of lines to print per tailed log (default: 40)")
     step_mode.add_argument("--ack-unknown", metavar="STEP_ID", help="Acknowledge an unknown step by step_id")
     swim_step.add_argument("--as", dest="ack_as", choices=("failed", "waived"), required=False,
                            help="Outcome to record for --ack-unknown")
@@ -668,12 +773,13 @@ def main() -> None:
         if args.swim_command == "compile-schedule":
             _handle_swim_compile_schedule(args)
         elif args.swim_command == "next":
-            journal_path = args.journal or _default_swim_journal(args.schedule)
-            state_path = args.state or _derive_swim_state(args.schedule)
+            schedule_path = _abs_user_path(args.schedule)
+            journal_path = _abs_user_path(args.journal) or _default_swim_journal(schedule_path)
+            state_path = _abs_user_path(args.state) or _derive_swim_state(schedule_path)
             if not state_path:
                 _emit_json({"ok": False, "error": "could not derive state path", "subcommand": "next"}, 3)
             _handle_swim_subprocess("next-resolve", [
-                "--schedule", args.schedule,
+                "--schedule", schedule_path,
                 "--journal", journal_path,
                 "--state", state_path,
             ], "next")
@@ -684,16 +790,16 @@ def main() -> None:
                 if not getattr(args, "ack_as", None):
                     _emit_json({"ok": False, "error": "--as is required for --ack-unknown", "subcommand": "step"}, 2)
                 _handle_swim_subprocess("step", [
-                    "--journal", args.journal,
+                    "--journal", _abs_user_path(args.journal),
                     "--ack-unknown", args.ack_unknown,
                     "--as", args.ack_as,
                 ], "step")
                 return
-            schedule = args.schedule
+            schedule = _abs_user_path(args.schedule)
             if not schedule:
                 _emit_json({"ok": False, "error": "--schedule is required", "subcommand": "step"}, 2)
-            journal_path = args.journal or _default_swim_journal(schedule)
-            state_path = args.state or _derive_swim_state(schedule)
+            journal_path = _abs_user_path(args.journal) or _default_swim_journal(schedule)
+            state_path = _abs_user_path(args.state) or _derive_swim_state(schedule)
             if not state_path:
                 _emit_json({"ok": False, "error": "could not derive state path", "subcommand": "step"}, 3)
             tool_args = ["--schedule", schedule, "--journal", journal_path, "--state", state_path]
@@ -703,14 +809,30 @@ def main() -> None:
                 tool_args.extend(["--step-id", args.step_id])
             if args.apply:
                 tool_args.append("--apply")
-            _handle_swim_subprocess("step", tool_args, "step")
+            proc = _run_swim_go("step", tool_args)
+            stdout = proc.stdout.strip()
+            stderr = proc.stderr.strip()
+            if stdout:
+                print(stdout)
+            if args.apply and getattr(args, "tail_logs", False) and stdout:
+                _tail_apply_logs(stdout, schedule, max(0, int(getattr(args, "tail_lines", 40))))
+            if proc.returncode == 0:
+                return
+            if stdout:
+                sys.exit(proc.returncode)
+            _emit_json({
+                "ok": False,
+                "error": stderr or "swim-step failed",
+                "subcommand": "step",
+            }, proc.returncode if proc.returncode in (2, 3, 4) else 3)
         elif args.swim_command == "run":
-            journal_path = args.journal or _default_swim_journal(args.schedule)
-            state_path = args.state or _derive_swim_state(args.schedule)
+            schedule_path = _abs_user_path(args.schedule)
+            journal_path = _abs_user_path(args.journal) or _default_swim_journal(schedule_path)
+            state_path = _abs_user_path(args.state) or _derive_swim_state(schedule_path)
             if not state_path:
                 _emit_json({"ok": False, "error": "could not derive state path", "subcommand": "run"}, 3)
             tool_args = [
-                "--schedule", args.schedule,
+                "--schedule", schedule_path,
                 "--journal", journal_path,
                 "--state", state_path,
                 "--until", args.until,
@@ -721,8 +843,9 @@ def main() -> None:
                 tool_args.extend(["--max-steps", str(args.max_steps)])
             _handle_swim_subprocess("run", tool_args, "run")
         elif args.swim_command == "journal":
-            journal_path = args.journal or _default_swim_journal(args.schedule)
-            tool_args = ["--schedule", args.schedule, "--journal", journal_path]
+            schedule_path = _abs_user_path(args.schedule)
+            journal_path = _abs_user_path(args.journal) or _default_swim_journal(schedule_path)
+            tool_args = ["--schedule", schedule_path, "--journal", journal_path]
             if args.tail is not None:
                 tool_args.extend(["--tail", str(args.tail)])
             _handle_swim_subprocess("journal", tool_args, "journal")

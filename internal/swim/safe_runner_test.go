@@ -5,12 +5,13 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func TestExecuteNextStepSafe_LockBusy(t *testing.T) {
 	dir := t.TempDir()
-	schedulePath := filepath.Join(dir, "schedule.json")
+	schedulePath := filepath.Join(dir, "adopt-drift-schedule.json")
 	journalPath := filepath.Join(dir, "journal.json")
 	statePath := filepath.Join(dir, "state.json")
 	lockPath := filepath.Join(dir, "custom.lock")
@@ -176,9 +177,72 @@ func TestExecuteNextStepSafe_BlocksOnSnapshotDriftBeforeInvoke(t *testing.T) {
 	}
 }
 
+func TestExecuteNextStepSafe_AdoptsExactProducedStateOnCursorDrift(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "adopt-drift-schedule.json")
+	journalPath := filepath.Join(dir, "journal.json")
+	statePath := filepath.Join(dir, "state.json")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{
+			Seq:      1,
+			StepID:   "S1_T1.1_implement",
+			TaskID:   "T1.1",
+			Action:   "implement",
+			Requires: StatusWrapper{TaskStatus: string(StatusAvailable)},
+			Produces: StatusWrapper{TaskStatus: string(StatusTaken)},
+			Invoke:   InvokeSpec{Argv: []string{"bash", "-lc", "true"}},
+		},
+	})
+	receiptPath := dispatchReceiptAbsPath(schedulePath, "S1_T1.1_implement", 1)
+	if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll receipt dir: %v", err)
+	}
+	if err := os.WriteFile(receiptPath, []byte(`{"ok":true}`+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile receipt: %v", err)
+	}
+
+	invoked := 0
+	res, err := ExecuteNextStepSafe(SafeExecOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		StatePath:    statePath,
+		ReadSnapshotFn: func(_ string) (*StateSnapshot, error) {
+			return snapshotWithTaskStatus("T1.1", StatusTaken), nil
+		},
+		InvokeFn: func(_ []string, _ string) error {
+			invoked++
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteNextStepSafe: %v", err)
+	}
+	if res.Outcome != "applied" {
+		t.Fatalf("outcome = %q, want applied", res.Outcome)
+	}
+	if res.Cursor != 1 {
+		t.Fatalf("cursor = %d, want 1", res.Cursor)
+	}
+	if invoked != 0 {
+		t.Fatalf("invoke count = %d, want 0", invoked)
+	}
+
+	j := readJournal(t, journalPath)
+	if len(j.Events) != 1 {
+		t.Fatalf("events len = %d, want 1", len(j.Events))
+	}
+	if got := j.Events[0].Outcome; got != "applied" {
+		t.Fatalf("event outcome = %q, want applied", got)
+	}
+	if j.Events[0].Reason == "" || !strings.Contains(j.Events[0].Reason, "idempotent_adopt") {
+		t.Fatalf("event reason = %q, want idempotent_adopt note", j.Events[0].Reason)
+	}
+}
+
 func TestExecuteNextStepSafe_AppliesOnStableSnapshotsAndProducedState(t *testing.T) {
 	dir := t.TempDir()
-	schedulePath := filepath.Join(dir, "schedule.json")
+	schedulePath := filepath.Join(dir, "apply-stable-schedule.json")
 	journalPath := filepath.Join(dir, "journal.json")
 	statePath := filepath.Join(dir, "state.json")
 
@@ -209,6 +273,16 @@ func TestExecuteNextStepSafe_AppliesOnStableSnapshotsAndProducedState(t *testing
 		},
 		InvokeFn: func(_ []string, _ string) error {
 			invoked++
+			receiptPath := os.Getenv("SWIM_DISPATCH_RECEIPT_PATH")
+			if receiptPath == "" {
+				t.Fatal("missing SWIM_DISPATCH_RECEIPT_PATH")
+			}
+			if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
+				t.Fatalf("MkdirAll receipt dir: %v", err)
+			}
+			if err := os.WriteFile(receiptPath, []byte(`{"ok":true}`+"\n"), 0o644); err != nil {
+				t.Fatalf("WriteFile receipt: %v", err)
+			}
 			return nil
 		},
 	})
@@ -234,6 +308,86 @@ func TestExecuteNextStepSafe_AppliesOnStableSnapshotsAndProducedState(t *testing
 	}
 	if j.Events[0].CompletedOn == "" {
 		t.Fatal("expected completed_on on applied event")
+	}
+}
+
+func TestExecuteNextStepSafe_FixInjectsPriorStdoutPath(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "fix-prior-stdout-schedule.json")
+	journalPath := filepath.Join(dir, "journal.json")
+	statePath := filepath.Join(dir, "state.json")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{
+			Seq:      1,
+			StepID:   "S1_T1.1_fix",
+			TaskID:   "T1.1",
+			Action:   "fix",
+			Requires: StatusWrapper{TaskStatus: string(StatusReviewTaken)},
+			Produces: StatusWrapper{TaskStatus: string(StatusTaken)},
+			Invoke:   InvokeSpec{Argv: []string{"bash", "-lc", "true"}},
+		},
+	})
+
+	priorStdout := ".waveplan/swim/fix-prior-stdout-schedule/logs/S1_T1.1_review.1.stdout.log"
+	writeJournal(t, journalPath, Journal{
+		SchemaVersion: 1,
+		SchedulePath:  schedulePath,
+		Cursor:        0,
+		Events: []JournalEvent{
+			{
+				EventID:     "E0001",
+				StepID:      "S1_T1.1_review",
+				Seq:         1,
+				TaskID:      "T1.1",
+				Action:      "review",
+				Attempt:     1,
+				StartedOn:   "2026-05-11T00:00:00Z",
+				CompletedOn: "2026-05-11T00:00:01Z",
+				Outcome:     "applied",
+				StateBefore: StatusWrapper{TaskStatus: string(StatusTaken)},
+				StateAfter:  StatusWrapper{TaskStatus: string(StatusReviewTaken)},
+				StdoutPath:  priorStdout,
+			},
+		},
+	})
+
+	var capturedPriorPath string
+	var reads int
+	_, err := ExecuteNextStepSafe(SafeExecOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		StatePath:    statePath,
+		ReadSnapshotFn: func(_ string) (*StateSnapshot, error) {
+			reads++
+			if reads < 3 {
+				return snapshotWithTaskStatus("T1.1", StatusReviewTaken), nil
+			}
+			return snapshotWithTaskStatus("T1.1", StatusTaken), nil
+		},
+		InvokeFn: func(_ []string, _ string) error {
+			capturedPriorPath = os.Getenv("SWIM_PRIOR_STDOUT_PATH")
+			receiptPath := os.Getenv("SWIM_DISPATCH_RECEIPT_PATH")
+			if receiptPath != "" {
+				if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
+					t.Fatalf("MkdirAll receipt dir: %v", err)
+				}
+				if err := os.WriteFile(receiptPath, []byte(`{"ok":true}`+"\n"), 0o644); err != nil {
+					t.Fatalf("WriteFile receipt: %v", err)
+				}
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteNextStepSafe: %v", err)
+	}
+
+	if !strings.HasSuffix(capturedPriorPath, priorStdout) {
+		t.Fatalf("SWIM_PRIOR_STDOUT_PATH = %q, want path ending in %q", capturedPriorPath, priorStdout)
+	}
+	if !filepath.IsAbs(capturedPriorPath) {
+		t.Fatalf("SWIM_PRIOR_STDOUT_PATH = %q, want absolute path", capturedPriorPath)
 	}
 }
 

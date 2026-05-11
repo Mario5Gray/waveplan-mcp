@@ -91,7 +91,7 @@ func ExecuteNextStep(opts ExecNextOptions) (*ExecNextResult, error) {
 	stdoutPath, stderrPath := deriveLogPaths(opts.SchedulePath, row.StepID, attempt)
 
 	started := time.Now().UTC().Format(time.RFC3339)
-	runErr := invokeArgv(row.Invoke.Argv, opts.WorkDir, filepath.Dir(opts.SchedulePath), stdoutPath, stderrPath, opts.InvokeFn)
+	runErr := invokeArgv(row.Invoke.Argv, opts.WorkDir, filepath.Dir(opts.SchedulePath), stdoutPath, stderrPath, nil, opts.InvokeFn)
 	completed := time.Now().UTC().Format(time.RFC3339)
 
 	exitCode := 0
@@ -231,7 +231,7 @@ func exitCodeFromErr(err error) int {
 	return 1
 }
 
-func invokeArgv(argv []string, workDir, artifactRoot, stdoutPath, stderrPath string, fn func(argv []string, workDir string) error) error {
+func invokeArgv(argv []string, workDir, artifactRoot, stdoutPath, stderrPath string, extraEnv map[string]string, fn func(argv []string, workDir string) error) error {
 	stdoutFile, stderrFile, err := openLogFiles(artifactRoot, stdoutPath, stderrPath)
 	if err != nil {
 		return err
@@ -242,12 +242,20 @@ func invokeArgv(argv []string, workDir, artifactRoot, stdoutPath, stderrPath str
 	}()
 
 	if fn != nil {
+		restore := applyEnv(extraEnv)
+		defer restore()
 		return fn(argv, workDir)
 	}
 
 	cmd := exec.Command(argv[0], argv[1:]...)
 	if workDir != "" {
 		cmd.Dir = workDir
+	}
+	if len(extraEnv) > 0 {
+		cmd.Env = os.Environ()
+		for k, v := range extraEnv {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
 	}
 	cmd.Stdout = stdoutFile
 	cmd.Stderr = stderrFile
@@ -271,6 +279,52 @@ func deriveLogDir(schedulePath string) string {
 		name = "default"
 	}
 	return filepath.Join(".waveplan", "swim", name, "logs")
+}
+
+func deriveDispatchReceiptPath(schedulePath, stepID string, attempt int) string {
+	receiptDir := deriveDispatchReceiptDir(schedulePath)
+	base := fmt.Sprintf("%s.%d", stepID, attempt)
+	return filepath.Join(receiptDir, base+".dispatch.json")
+}
+
+func deriveDispatchReceiptDir(schedulePath string) string {
+	base := filepath.Base(schedulePath)
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+	if name == "" {
+		name = base
+	}
+	if name == "" {
+		name = "default"
+	}
+	return filepath.Join(".waveplan", "swim", name, "receipts")
+}
+
+func applyEnv(extraEnv map[string]string) func() {
+	if len(extraEnv) == 0 {
+		return func() {}
+	}
+	type envRestore struct {
+		key     string
+		value   string
+		present bool
+	}
+	restore := make([]envRestore, 0, len(extraEnv))
+	for k, v := range extraEnv {
+		prev, ok := os.LookupEnv(k)
+		restore = append(restore, envRestore{key: k, value: prev, present: ok})
+		_ = os.Setenv(k, v)
+	}
+	return func() {
+		for i := len(restore) - 1; i >= 0; i-- {
+			r := restore[i]
+			if r.present {
+				_ = os.Setenv(r.key, r.value)
+			} else {
+				_ = os.Unsetenv(r.key)
+			}
+		}
+	}
 }
 
 func openLogFiles(artifactRoot, stdoutPath, stderrPath string) (*os.File, *os.File, error) {

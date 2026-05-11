@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 )
 
@@ -13,11 +14,11 @@ import (
 type Status string
 
 const (
-	StatusAvailable    Status = "available"
-	StatusTaken        Status = "taken"
-	StatusReviewTaken  Status = "review_taken"
-	StatusReviewEnded  Status = "review_ended"
-	StatusCompleted    Status = "completed"
+	StatusAvailable   Status = "available"
+	StatusTaken       Status = "taken"
+	StatusReviewTaken Status = "review_taken"
+	StatusReviewEnded Status = "review_ended"
+	StatusCompleted   Status = "completed"
 )
 
 // takenEntry mirrors a single value in state.taken.
@@ -49,15 +50,29 @@ type rawState struct {
 // StateSnapshot is an immutable, in-memory view of a state file.
 // Token() returns a deterministic content hash usable as a CAS sentinel.
 type StateSnapshot struct {
-	raw      rawState
+	raw       rawState
 	canonBody []byte // canonical-ordered re-serialization for Token()
-	warnings []string
+	warnings  []string
 }
 
 // ReadStateSnapshot loads and parses a state JSON file from disk.
 func ReadStateSnapshot(path string) (*StateSnapshot, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
+		return nil, fmt.Errorf("read state file %q: %w", path, err)
+	}
+	return ReadStateSnapshotBytes(body)
+}
+
+// ReadStateSnapshotOrEmpty is the operator-facing variant used by SWIM CLI/MCP
+// flows. A missing file is treated as a clean empty state so first-run `next`
+// / `step` / `run --dry-run` can operate without an explicit bootstrap step.
+func ReadStateSnapshotOrEmpty(path string) (*StateSnapshot, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ReadStateSnapshotBytes([]byte(fmt.Sprintf(`{"plan":%q,"taken":{},"completed":{}}`, filepath.Base(path))))
+		}
 		return nil, fmt.Errorf("read state file %q: %w", path, err)
 	}
 	return ReadStateSnapshotBytes(body)

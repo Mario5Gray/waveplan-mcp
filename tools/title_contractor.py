@@ -44,6 +44,7 @@ PROTECTED_TOKENS: Set[str] = {
 
 class TechBigramContractor:
     BIGRAM_MAP: Dict[str, str] = {
+        
         "cross parent": "xparent",
         "command line": "cli",
         "machine learning": "ml",
