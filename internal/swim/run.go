@@ -99,7 +99,7 @@ func runDry(opts RunOptions, cond untilCond, report *RunReport) (*RunReport, err
 	}
 	readSnapshot := opts.ReadSnapshotFn
 	if readSnapshot == nil {
-		readSnapshot = ReadStateSnapshot
+		readSnapshot = ReadStateSnapshotOrEmpty
 	}
 	snap, err := readSnapshot(opts.StatePath)
 	if err != nil {
@@ -154,7 +154,7 @@ func parseUntil(raw string) (untilCond, error) {
 		return untilCond{kind: untilNone}, nil
 	}
 	switch raw {
-	case "implement", "review", "end_review", "finish":
+	case "implement", "review", "end_review", "finish", "fix":
 		return untilCond{kind: untilAction, action: raw}, nil
 	}
 	if strings.HasPrefix(raw, "seq:") {
@@ -179,7 +179,9 @@ func matchesUntil(cond untilCond, step *ApplyReport) bool {
 	case untilNone:
 		return false
 	case untilAction:
-		return strings.HasSuffix(step.StepID, "_"+cond.action)
+		suffix := "_" + cond.action
+		return strings.HasSuffix(step.StepID, suffix) ||
+			strings.Contains(step.StepID, suffix+"_r")
 	case untilSeq:
 		return step.Seq == cond.seq
 	case untilStep:

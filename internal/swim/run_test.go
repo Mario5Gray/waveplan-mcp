@@ -364,6 +364,63 @@ func TestRun_InvalidUntil(t *testing.T) {
 	}
 }
 
+func TestRun_UntilFixWithRoundSuffix(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "schedule.json")
+	journalPath := filepath.Join(dir, "journal.json")
+	statePath := filepath.Join(dir, "state.json")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{Seq: 1, StepID: "S1_T1.1_implement", TaskID: "T1.1", Action: "implement",
+			Requires: StatusWrapper{TaskStatus: "available"}, Produces: StatusWrapper{TaskStatus: "taken"},
+			Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 2, StepID: "S2_T1.1_review", TaskID: "T1.1", Action: "review",
+			Requires: StatusWrapper{TaskStatus: "taken"}, Produces: StatusWrapper{TaskStatus: "review_taken"},
+			Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 3, StepID: "S3_T1.1_fix_r1", TaskID: "T1.1", Action: "fix",
+			Requires: StatusWrapper{TaskStatus: "review_taken"}, Produces: StatusWrapper{TaskStatus: "taken"},
+			Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+	})
+
+	var reads int
+	report, err := Run(RunOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		StatePath:    statePath,
+		Until:        "fix",
+		ReadSnapshotFn: func(_ string) (*StateSnapshot, error) {
+			reads++
+			switch {
+			case reads <= 2:
+				return snapshotWithTaskStatus("T1.1", StatusAvailable), nil
+			case reads <= 5:
+				return snapshotWithTaskStatus("T1.1", StatusTaken), nil
+			case reads <= 8:
+				return snapshotWithTaskStatus("T1.1", StatusReviewTaken), nil
+			default:
+				return snapshotWithTaskStatus("T1.1", StatusTaken), nil
+			}
+		},
+		InvokeFn: invokeFnWithReceipt(t),
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Stopped != "until" {
+		t.Fatalf("stopped = %q, want until", report.Stopped)
+	}
+	if !report.ReachedUntil {
+		t.Fatal("expected ReachedUntil=true")
+	}
+	if len(report.Steps) != 3 {
+		t.Fatalf("steps = %d, want 3", len(report.Steps))
+	}
+	last := report.Steps[len(report.Steps)-1]
+	if last.StepID != "S3_T1.1_fix_r1" {
+		t.Fatalf("last step_id = %q, want S3_T1.1_fix_r1", last.StepID)
+	}
+}
+
 func writeFourStepSchedule(t *testing.T, path, taskID string) {
 	t.Helper()
 	writeSchedule(t, path, []ScheduleRow{
