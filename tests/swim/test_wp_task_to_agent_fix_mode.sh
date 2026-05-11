@@ -22,7 +22,13 @@ import json, sys
 
 args = sys.argv[1:]
 if "get" in args:
-    print(json.dumps({"tasks": [{"task_id": "T1.1", "title": "stub", "status": "taken"}]}))
+    get_idx = args.index("get")
+    get_target = args[get_idx + 1] if get_idx + 1 < len(args) else ""
+    if get_target.startswith("task-"):
+        task_id = get_target[len("task-"):]
+        print(json.dumps({"task_id": task_id, "title": "stub fix task", "status": "review_taken"}))
+    else:
+        print(json.dumps({"tasks": [{"task_id": "T1.1", "title": "stub", "status": "review_taken"}]}))
 elif "start_fix" in args:
     print(json.dumps({"ok": True, "task_id": args[-1]}))
 else:
@@ -43,6 +49,7 @@ export PATH="$TMP:$PATH"
 export WAVEPLAN_CLI_BIN="$CLI_STUB"
 export SWIM_DISPATCH_RECEIPT_PATH="$RECEIPT_OUT"
 export SWIM_PRIOR_STDOUT_PATH="$PRIOR_STDOUT"
+export SWIM_TASK_ID="T1.1"
 
 "$ROOT/wp-task-to-agent.sh" \
   --target codex \

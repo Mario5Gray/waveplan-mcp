@@ -229,6 +229,28 @@ print(json.dumps(sel))
 ' "$agent_tasks_json"
 }
 
+select_review_taken_task_for_agent() {
+  local plan="$1"
+  local agent="$2"
+  local agent_tasks_json
+  agent_tasks_json="$(waveplan_cli --plan "$plan" get "$agent")"
+  if json_has_error "$agent_tasks_json"; then
+    return 1
+  fi
+  python3 -c 'import json,sys
+obj=json.loads(sys.argv[1] or "{}")
+tasks=obj.get("tasks", [])
+review=[t for t in tasks if t.get("status")=="review_taken"]
+if not review:
+  print("")
+  sys.exit(0)
+review.sort(key=lambda t: ((t.get("started_at") or ""), (t.get("task_id") or "")), reverse=True)
+sel=review[0]
+print(sel.get("task_id", ""))
+print(json.dumps(sel))
+' "$agent_tasks_json"
+}
+
 send_prompt() {
   local prompt="$1"
   if [[ "$DRY_RUN" == "1" ]]; then
@@ -391,12 +413,26 @@ fi
 
 # fix mode
 if [[ "$MODE" == "fix" ]]; then
-  SELECTED="$(select_taken_task_for_agent "$PLAN" "$AGENT" || true)"
-  TASK_ID="$(printf '%s\n' "$SELECTED" | sed -n '1p')"
-  CURRENT_TASK_JSON="$(printf '%s\n' "$SELECTED" | sed -n '2,$p')"
+  # SWIM_TASK_ID is injected by safe_runner.go for all dispatch steps.
+  # When present use it directly; otherwise fall back to finding a review_taken task.
+  TASK_ID="${SWIM_TASK_ID:-}"
+  CURRENT_TASK_JSON=""
+
+  if [[ -n "$TASK_ID" ]]; then
+    CURRENT_TASK_JSON="$(waveplan_cli --plan "$PLAN" get "task-$TASK_ID")"
+    if json_has_error "$CURRENT_TASK_JSON"; then
+      echo "waveplan get task returned error payload:" >&2
+      echo "$CURRENT_TASK_JSON" >&2
+      exit 1
+    fi
+  else
+    SELECTED="$(select_review_taken_task_for_agent "$PLAN" "$AGENT" || true)"
+    TASK_ID="$(printf '%s\n' "$SELECTED" | sed -n '1p')"
+    CURRENT_TASK_JSON="$(printf '%s\n' "$SELECTED" | sed -n '2,$p')"
+  fi
 
   if [[ -z "$TASK_ID" || -z "$CURRENT_TASK_JSON" ]]; then
-    echo "No currently taken task found for agent '$AGENT'" >&2
+    echo "No review_taken task found for agent '$AGENT'" >&2
     exit 1
   fi
 
