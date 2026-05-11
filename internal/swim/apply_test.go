@@ -684,3 +684,62 @@ func TestApply_JSONRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestReportJSON_ReservedBoundaryInquiryFields(t *testing.T) {
+	applyReport := &ApplyReport{
+		Status:          "blocked",
+		Boundary:        "blocked",
+		InquiryRequired: true,
+		InquirySource:   "adapter",
+		InquiryHint:     "answer permission prompt in target UI",
+	}
+	body, err := json.Marshal(applyReport)
+	if err != nil {
+		t.Fatalf("Marshal ApplyReport: %v", err)
+	}
+	wire := string(body)
+	for _, key := range []string{"boundary", "inquiry_required", "inquiry_source", "inquiry_hint"} {
+		if !strings.Contains(wire, `"`+key+`"`) {
+			t.Fatalf("missing json key %q in %s", key, wire)
+		}
+	}
+
+	runReport := &RunReport{
+		Boundary:        "blocked",
+		InquiryRequired: true,
+		InquirySource:   "adapter",
+		InquiryHint:     "answer permission prompt in target UI",
+	}
+	body, err = json.Marshal(runReport)
+	if err != nil {
+		t.Fatalf("Marshal RunReport: %v", err)
+	}
+	wire = string(body)
+	for _, key := range []string{"boundary", "inquiry_required", "inquiry_source", "inquiry_hint"} {
+		if !strings.Contains(wire, `"`+key+`"`) {
+			t.Fatalf("missing json key %q in %s", key, wire)
+		}
+	}
+
+	body, err = json.Marshal(&ApplyReport{Status: "done"})
+	if err != nil {
+		t.Fatalf("Marshal empty reserved ApplyReport fields: %v", err)
+	}
+	wire = string(body)
+	for _, key := range []string{"boundary", "inquiry_required", "inquiry_source", "inquiry_hint"} {
+		if strings.Contains(wire, `"`+key+`"`) {
+			t.Fatalf("unexpected json key %q in %s", key, wire)
+		}
+	}
+
+	body, err = json.Marshal(&RunReport{Stopped: "done"})
+	if err != nil {
+		t.Fatalf("Marshal empty reserved RunReport fields: %v", err)
+	}
+	wire = string(body)
+	for _, key := range []string{"boundary", "inquiry_required", "inquiry_source", "inquiry_hint"} {
+		if strings.Contains(wire, `"`+key+`"`) {
+			t.Fatalf("unexpected json key %q in %s", key, wire)
+		}
+	}
+}

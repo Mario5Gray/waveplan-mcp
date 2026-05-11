@@ -20,14 +20,18 @@ type ApplyOptions struct {
 
 // ApplyReport is the stable JSON-friendly report for CLI and MCP callers.
 type ApplyReport struct {
-	Status     string `json:"status"`
-	StepID     string `json:"step_id,omitempty"`
-	Seq        int    `json:"seq,omitempty"`
-	ExitCode   int    `json:"exit_code,omitempty"`
-	StdoutPath string `json:"stdout_path,omitempty"`
-	StderrPath string `json:"stderr_path,omitempty"`
-	Reason     string `json:"reason,omitempty"`
-	Hint       string `json:"hint,omitempty"`
+	Status          string `json:"status"`
+	StepID          string `json:"step_id,omitempty"`
+	Seq             int    `json:"seq,omitempty"`
+	ExitCode        int    `json:"exit_code,omitempty"`
+	StdoutPath      string `json:"stdout_path,omitempty"`
+	StderrPath      string `json:"stderr_path,omitempty"`
+	Reason          string `json:"reason,omitempty"`
+	Hint            string `json:"hint,omitempty"`
+	Boundary        string `json:"boundary,omitempty"`
+	InquiryRequired bool   `json:"inquiry_required,omitempty"`
+	InquirySource   string `json:"inquiry_source,omitempty"`
+	InquiryHint     string `json:"inquiry_hint,omitempty"`
 }
 
 // Apply executes exactly one safe apply attempt and normalizes the result

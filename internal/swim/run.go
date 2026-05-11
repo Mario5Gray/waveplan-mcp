@@ -21,10 +21,14 @@ type RunOptions struct {
 
 // RunReport captures a multi-step wet or dry run.
 type RunReport struct {
-	Steps        []ApplyReport `json:"steps"`
-	Stopped      string        `json:"stopped"`
-	ReachedUntil bool          `json:"reached_until"`
-	DryRun       bool          `json:"dry_run"`
+	Steps           []ApplyReport `json:"steps"`
+	Stopped         string        `json:"stopped"`
+	ReachedUntil    bool          `json:"reached_until"`
+	DryRun          bool          `json:"dry_run"`
+	Boundary        string        `json:"boundary,omitempty"`
+	InquiryRequired bool          `json:"inquiry_required,omitempty"`
+	InquirySource   string        `json:"inquiry_source,omitempty"`
+	InquiryHint     string        `json:"inquiry_hint,omitempty"`
 }
 
 type untilKind string
