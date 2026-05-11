@@ -55,6 +55,10 @@ Install the MCP server and helper scripts into `~/.local/bin`:
 make install
 ```
 
+This also installs SWIM helper binaries, installs the schedule/journal schemas
+under `~/.local/share/waveplan/specs`, and seeds
+`~/.config/waveplan-mcp/waveagents.json` if it does not already exist.
+
 Install only one side:
 
 ```bash
@@ -209,33 +213,187 @@ Portability overrides:
 
 ## SWIM
 
-SWIM ("Schedule, Work, Invoke, Mark") is a deterministic execution layer above waveplan that turns a plan into a typed, journaled, race-safe step sequence. Operators drive it via `waveplan-cli swim`.
+SWIM ("Schedule, Work, Invoke, Mark") is the deterministic execution layer above
+waveplan. It compiles a plan into typed schedule rows, applies one row at a time
+under a lock, records an append-only journal, and refuses to advance when state
+or dispatch proof is ambiguous.
 
-Quick start (3 commands):
+Use SWIM when you want the operator loop to be explicit and replayable:
+
+```text
+compile schedule -> inspect next row -> apply row -> inspect journal -> continue
+```
+
+### Start Using SWIM Now
+
+Install first:
+
+```bash
+make install
+```
+
+Create or review the agent rotation config:
+
+```bash
+$EDITOR ~/.config/waveplan-mcp/waveagents.json
+```
+
+Compile a schedule from a plan. `--bootstrap-state` creates
+`<plan>.state.json` if it is missing, which is the normal first-run path:
+
+```bash
+PLAN=docs/plans/2026-05-05-swim-execution-waves.json
+SCHEDULE=/tmp/swim-schedule.json
+
+waveplan-cli swim compile-schedule \
+  --plan "$PLAN" \
+  --out "$SCHEDULE" \
+  --bootstrap-state
+```
+
+If you do not want to use the installed default agents file, pass one directly:
 
 ```bash
 waveplan-cli swim compile-schedule \
-  --plan docs/specs/swim-ops-examples/plan.json \
-  --agents docs/specs/swim-ops-examples/waveagents.json \
-  --out /tmp/schedule.json
-
-waveplan-cli swim next --schedule /tmp/schedule.json
-waveplan-cli swim step --apply --schedule /tmp/schedule.json
+  --plan "$PLAN" \
+  --agents tests/swim/fixtures/waveagents.json \
+  --out "$SCHEDULE" \
+  --bootstrap-state
 ```
 
-Subcommands: `compile-schedule`, `next`, `step` (with `--apply` and `--ack-unknown`), `run` (with `--until` / `--dry-run` / `--max-steps`), `journal`, `validate`, `compile-plan-json`.
+Inspect the next step without mutation:
 
-Full reference: [docs/specs/2026-05-05-swim-ops.md](docs/specs/2026-05-05-swim-ops.md). Recovery flows for stuck `unknown` events, `lock_busy`, and cursor drift are documented there with copy-paste bash.
+```bash
+waveplan-cli swim next --schedule "$SCHEDULE"
+```
 
-Runtime artifact layout (per plan):
+Apply one step:
+
+```bash
+waveplan-cli swim step --apply --schedule "$SCHEDULE"
+```
+
+Apply until a boundary:
+
+```bash
+waveplan-cli swim run --schedule "$SCHEDULE" --until review
+waveplan-cli swim run --schedule "$SCHEDULE" --until fix
+waveplan-cli swim run --schedule "$SCHEDULE" --until seq:4
+waveplan-cli swim run --schedule "$SCHEDULE" --until step:S1_T1.1_finish
+```
+
+Inspect recent journal events:
+
+```bash
+waveplan-cli swim journal --schedule "$SCHEDULE" --tail 5
+```
+
+Validate artifacts:
+
+```bash
+waveplan-cli swim validate --kind schedule --in "$SCHEDULE"
+waveplan-cli swim validate --kind journal --in "${SCHEDULE%.json}.journal.json"
+```
+
+### SWIM Terminology
+
+| Term | Meaning |
+|------|---------|
+| `schedule` | v2 JSON list of execution rows. Each row has `seq`, `step_id`, `task_id`, `action`, `requires`, `produces`, and `invoke.argv`. |
+| `journal` | append-only v1 JSON event log. The `cursor` points at the next schedule row to execute. |
+| `state` | waveplan `<plan>.state.json`; task status is derived as `available`, `taken`, `review_taken`, `review_ended`, or `completed`. |
+| `dispatch action` | an action that hands work to an external agent CLI and must produce a dispatch receipt: `implement`, `review`, `fix`. |
+| `dispatch receipt` | durable proof that the target CLI accepted the prompt, written under `.waveplan/swim/<schedule-basename>/receipts/`. |
+| `incomplete_dispatch` | state advanced but receipt is missing; rerun the same SWIM step to redeliver the prompt. |
+| `fix` | dispatch action that transitions `review_taken -> taken` and sends prior review stdout to the implementer. |
+| `fix round` | preplanned `fix -> review` pair. Step IDs may use `_rN`, e.g. `S3_T1.1_fix_r1`. |
+
+### Step Lifecycle
+
+The standard emitted lifecycle is:
 
 ```text
-.waveplan/swim/<plan-basename>/
-  swim.lock                       # advisory flock; content = JSON {pid, started_at, hostname}
-  <schedule>.journal.json         # append-only event journal with cursor
+implement   available    -> taken
+review      taken        -> review_taken
+end_review  review_taken -> review_ended
+finish      review_ended -> completed
+```
+
+The runtime also supports preplanned fix cycles:
+
+```text
+implement   available    -> taken
+review      taken        -> review_taken
+fix         review_taken -> taken
+review_r2   taken        -> review_taken
+end_review  review_taken -> review_ended
+finish      review_ended -> completed
+```
+
+Current `wp-emit-wave-execution.sh` emits the standard lifecycle. If a schedule
+contains `fix` rows, SWIM validates and executes them, and `wp-task-to-agent.sh
+--mode fix` attaches the prior review stdout via `SWIM_PRIOR_STDOUT_PATH`.
+That launcher path depends on a configured waveplan CLI/MCP that supports
+`start_fix <task_id>`.
+
+### Dispatch Safety
+
+For `implement`, `review`, and `fix`, SWIM injects these env vars into the
+invoked launcher:
+
+```text
+SWIM_DISPATCH_RECEIPT_PATH
+SWIM_STEP_ID
+SWIM_TASK_ID
+SWIM_ACTION
+SWIM_PRIOR_STDOUT_PATH   # fix only, when a prior review stdout log exists
+```
+
+The step is `applied` only when both conditions hold:
+
+```text
+runtime state == row.produces.task_status
+dispatch receipt exists
+```
+
+If state moved but the receipt is missing, SWIM returns `incomplete_dispatch`.
+Do not manually advance the journal; rerun:
+
+```bash
+waveplan-cli swim step --apply --schedule "$SCHEDULE"
+```
+
+### Subcommands
+
+`waveplan-cli swim` supports:
+
+- `compile-schedule`: compile a v2 schedule from a plan and agents config.
+- `next`: resolve the next safe row without mutation.
+- `step`: inspect, apply, or acknowledge an `unknown` event.
+- `run`: apply repeatedly until `implement`, `review`, `fix`, `end_review`, `finish`, `seq:N`, or `step:<id>`.
+- `journal`: inspect journal events.
+- `validate`: validate schedule, journal, or plan JSON.
+- `compile-plan-json`: validate and canonicalize an execution-waves plan.
+- `refine` / `refine-run`: split coarse units into fine steps and execute them with parent rollup.
+
+Full reference: [docs/specs/2026-05-05-swim-ops.md](docs/specs/2026-05-05-swim-ops.md). Dispatch receipt and fix-cycle design notes: [docs/specs/2026-05-10-swim-fixes.md](docs/specs/2026-05-10-swim-fixes.md).
+
+Runtime artifact layout:
+
+```text
+.waveplan/swim/<schedule-basename>/
+  swim.lock
   logs/
     <step_id>.<attempt>.stdout.log
     <step_id>.<attempt>.stderr.log
+  receipts/
+    <step_id>.<attempt>.dispatch.json
+```
+
+The default journal path is next to the schedule:
+
+```text
+<schedule-basename>.journal.json
 ```
 
 ## txtstore
