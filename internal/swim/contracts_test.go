@@ -230,6 +230,33 @@ func TestValidateJournal_Cases(t *testing.T) {
 	}
 }
 
+func TestValidateSchedule_FixCycle(t *testing.T) {
+	rows := []ScheduleRow{
+		{Seq: 1, StepID: "S1_T1.1_implement", TaskID: "T1.1", Action: "implement",
+			Requires: StatusWrapper{TaskStatus: "available"}, Produces: StatusWrapper{TaskStatus: "taken"},
+			Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 2, StepID: "S2_T1.1_review", TaskID: "T1.1", Action: "review",
+			Requires: StatusWrapper{TaskStatus: "taken"}, Produces: StatusWrapper{TaskStatus: "review_taken"},
+			Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 3, StepID: "S3_T1.1_fix", TaskID: "T1.1", Action: "fix",
+			Requires: StatusWrapper{TaskStatus: "review_taken"}, Produces: StatusWrapper{TaskStatus: "taken"},
+			Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 4, StepID: "S4_T1.1_review_r2", TaskID: "T1.1", Action: "review",
+			Requires: StatusWrapper{TaskStatus: "taken"}, Produces: StatusWrapper{TaskStatus: "review_taken"},
+			Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 5, StepID: "S5_T1.1_end_review", TaskID: "T1.1", Action: "end_review",
+			Requires: StatusWrapper{TaskStatus: "review_taken"}, Produces: StatusWrapper{TaskStatus: "review_ended"},
+			Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 6, StepID: "S6_T1.1_finish", TaskID: "T1.1", Action: "finish",
+			Requires: StatusWrapper{TaskStatus: "review_ended"}, Produces: StatusWrapper{TaskStatus: "completed"},
+			Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+	}
+	raw := marshalJSON(t, Schedule{SchemaVersion: 2, Execution: rows})
+	if err := ValidateSchedule(raw); err != nil {
+		t.Fatalf("ValidateSchedule fix cycle: %v", err)
+	}
+}
+
 func TestEmitterGoldenSchedule(t *testing.T) {
 	root := mustRepoRoot(t)
 	expectedPath := filepath.Join(root, expectedScheduleFixture)

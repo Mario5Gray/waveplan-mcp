@@ -57,7 +57,7 @@
         },
         "step_id": {
           "type": "string",
-          "pattern": "^S[0-9]+_[A-Za-z0-9._\\-]+_(implement|review|end_review|finish)$"
+          "pattern": "^S[0-9]+_[A-Za-z0-9._\\-]+_(implement|review|end_review|finish|fix)(_r[0-9]+)?$"
         },
         "task_id": {
           "type": "string",
@@ -65,7 +65,7 @@
         },
         "action": {
           "type": "string",
-          "enum": ["implement", "review", "end_review", "finish"]
+          "enum": ["implement", "review", "end_review", "finish", "fix"]
         },
         "requires": {
           "$ref": "#/$defs/status_wrapper"
