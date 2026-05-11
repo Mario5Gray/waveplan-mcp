@@ -6,6 +6,26 @@ import (
 	"testing"
 )
 
+// invokeFnWithReceipt returns an InvokeFn that writes a dispatch receipt when
+// SWIM_DISPATCH_RECEIPT_PATH is set (dispatch steps) and succeeds silently for
+// non-dispatch steps. Required after the receipt model was introduced.
+func invokeFnWithReceipt(t *testing.T) func([]string, string) error {
+	t.Helper()
+	return func(_ []string, _ string) error {
+		receiptPath := os.Getenv("SWIM_DISPATCH_RECEIPT_PATH")
+		if receiptPath == "" {
+			return nil
+		}
+		if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
+			t.Fatalf("MkdirAll receipt dir: %v", err)
+		}
+		if err := os.WriteFile(receiptPath, []byte(`{"ok":true}`+"\n"), 0o644); err != nil {
+			t.Fatalf("WriteFile receipt: %v", err)
+		}
+		return nil
+	}
+}
+
 func TestRun_DefaultStopsOnFirstNonApplied(t *testing.T) {
 	dir := t.TempDir()
 	schedulePath := filepath.Join(dir, "schedule.json")
@@ -30,7 +50,7 @@ func TestRun_DefaultStopsOnFirstNonApplied(t *testing.T) {
 				return snapshotWithTaskStatus("T1.1", StatusAvailable), nil
 			}
 		},
-		InvokeFn: func(_ []string, _ string) error { return nil },
+		InvokeFn: invokeFnWithReceipt(t),
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -78,7 +98,7 @@ func TestRun_UntilActionFinish(t *testing.T) {
 				return snapshotWithTaskStatus("T1.1", StatusCompleted), nil
 			}
 		},
-		InvokeFn: func(_ []string, _ string) error { return nil },
+		InvokeFn: invokeFnWithReceipt(t),
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -133,7 +153,7 @@ func TestRun_UntilSeq(t *testing.T) {
 			reads++
 			return snapshotWithTaskStatus(cur.task, cur.status), nil
 		},
-		InvokeFn: func(_ []string, _ string) error { return nil },
+		InvokeFn: invokeFnWithReceipt(t),
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -178,7 +198,7 @@ func TestRun_UntilStep(t *testing.T) {
 				return snapshotWithTaskStatus("T1.1", StatusCompleted), nil
 			}
 		},
-		InvokeFn: func(_ []string, _ string) error { return nil },
+		InvokeFn: invokeFnWithReceipt(t),
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -324,7 +344,7 @@ func TestRun_MaxStepsCap(t *testing.T) {
 				return snapshotWithTaskStatus("T1.1", StatusReviewTaken), nil
 			}
 		},
-		InvokeFn: func(_ []string, _ string) error { return nil },
+		InvokeFn: invokeFnWithReceipt(t),
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
