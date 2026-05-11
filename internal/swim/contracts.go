@@ -35,6 +35,7 @@ var statusByAction = map[string]struct {
 }{
 	"implement":  {requires: "available", produces: "taken"},
 	"review":     {requires: "taken", produces: "review_taken"},
+	"fix":        {requires: "review_taken", produces: "taken"},
 	"end_review": {requires: "review_taken", produces: "review_ended"},
 	"finish":     {requires: "review_ended", produces: "completed"},
 }
@@ -99,7 +100,7 @@ type JournalEvent struct {
 // LoadScheduleSchema compiles and caches docs/specs/swim-schedule-schema-v2.json.
 func LoadScheduleSchema() (*jsonschema.Schema, error) {
 	scheduleSchemaOnce.Do(func() {
-		scheduleSchema, scheduleSchemaErr = compileSchemaFromRepoPath(scheduleSchemaRelPath, "mem://swim-schedule-schema-v2.json")
+		scheduleSchema, scheduleSchemaErr = compileSchemaFromResolvedPath(scheduleSchemaRelPath, "mem://swim-schedule-schema-v2.json")
 	})
 	return scheduleSchema, scheduleSchemaErr
 }
@@ -107,7 +108,7 @@ func LoadScheduleSchema() (*jsonschema.Schema, error) {
 // LoadJournalSchema compiles and caches docs/specs/swim-journal-schema-v1.json.
 func LoadJournalSchema() (*jsonschema.Schema, error) {
 	journalSchemaOnce.Do(func() {
-		journalSchema, journalSchemaErr = compileSchemaFromRepoPath(journalSchemaRelPath, "mem://swim-journal-schema-v1.json")
+		journalSchema, journalSchemaErr = compileSchemaFromResolvedPath(journalSchemaRelPath, "mem://swim-journal-schema-v1.json")
 	})
 	return journalSchema, journalSchemaErr
 }
@@ -218,12 +219,11 @@ func validateJSONAgainstSchema(kind string, data []byte, sch *jsonschema.Schema)
 	return nil
 }
 
-func compileSchemaFromRepoPath(relPath, resourceURL string) (*jsonschema.Schema, error) {
-	root, err := findRepoRoot()
+func compileSchemaFromResolvedPath(relPath, resourceURL string) (*jsonschema.Schema, error) {
+	abs, err := resolveSchemaPath(relPath)
 	if err != nil {
 		return nil, err
 	}
-	abs := filepath.Join(root, relPath)
 	raw, err := os.ReadFile(abs)
 	if err != nil {
 		return nil, fmt.Errorf("read schema %s: %w", abs, err)
@@ -238,6 +238,35 @@ func compileSchemaFromRepoPath(relPath, resourceURL string) (*jsonschema.Schema,
 		return nil, fmt.Errorf("compile schema %s: %w", relPath, err)
 	}
 	return sch, nil
+}
+
+func resolveSchemaPath(relPath string) (string, error) {
+	name := filepath.Base(relPath)
+	if exePath, err := os.Executable(); err == nil && exePath != "" {
+		shareCandidate := filepath.Join(filepath.Dir(filepath.Dir(exePath)), "share", "waveplan", "specs", name)
+		if _, err := os.Stat(shareCandidate); err == nil {
+			return shareCandidate, nil
+		}
+		siblingCandidate := filepath.Join(filepath.Dir(exePath), name)
+		if _, err := os.Stat(siblingCandidate); err == nil {
+			return siblingCandidate, nil
+		}
+	}
+	// Repo root takes priority over user share so that `go test` always uses
+	// the checked-in schema rather than a potentially stale installed copy.
+	if root, err := findRepoRoot(); err == nil {
+		abs := filepath.Join(root, relPath)
+		if _, err := os.Stat(abs); err == nil {
+			return abs, nil
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		userShare := filepath.Join(home, ".local", "share", "waveplan", "specs", name)
+		if _, err := os.Stat(userShare); err == nil {
+			return userShare, nil
+		}
+	}
+	return "", fmt.Errorf("schema %s not found in install share dir or repo root", relPath)
 }
 
 func findRepoRoot() (string, error) {

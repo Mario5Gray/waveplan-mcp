@@ -57,7 +57,7 @@
         },
         "step_id": {
           "type": "string",
-          "pattern": "^S[0-9]+_[A-Za-z0-9._\\-]+_(implement|review|end_review|finish|fix)(_r[0-9]+)?$"
+          "pattern": "^S[0-9]+_[A-Za-z0-9.\\-]+_(implement|end_review|finish|review(_r[0-9]+)?|fix(_r[0-9]+)?)$"
         },
         "task_id": {
           "type": "string",
