@@ -257,6 +257,23 @@ func TestValidateSchedule_FixCycle(t *testing.T) {
 	}
 }
 
+func TestValidateSchedule_FixRequiresProducesCheck(t *testing.T) {
+	badRow := []ScheduleRow{
+		{Seq: 1, StepID: "S1_T1.1_fix", TaskID: "T1.1", Action: "fix",
+			Requires: StatusWrapper{TaskStatus: "taken"},
+			Produces: StatusWrapper{TaskStatus: "taken"},
+			Invoke:   InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+	}
+	raw := marshalJSON(t, Schedule{SchemaVersion: 2, Execution: badRow})
+	err := ValidateSchedule(raw)
+	if err == nil {
+		t.Fatal("expected requires/produces mismatch error, got nil")
+	}
+	if !strings.Contains(err.Error(), "requires/produces mismatch") {
+		t.Fatalf("error = %v, want requires/produces mismatch", err)
+	}
+}
+
 func TestEmitterGoldenSchedule(t *testing.T) {
 	root := mustRepoRoot(t)
 	expectedPath := filepath.Join(root, expectedScheduleFixture)
