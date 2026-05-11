@@ -63,7 +63,7 @@
         },
         "step_id": {
           "type": "string",
-          "pattern": "^(S[0-9]+_[A-Za-z0-9._\\-]+_(implement|review|end_review|finish)|F[0-9]+_[A-Z][0-9]+\\.[0-9]+_s[0-9]+|PARENT_[A-Z][0-9]+\\.[0-9]+_rollup)$"
+          "pattern": "^(S[0-9]+_[A-Za-z0-9.\\-]+_(implement|end_review|finish|review(_r[0-9]+)?|fix(_r[0-9]+)?)|F[0-9]+_[A-Z][0-9]+\\.[0-9]+_s[0-9]+|PARENT_[A-Z][0-9]+\\.[0-9]+_rollup)$"
         },
         "seq": {
           "type": "integer",
@@ -75,7 +75,7 @@
         },
         "action": {
           "type": "string",
-          "enum": ["implement", "review", "end_review", "finish"]
+          "enum": ["implement", "review", "end_review", "finish", "fix"]
         },
         "attempt": {
           "type": "integer",
