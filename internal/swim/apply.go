@@ -64,21 +64,22 @@ func Apply(opts ApplyOptions) (*ApplyReport, error) {
 	}
 	if ev, ok := firstUnknownPending(journal, journal.Cursor); ok {
 		return &ApplyReport{
-			Status: "unknown_pending",
-			StepID: ev.StepID,
-			Seq:    ev.Seq,
-			Reason: fmt.Sprintf("unknown_pending: event_id=%s step_id=%s seq=%d", ev.EventID, ev.StepID, ev.Seq),
-			Hint:   "Resolve with swim step --ack-unknown <step_id> before retrying apply.",
+			Status:   "unknown_pending",
+			StepID:   ev.StepID,
+			Seq:      ev.Seq,
+			Reason:   fmt.Sprintf("unknown_pending: event_id=%s step_id=%s seq=%d", ev.EventID, ev.StepID, ev.Seq),
+			Hint:     "Resolve with swim step --ack-unknown <step_id> before retrying apply.",
+			Boundary: "unknown_pending",
 		}, nil
 	}
 
 	if res.Done {
-		return &ApplyReport{Status: "done"}, nil
+		return &ApplyReport{Status: "done", Boundary: "done"}, nil
 	}
 
 	event := journal.LastEvent
 	if event == nil {
-		return &ApplyReport{Status: "blocked", Reason: "missing_last_event"}, nil
+		return &ApplyReport{Status: "blocked", Reason: "missing_last_event", Boundary: "blocked"}, nil
 	}
 	report := &ApplyReport{
 		StepID:     event.StepID,
@@ -94,20 +95,28 @@ func Apply(opts ApplyOptions) (*ApplyReport, error) {
 		return report, nil
 	case "failed":
 		report.Status = "blocked"
+		report.Boundary = "blocked"
 		report.Reason = fmt.Sprintf("invoke_exit: step_id=%s exit_code=%d", event.StepID, report.ExitCode)
+		applyReceiptInquiry(report, opts.SchedulePath, event)
 		return report, nil
 	case "blocked":
 		report.Reason = normalizeBlockedReason(event.Reason)
 		if strings.Contains(report.Reason, "incomplete_dispatch:") {
 			report.Status = "incomplete_dispatch"
+			report.Boundary = "incomplete_dispatch"
 			report.Hint = "Re-run the same swim step to continue dispatch without re-claiming the task."
+			applyReceiptInquiry(report, opts.SchedulePath, event)
 			return report, nil
 		}
 		report.Status = "blocked"
+		report.Boundary = "blocked"
+		applyReceiptInquiry(report, opts.SchedulePath, event)
 		return report, nil
 	default:
 		report.Status = "blocked"
+		report.Boundary = "blocked"
 		report.Reason = event.Reason
+		applyReceiptInquiry(report, opts.SchedulePath, event)
 		return report, nil
 	}
 }
@@ -117,6 +126,7 @@ func lockBusyReport(lockPath, schedulePath string) *ApplyReport {
 		lockPath = DeriveLockPath(schedulePath)
 	}
 	report := &ApplyReport{Status: "lock_busy"}
+	report.Boundary = "blocked"
 	pid, startedAt, err := ReadLockHolder(lockPath)
 	if err == nil && pid > 0 {
 		report.Hint = fmt.Sprintf("Lock held by pid=%d started_at=%s", pid, startedAt)
@@ -136,4 +146,17 @@ func derefInt(v *int) int {
 		return 0
 	}
 	return *v
+}
+
+func applyReceiptInquiry(report *ApplyReport, schedulePath string, event *JournalEvent) {
+	if report == nil || event == nil || !isDispatchAction(event.Action) {
+		return
+	}
+	receipt, err := loadDispatchReceipt(schedulePath, event.StepID, event.Attempt)
+	if err != nil || receipt == nil || !receipt.InquiryRequired {
+		return
+	}
+	report.InquiryRequired = true
+	report.InquirySource = receipt.InquirySource
+	report.InquiryHint = receipt.InquiryHint
 }

@@ -255,6 +255,9 @@ func TestApply_IncompleteDispatchWhenStateAdvancedButReceiptMissing(t *testing.T
 	if report.Status != "incomplete_dispatch" {
 		t.Fatalf("status = %q, reason = %q, want incomplete_dispatch", report.Status, report.Reason)
 	}
+	if report.Boundary != "incomplete_dispatch" {
+		t.Fatalf("boundary = %q, want incomplete_dispatch", report.Boundary)
+	}
 	if !strings.Contains(report.Reason, "receipt_missing") {
 		t.Fatalf("reason = %q, want receipt_missing", report.Reason)
 	}
@@ -659,6 +662,71 @@ func TestApply_FixAction_IncompleteDispatch(t *testing.T) {
 	j := readJournal(t, journalPath)
 	if j.Cursor != 0 {
 		t.Fatalf("cursor = %d, want 0", j.Cursor)
+	}
+}
+
+func TestApply_BlockedReportIncludesReceiptInquiryFields(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "schedule.json")
+	journalPath := filepath.Join(dir, "journal.json")
+	statePath := filepath.Join(dir, "state.json")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{
+			Seq:      1,
+			StepID:   "S1_T1.1_implement",
+			TaskID:   "T1.1",
+			Action:   "implement",
+			Requires: StatusWrapper{TaskStatus: string(StatusAvailable)},
+			Produces: StatusWrapper{TaskStatus: string(StatusTaken)},
+			Invoke:   InvokeSpec{Argv: []string{"bash", "-lc", "exit 1"}},
+		},
+	})
+
+	var reads int
+	report, err := Apply(ApplyOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		StatePath:    statePath,
+		ReadSnapshotFn: func(_ string) (*StateSnapshot, error) {
+			reads++
+			if reads < 3 {
+				return snapshotWithTaskStatus("T1.1", StatusAvailable), nil
+			}
+			return snapshotWithTaskStatus("T1.1", StatusTaken), nil
+		},
+		InvokeFn: func(_ []string, _ string) error {
+			receiptPath := os.Getenv("SWIM_DISPATCH_RECEIPT_PATH")
+			if receiptPath == "" {
+				t.Fatal("missing SWIM_DISPATCH_RECEIPT_PATH")
+			}
+			if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
+				t.Fatalf("MkdirAll receipt dir: %v", err)
+			}
+			body := `{"ok":true,"inquiry_required":true,"inquiry_source":"adapter","inquiry_hint":"answer permission prompt in target UI"}` + "\n"
+			if err := os.WriteFile(receiptPath, []byte(body), 0o644); err != nil {
+				t.Fatalf("WriteFile receipt: %v", err)
+			}
+			return exitError(1)
+		},
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if report.Status != "blocked" {
+		t.Fatalf("status = %q, want blocked", report.Status)
+	}
+	if report.Boundary != "blocked" {
+		t.Fatalf("boundary = %q, want blocked", report.Boundary)
+	}
+	if !report.InquiryRequired {
+		t.Fatal("InquiryRequired = false, want true")
+	}
+	if report.InquirySource != "adapter" {
+		t.Fatalf("inquiry_source = %q, want adapter", report.InquirySource)
+	}
+	if report.InquiryHint != "answer permission prompt in target UI" {
+		t.Fatalf("inquiry_hint = %q", report.InquiryHint)
 	}
 }
 

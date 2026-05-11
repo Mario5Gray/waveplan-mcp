@@ -78,16 +78,22 @@ func runWet(opts RunOptions, cond untilCond, report *RunReport) (*RunReport, err
 
 		if step.Status != "applied" {
 			report.Stopped = step.Status
+			report.Boundary = step.Boundary
+			report.InquiryRequired = step.InquiryRequired
+			report.InquirySource = step.InquirySource
+			report.InquiryHint = step.InquiryHint
 			return report, nil
 		}
 		if matchesUntil(cond, step) {
 			report.Stopped = "until"
+			report.Boundary = "until_reached"
 			report.ReachedUntil = true
 			return report, nil
 		}
 	}
 	if opts.MaxSteps > 0 && len(report.Steps) == opts.MaxSteps {
 		report.Stopped = "max_steps"
+		report.Boundary = "max_steps"
 	}
 	return report, nil
 }
@@ -118,8 +124,10 @@ func runDry(opts RunOptions, cond untilCond, report *RunReport) (*RunReport, err
 		switch decision.Action {
 		case ActionDone:
 			step.Status = "done"
+			step.Boundary = "done"
 			report.Steps = append(report.Steps, step)
 			report.Stopped = "done"
+			report.Boundary = "done"
 			return report, nil
 		case ActionReady:
 			step = ApplyReport{
@@ -137,18 +145,21 @@ func runDry(opts RunOptions, cond untilCond, report *RunReport) (*RunReport, err
 			}
 		default:
 			step = ApplyReport{
-				Status: "would_block",
-				StepID: decision.Row.StepID,
-				Seq:    decision.Row.Seq,
-				Reason: decision.Reason,
+				Status:   "would_block",
+				StepID:   decision.Row.StepID,
+				Seq:      decision.Row.Seq,
+				Reason:   decision.Reason,
+				Boundary: "blocked",
 			}
 			report.Steps = append(report.Steps, step)
 			report.Stopped = "blocked"
+			report.Boundary = "blocked"
 			return report, nil
 		}
 	}
 	if opts.MaxSteps > 0 && len(report.Steps) == opts.MaxSteps {
 		report.Stopped = "max_steps"
+		report.Boundary = "max_steps"
 	}
 	return report, nil
 }

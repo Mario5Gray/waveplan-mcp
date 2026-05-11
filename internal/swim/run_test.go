@@ -67,6 +67,9 @@ func TestRun_DefaultStopsOnFirstNonApplied(t *testing.T) {
 	if report.Stopped != "blocked" {
 		t.Fatalf("stopped = %q, want blocked", report.Stopped)
 	}
+	if report.Boundary != "blocked" {
+		t.Fatalf("boundary = %q, want blocked", report.Boundary)
+	}
 }
 
 func TestRun_UntilActionFinish(t *testing.T) {
@@ -111,6 +114,107 @@ func TestRun_UntilActionFinish(t *testing.T) {
 	}
 	if report.Steps[3].StepID != "S1_T1.1_finish" {
 		t.Fatalf("last step_id = %q, want S1_T1.1_finish", report.Steps[3].StepID)
+	}
+}
+
+func TestRun_UntilSetsBoundaryUntilReached(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "schedule.json")
+	journalPath := filepath.Join(dir, "journal.json")
+	statePath := filepath.Join(dir, "state.json")
+
+	writeFourStepSchedule(t, schedulePath, "T1.1")
+
+	var reads int
+	report, err := Run(RunOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		StatePath:    statePath,
+		Until:        "implement",
+		ReadSnapshotFn: func(_ string) (*StateSnapshot, error) {
+			reads++
+			switch reads {
+			case 1, 2:
+				return snapshotWithTaskStatus("T1.1", StatusAvailable), nil
+			default:
+				return snapshotWithTaskStatus("T1.1", StatusTaken), nil
+			}
+		},
+		InvokeFn: invokeFnWithReceipt(t),
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Stopped != "until" {
+		t.Fatalf("stopped = %q, want until", report.Stopped)
+	}
+	if report.Boundary != "until_reached" {
+		t.Fatalf("boundary = %q, want until_reached", report.Boundary)
+	}
+	if !report.ReachedUntil {
+		t.Fatal("ReachedUntil = false, want true")
+	}
+}
+
+func TestRun_RollsUpInquiryFieldsFromBlockedStep(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "schedule.json")
+	journalPath := filepath.Join(dir, "journal.json")
+	statePath := filepath.Join(dir, "state.json")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{
+			Seq:      1,
+			StepID:   "S1_T1.1_implement",
+			TaskID:   "T1.1",
+			Action:   "implement",
+			Requires: StatusWrapper{TaskStatus: string(StatusAvailable)},
+			Produces: StatusWrapper{TaskStatus: string(StatusTaken)},
+			Invoke:   InvokeSpec{Argv: []string{"bash", "-lc", "exit 1"}},
+		},
+	})
+
+	var reads int
+	report, err := Run(RunOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		StatePath:    statePath,
+		ReadSnapshotFn: func(_ string) (*StateSnapshot, error) {
+			reads++
+			if reads < 3 {
+				return snapshotWithTaskStatus("T1.1", StatusAvailable), nil
+			}
+			return snapshotWithTaskStatus("T1.1", StatusTaken), nil
+		},
+		InvokeFn: func(_ []string, _ string) error {
+			receiptPath := os.Getenv("SWIM_DISPATCH_RECEIPT_PATH")
+			if receiptPath == "" {
+				t.Fatal("missing SWIM_DISPATCH_RECEIPT_PATH")
+			}
+			if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
+				t.Fatalf("MkdirAll receipt dir: %v", err)
+			}
+			body := `{"ok":true,"inquiry_required":true,"inquiry_source":"adapter","inquiry_hint":"answer permission prompt in target UI"}` + "\n"
+			if err := os.WriteFile(receiptPath, []byte(body), 0o644); err != nil {
+				t.Fatalf("WriteFile receipt: %v", err)
+			}
+			return exitError(1)
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Boundary != "blocked" {
+		t.Fatalf("boundary = %q, want blocked", report.Boundary)
+	}
+	if !report.InquiryRequired {
+		t.Fatal("InquiryRequired = false, want true")
+	}
+	if report.InquirySource != "adapter" {
+		t.Fatalf("inquiry_source = %q, want adapter", report.InquirySource)
+	}
+	if report.InquiryHint != "answer permission prompt in target UI" {
+		t.Fatalf("inquiry_hint = %q", report.InquiryHint)
 	}
 }
 
