@@ -11,7 +11,7 @@ Usage:
     --target <codex|claude|opencode> \
     --plan <plan.json> \
     --agent <agent-name> \
-    [--mode implement|review] \
+    [--mode implement|review|fix] \
     [--reviewer <name>] \
     [--dry-run]
 
@@ -29,7 +29,7 @@ Options:
   --target <name>        codex | claude | opencode
   --plan <path>          Path to *-execution-waves.json
   --agent <name>         Agent name
-  --mode <mode>          implement (default) | review
+  --mode <mode>          implement (default) | review | fix
   --reviewer <name>      Reviewer for review mode (default: --agent)
   --dry-run              Print generated prompt; no waveplan writes
   -h, --help             Show this help
@@ -106,8 +106,8 @@ case "$TARGET" in
     ;;
 esac
 
-if [[ "$MODE" != "implement" && "$MODE" != "review" ]]; then
-  echo "Invalid --mode: $MODE (must be implement or review)" >&2
+if [[ "$MODE" != "implement" && "$MODE" != "review" && "$MODE" != "fix" ]]; then
+  echo "Invalid --mode: $MODE (must be implement, review, or fix)" >&2
   exit 2
 fi
 
@@ -174,6 +174,39 @@ else:
 ' "$payload"
 }
 
+write_dispatch_receipt() {
+  local task_id="$1"
+  local task_source="$2"
+  local receipt_path="${SWIM_DISPATCH_RECEIPT_PATH:-}"
+  if [[ -z "$receipt_path" ]]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$receipt_path")"
+  python3 - "$receipt_path" "$task_id" "$task_source" "$TARGET" "$AGENT" "$MODE" <<'PY'
+import json
+import os
+import sys
+from datetime import datetime, timezone
+
+receipt_path, task_id, task_source, target, agent, mode = sys.argv[1:7]
+payload = {
+    "ok": True,
+    "step_id": os.environ.get("SWIM_STEP_ID", ""),
+    "task_id": task_id,
+    "action": mode,
+    "target": target,
+    "agent": agent,
+    "mode": mode,
+    "task_source": task_source,
+    "tool": target,
+    "delivered_on": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+}
+with open(receipt_path, "w", encoding="utf-8") as f:
+    json.dump(payload, f, indent=2)
+    f.write("\n")
+PY
+}
+
 select_taken_task_for_agent() {
   local plan="$1"
   local agent="$2"
@@ -205,6 +238,11 @@ send_prompt() {
 
   if [[ "$TARGET" == "opencode" ]]; then
     send_prompt_opencode "$prompt"
+    return 0
+  fi
+
+  if [[ "$TARGET" == "codex" ]]; then
+    printf '%s\n' "$prompt" | codex exec -
     return 0
   fi
 
@@ -346,6 +384,68 @@ $TASK_JSON
 "
 
   send_prompt "$PROMPT"
+  TASK_ID="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1] or "{}").get("task_id",""))' "$TASK_JSON")"
+  write_dispatch_receipt "$TASK_ID" "$TASK_SOURCE"
+  exit 0
+fi
+
+# fix mode
+if [[ "$MODE" == "fix" ]]; then
+  SELECTED="$(select_taken_task_for_agent "$PLAN" "$AGENT" || true)"
+  TASK_ID="$(printf '%s\n' "$SELECTED" | sed -n '1p')"
+  CURRENT_TASK_JSON="$(printf '%s\n' "$SELECTED" | sed -n '2,$p')"
+
+  if [[ -z "$TASK_ID" || -z "$CURRENT_TASK_JSON" ]]; then
+    echo "No currently taken task found for agent '$AGENT'" >&2
+    exit 1
+  fi
+
+  if [[ "$DRY_RUN" == "1" ]]; then
+    FIX_RESULT_JSON="{\"dry_run\":true,\"would_run\":\"python3 $WAVEPLAN_CLI_BIN --plan $PLAN start_fix $TASK_ID\"}"
+  else
+    FIX_RESULT_JSON="$(waveplan_cli --plan "$PLAN" start_fix "$TASK_ID")"
+    if json_has_error "$FIX_RESULT_JSON"; then
+      echo "waveplan start_fix returned error payload:" >&2
+      echo "$FIX_RESULT_JSON" >&2
+      exit 1
+    fi
+  fi
+
+  PRIOR_REVIEW_CONTENT=""
+  PRIOR_STDOUT_PATH="${SWIM_PRIOR_STDOUT_PATH:-}"
+  if [[ -n "$PRIOR_STDOUT_PATH" && -f "$PRIOR_STDOUT_PATH" ]]; then
+    PRIOR_REVIEW_CONTENT="$(cat "$PRIOR_STDOUT_PATH")"
+  fi
+
+  read -r -d '' PREAMBLE <<'TXT' || true
+fix cycle: address reviewer findings.
+
+hard requirements:
+- use superpowers skill workflow while implementing fixes.
+- waveplan-cli / waveplan-mcp usage in this task is read-only only.
+- do not execute waveplan write actions: no pop, no fin, no start_review, no end_review, no plan mutations.
+- allowed waveplan reads: peek, get, deptree, list_plans.
+
+apply all required fixes from the reviewer findings below.
+run tests relevant to changes.
+return concrete file changes + verification commands/results.
+TXT
+
+  PROMPT="$PREAMBLE
+
+plan: $PLAN
+claimed_by: $AGENT
+mode: fix
+
+task_json:
+$CURRENT_TASK_JSON
+
+reviewer_findings:
+${PRIOR_REVIEW_CONTENT:-<no prior review stdout available>}
+"
+
+  send_prompt "$PROMPT"
+  write_dispatch_receipt "$TASK_ID" "fix_taken"
   exit 0
 fi
 
@@ -423,3 +523,4 @@ $TASK_AFTER_JSON
 "
 
 send_prompt "$PROMPT"
+write_dispatch_receipt "$TASK_ID" "taken_by_agent"
