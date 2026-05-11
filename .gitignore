@@ -21,3 +21,5 @@ internal/swim/.waveplan/
 
 # macOS
 .DS_Store
+txtstore
+txtstore-mcp
