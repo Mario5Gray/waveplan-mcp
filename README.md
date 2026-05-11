@@ -30,6 +30,8 @@ The recommended toolchain combines these four components into a cohesive agent-f
 Together they form a complete stack: Superpowers keeps Agents disciplined and predictable. Plan with Fibreplane; break problem into issues and collaborate. Drift for Documentation Spec to Code Integrity. Waveplan turns specs and plans into code steps for execution with DAG ordering. txtstore provides sectioned markdown storage for implementation notes and review artifacts.  
 
 For a detailed guide on how to use this stack together, see [planstack.md](planstack.md).
+For RAG indexing guidance across generated plans, schedules, journals, logs, and
+notes, see [docs/specs/rag-artifact-indexing-policy.md](docs/specs/rag-artifact-indexing-policy.md).
 
 ## Overview
 
