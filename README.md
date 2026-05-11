@@ -363,6 +363,30 @@ Do not manually advance the journal; rerun:
 waveplan-cli swim step --apply --schedule "$SCHEDULE"
 ```
 
+### Boundaries and Inquiries
+
+SWIM observes execution and stops at expected boundaries. It does not approve
+downstream prompts or grant target-CLI permissions. `--until review` means
+"apply safe rows until the review boundary," not "answer permission prompts on
+the way." Permission handling lives in adapters, not in SWIM.
+
+`ApplyReport` and `RunReport` carry four fields for boundary classification
+and inquiry decoration:
+
+```text
+boundary           until_reached | done | max_steps | blocked
+                 | incomplete_dispatch | unknown_pending
+inquiry_required   true when a downstream party must answer
+inquiry_source     adapter | invoke | timeout | unknown
+inquiry_hint       free-text actionable hint
+```
+
+`boundary` is set on every non-applied row and rolled up on the run report.
+`inquiry_*` decorators populate when the dispatch receipt
+(`<step>.<attempt>.dispatch.json`) carries `inquiry_required: true`. Env-var
+and stdout heuristics are reserved as future fallbacks. Full contract:
+[docs/specs/2026-05-05-swim-ops.md](docs/specs/2026-05-05-swim-ops.md#boundaries-and-inquiries).
+
 ### Subcommands
 
 `waveplan-cli swim` supports:
