@@ -1,0 +1,31 @@
+# Example waveplan-ps configuration.
+#
+# Each *_dirs entry is a recursive directory root. Do not use glob patterns
+# such as "../docs/plans/*.json"; point at the containing directory instead.
+
+plan_dirs:
+  # Recursively loads files named *-execution-waves.json.
+  - ../docs/plans
+
+state_dirs:
+  # Recursively loads files named *.state.json.
+  - ../docs/plans
+
+journal_dirs:
+  # Recursively loads SWIM journal sidecars named *.journal.json.
+  - ../docs/plans
+
+note_dirs:
+  # Recursively loads txtstore Markdown notes.
+  - ../docs/agent_notes
+
+log_dirs:
+  # Recursively loads SWIM step logs under this root.
+  # Log filenames must look like:
+  #   S2_T8.1_implement.1.stdout.log
+  #   S2_T8.1_implement.1.stderr.log
+  - ../docs/plans/.waveplan
+
+display:
+  # Defaults to true when omitted. Explicit false is preserved.
+  expand_first_wave: true
