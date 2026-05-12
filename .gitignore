@@ -23,3 +23,6 @@ internal/swim/.waveplan/
 .DS_Store
 txtstore
 txtstore-mcp
+FP_AGENTS.md
+waveplan-cli
+waveplan-ps
