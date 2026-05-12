@@ -1,0 +1,59 @@
+Bash is blocked for fp commands. Presenting findings directly.
+
+---
+
+## Review: T5.1 — tview rendering + exact step_id log correlation
+
+**Reviewer:** sigma | **Implementer:** phi
+
+---
+
+### Correctness verdict: PASS with two required fixes
+
+---
+
+### Findings (severity order)
+
+#### [suggestion] `internal/ui/tui.go` — `Options.ExpandFirstWave` dead field
+
+`Options.ExpandFirstWave bool` is declared, accepted by `RenderText` and `BuildTable`, and passed in every test (`Options{ExpandFirstWave: true}`) — but **never read** by any rendering function. `BuildTable` doesn't reference `options` at all. Either implement the wave-collapse behavior or remove the field and the unused parameter from `BuildTable`. Dead options mislead callers.
+
+**Relevant lines:** `tui.go:17-21` (struct), `tui.go:58` (`BuildTable` signature — `options` param unused).
+
+---
+
+#### [suggestion] `internal/ui/tui.go` — `BuildTable` accepts `Options` but ignores it entirely
+
+The `options Options` parameter is accepted at `tui.go:58` but zero references appear in the function body. Remove it or apply `TailLimit`/`JournalLimit` equivalents to the table if needed.
+
+---
+
+#### [nit] `internal/ui/tui.go:123-135` — `sort.Slice` vs `sort.SliceStable` in `LogsForUnit`
+
+The four-key comparison chain (StepID → Attempt → Stream → Path) is fully deterministic, so there's no actual instability. `sort.SliceStable` would be a safer habit if the chain ever shortens.
+
+---
+
+### Passing checks
+
+| Area | Verdict |
+|---|---|
+| Exact segment extraction (`taskIDFromStepID`) | ✓ splits on `_`, returns `parts[1]`, no substring match |
+| False-positive guards | ✓ `T5.10` and `XT5.1` correctly excluded from T5.1 matches |
+| `review_r{n}` and `fix_r{n}` step IDs | ✓ split produces same `parts[1]`; both covered by test |
+| `LogsForUnit` sorted output order | ✓ `"S3_T5.1_implement" < "S3_T5.1_review_r2"` lexicographically; test assertion correct |
+| Nil-safe `StatusOf` on nil state | ✓ early `if s == nil` guard in `state.go:80` |
+| tview shim replace scope | ✓ `replace github.com/rivo/tview => ./internal/tviewshim` scoped to this module; parent binary gets real tview |
+| `BuildPrimitive` type assertion in test | ✓ `primitive.(*Root)` succeeds; `Root` returned by `BuildPrimitive` |
+| Test coverage | ✓ all three assertions (exact match, false-positive exclusion, render snapshot) covered |
+| `planWaves` fallback | ✓ handles both explicit `Waves` array and unit-derived grouping |
+| Log regex ambiguous filename rejection | ✓ `S1_T1.1_implement.1.2.stdout.log` correctly rejected by pattern |
+
+---
+
+### Required fixes before approval
+
+1. **Remove or implement `ExpandFirstWave`** — remove from `Options` and test calls, OR add the wave-expansion logic to `renderPlan`.
+2. **Remove unused `options` parameter from `BuildTable`** — or use it.
+
+Both are small; neither is a logic error or regression. Ready to re-enter after fixes.

@@ -1,0 +1,7 @@
+{
+  "finished_at": "2026-05-12 15:11",
+  "git_sha": "${GIT_SHA:-DEFERRED}",
+  "success": true,
+  "task_id": "T6.1",
+  "title": "Implement CLI flags, plan filtering, snapshot mode, and page-refreshing TUI"
+}

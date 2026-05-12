@@ -1,0 +1,20 @@
+Implemented T4.1 directly in the repo.
+
+Changes:
+- Added [internal/watch/watcher.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/watch/watcher.go:13)
+  - `Options`, `Snapshot`, and loaded source wrappers.
+  - Exported `PollOnce(options)` for single-shot snapshot loading.
+  - `Watcher.Run(ctx, handler)` for immediate + interval polling.
+  - `OptionsFromInventory` to bridge discovery output into watcher inputs.
+  - Log dirs are rediscovered each poll so new SWIM logs can appear live.
+- Added [internal/watch/watcher_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/watch/watcher_test.go:13)
+  - Covers `PollOnce` loading plan/state/journal/notes/log refs.
+  - Covers watcher polling updated file contents until context cancellation.
+
+Verification:
+- Red test first: `GOCACHE=/private/tmp/waveplan-ps-gocache go test ./internal/watch` failed with undefined `PollOnce`, `Options`, `Snapshot`, `New`.
+- Focused pass: `GOCACHE=/private/tmp/waveplan-ps-gocache go test -count=1 ./internal/watch` passed.
+- Full pass: `GOCACHE=/private/tmp/waveplan-ps-gocache go test -count=1 ./...` passed for `config`, `discovery`, `model`, and `watch`.
+- Drift refs checked for both new files; `drift refs ...` exited 0 with no bindings output.
+
+I did not run any Waveplan write actions. The Waveplan MCP read attempt was cancelled by the environment, so no Waveplan state was mutated.

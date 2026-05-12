@@ -1,0 +1,21 @@
+Implemented T2.1 directly in the repo.
+
+**File Changes**
+- [internal/discovery/discover.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/discovery/discover.go)
+  - Added recursive deterministic discovery for plans, states, journals, notes, and logs.
+  - Added category helpers: `DiscoverPlans`, `DiscoverStates`, `DiscoverJournals`, `DiscoverNotes`, `DiscoverLogs`.
+  - Log discovery validates `*.stdout.log` / `*.stderr.log` names through `model.ParseLogPath`.
+- [internal/discovery/discover_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/discovery/discover_test.go)
+  - Added TDD coverage for deterministic ordering, multi-root discovery, log parsing, and malformed log rejection.
+
+**Verification**
+- Red test first:
+  - `GOCACHE=$PWD/.gocache go test ./internal/discovery`
+  - Failed as expected with undefined `Discover`, `DiscoverLogs`, `DiscoverAll`.
+- Final test:
+  - `GOCACHE=/private/tmp/waveplan-ps-gocache go test -count=1 ./...`
+  - Result:
+    - `ok .../internal/discovery 0.011s`
+    - `ok .../internal/model 0.007s`
+
+Waveplan MCP read calls were attempted but returned cancelled by the environment. No waveplan write actions were executed.

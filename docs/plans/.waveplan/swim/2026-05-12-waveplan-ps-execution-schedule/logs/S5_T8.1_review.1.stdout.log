@@ -1,0 +1,48 @@
+Now I have full coverage. Delivering the review.
+
+---
+
+## T8.1 Review — "Document usage, flags, and recursive log directory config"
+
+**Reviewer:** sigma | **Status:** `in_review`
+
+---
+
+### Findings (severity order)
+
+**No Critical or Important issues found.**
+
+#### Minor — `--expand-first-wave` default framing
+
+README flags table shows `true` as the default. Technically correct for the zero-config case, but the actual effective value when a config file sets `expand_first_wave: false` and the flag is *not* passed is `false` (config wins via `flagWasPassed` guard at `main.go:133`). The table doesn't note "CLI default, overridden by config." Low risk — most users will understand — but could mislead someone who passes `--config` and wonders why expand behavior changed.
+
+#### Observation — `DiscoverAll` silently swallows malformed log filenames
+
+`discover.go:49` returns `nil` (silent drop) on `ParseLogPath` error inside `DiscoverAll`, while `DiscoverLogs` (the path actually called from `PollOnce`, `watcher.go:124`) correctly propagates the error. The README's claim "Malformed log filenames under `log_dirs` fail the snapshot" is **accurate for the CLI code path**, so this is not a doc bug. But it's an internal consistency gap worth noting to phi.
+
+---
+
+### Contract Adherence
+
+| Contract point | Status |
+|---|---|
+| `log_dirs` are recursive directory roots, not glob patterns | PASS — documented in 3 places: flags table, Config prose, config example header |
+| All flags match actual `flag.FlagSet` definitions in `main.go:103–116` | PASS — all 12 flags verified |
+| Defaults match `cliOptions` struct initialization at `main.go:96–101` | PASS |
+| Discovered file patterns match `discover.go` suffix checks | PASS |
+| Valid log actions match `logFilePattern` regex at `log.go:21` | PASS — `implement`, `review`, `review_r<N>`, `fix`, `fix_r<N>`, `end_review`, `finish` all confirmed |
+| Malformed log filename behavior | PASS — `DiscoverLogs` → error propagation chain verified |
+| `expand_first_wave` default/override semantics | PASS |
+| CLI dirs appended to config dirs (not replaced) | PASS — `appendPaths(cfg.*, opts.*)` at `main.go:160–164` |
+
+---
+
+### Required Fixes
+
+None. Documentation is accurate and contract-adherent.
+
+---
+
+### Verdict: **APPROVE**
+
+Phi's docs match the implementation exactly. The minor `--expand-first-wave` framing issue is cosmetic and not a correctness failure.

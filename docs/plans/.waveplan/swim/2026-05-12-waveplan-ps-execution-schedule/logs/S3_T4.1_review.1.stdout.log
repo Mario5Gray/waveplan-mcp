@@ -1,0 +1,44 @@
+## T4.1 Review: PASS with required fix
+
+Verdict: implementation satisfies the contract. One fix required before merge, two before CLI integration.
+
+---
+
+### Critical
+None.
+
+---
+
+### Important
+
+**1. Data race in `TestWatcherRunPollsUntilContextCanceled` — fix before merge**  
+`watcher_test.go:73,77-83` — `polls` counter is written in the watcher goroutine and read implicitly by the test goroutine via side-effects of `cancel()`. `-race` will flag this. Fix: remove `polls`, call `cancel()` after the second snapshot send, or use `atomic.Int32`.
+
+**2. `OptionsFromInventory` silently omits `LogDirs`**  
+`watcher.go:75-86` — populates `Options.Logs` from pre-scanned refs but never `Options.LogDirs`. A CLI wiring `Config` → `Inventory` → `Options` will need to manually stitch `Config.LogDirs` back in or per-poll log discovery is dead code. Fix before CLI layer (T5+): either add `LogDirs` to `Inventory` and fill it in `DiscoverAll`, or document the gap in the `OptionsFromInventory` godoc.
+
+**3. Single file I/O error permanently kills `Watcher.Run`**  
+`watcher.go:95-132` — fail-fast is the current contract but undocumented. A transient write-in-progress error stops all monitoring with no recovery path. Needs a decision and godoc before callers rely on it.
+
+---
+
+### Minor
+
+**4.** `sort.Slice` on `snapshot.Logs` (line 130) is only needed because `options.Logs` pre-seed is interleaved with `DiscoverLogs` output. Worth a comment so it isn't removed as dead work.
+
+**5.** `TestPollOnceLoadsSnapshotFromExplicitPathsAndLogDirs` never exercises the `Options.Logs` seeding path — only `LogDirs`. Add one test case with pre-seeded `LogRef` values to close the merge-and-sort coverage gap.
+
+**6.** Test name `TestWatcherRunPollsUntilContextCanceled` misses the "immediate first poll" behavior the test actually verifies.
+
+**7.** `LoadedNotes` (plural) is inconsistent with `LoadedPlan`, `LoadedState`, `LoadedJournal` (all singular). Cosmetic only.
+
+---
+
+### Required fixes summary
+
+| # | Severity | File | Action |
+|---|----------|------|--------|
+| 1 | **Important** | `watcher_test.go:73` | Fix data race on `polls` counter |
+| 2 | **Important** | `watcher.go:75` | Resolve `LogDirs` gap in `OptionsFromInventory` before CLI |
+| 3 | **Important** | `watcher.go` | Document fail-fast contract in godoc |
+| 5 | Minor | `watcher_test.go` | Add `Options.Logs` seeding test case |

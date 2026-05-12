@@ -1,0 +1,400 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-05-12",
+  "plan": {
+    "id": "waveplan-ps",
+    "title": "waveplan-ps observer for waveplan execution",
+    "plan_doc": {
+      "path": "../workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md",
+      "line": 1
+    },
+    "spec_doc": {
+      "path": "../workspace/waveplan-mcp/docs/specs/swim-markdown-plan-format-v1.md",
+      "line": 1
+    }
+  },
+  "fp_index": {
+    "FP-WPPS-T1": "FP-WPPS-T1",
+    "FP-WPPS-T10": "FP-WPPS-T10",
+    "FP-WPPS-T2": "FP-WPPS-T2",
+    "FP-WPPS-T3": "FP-WPPS-T3",
+    "FP-WPPS-T4": "FP-WPPS-T4",
+    "FP-WPPS-T5": "FP-WPPS-T5",
+    "FP-WPPS-T6": "FP-WPPS-T6",
+    "FP-WPPS-T7": "FP-WPPS-T7",
+    "FP-WPPS-T8": "FP-WPPS-T8",
+    "FP-WPPS-T9": "FP-WPPS-T9",
+    "WAVEPLAN-PS": "waveplan-ps"
+  },
+  "doc_index": {
+    "intake_md": {
+      "path": "dagdir2waveplan/../workspace/waveplan-mcp/docs/specs/swim-markdown-plan-format-v1.md",
+      "line": 1,
+      "kind": "spec"
+    },
+    "plan_md": {
+      "path": "dagdir2waveplan/../workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md",
+      "line": 1,
+      "kind": "plan"
+    },
+    "waveplan_schema": {
+      "path": "/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/waveplan-plan-schema.json",
+      "line": 1,
+      "kind": "spec"
+    }
+  },
+  "tasks": {
+    "T1": {
+      "title": "Add Go dependencies and domain model loaders",
+      "plan_line": 62,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "go.mod",
+        "go.sum",
+        "internal/model/plan.go",
+        "internal/model/state.go",
+        "internal/model/note.go",
+        "internal/model/log.go"
+      ]
+    },
+    "T2": {
+      "title": "Implement deterministic discovery helpers and log validation",
+      "plan_line": 63,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "internal/discovery/discover.go",
+        "internal/discovery/discover_test.go"
+      ]
+    },
+    "T3": {
+      "title": "Implement config loading with safe boolean pointer defaults",
+      "plan_line": 64,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "internal/config/config.go",
+        "internal/config/config_test.go"
+      ]
+    },
+    "T4": {
+      "title": "Implement watcher polling and exported PollOnce helper",
+      "plan_line": 65,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "internal/watch/watcher.go",
+        "internal/watch/watcher_test.go"
+      ]
+    },
+    "T5": {
+      "title": "Implement tview rendering and exact step_id log correlation",
+      "plan_line": 66,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "internal/ui/tui.go",
+        "internal/ui/tui_test.go"
+      ]
+    },
+    "T6": {
+      "title": "Implement CLI flags, plan filtering, snapshot mode, and page-refreshing TUI",
+      "plan_line": 67,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "cmd/waveplan-ps/main.go",
+        "cmd/waveplan-ps/main_test.go"
+      ]
+    },
+    "T7": {
+      "title": "Add integration test for --once snapshot output",
+      "plan_line": 68,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "tests/integration/waveplan_ps_test.go"
+      ]
+    },
+    "T8": {
+      "title": "Document usage, flags, and recursive log directory config",
+      "plan_line": 69,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "README.md",
+        "docs/waveplan-ps-config-example.yaml"
+      ]
+    },
+    "T9": {
+      "title": "Emit and validate execution-waves JSON from canonical source",
+      "plan_line": 70,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "docs/plans/2026-05-12-waveplan-ps-execution-waves.json"
+      ]
+    },
+    "T10": {
+      "title": "Compile SWIM execution schedule from validated execution-waves JSON",
+      "plan_line": 71,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "docs/plans/2026-05-12-waveplan-ps-execution-schedule.json"
+      ]
+    }
+  },
+  "units": {
+    "T1.1": {
+      "task": "T1",
+      "title": "Add Go dependencies and domain model loaders",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 62,
+      "depends_on": [],
+      "doc_refs": [
+        "plan_md"
+      ],
+      "fp_refs": [
+        "FP-WPPS-T1"
+      ],
+      "notes": [
+        "root module only; do not create nested go.mod"
+      ]
+    },
+    "T2.1": {
+      "task": "T2",
+      "title": "Implement deterministic discovery helpers and log validation",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 63,
+      "depends_on": [
+        "T1.1"
+      ],
+      "doc_refs": [
+        "plan_md"
+      ],
+      "fp_refs": [
+        "FP-WPPS-T2"
+      ],
+      "notes": [
+        "discovery owns file scanning; model owns loading"
+      ]
+    },
+    "T3.1": {
+      "task": "T3",
+      "title": "Implement config loading with safe boolean pointer defaults",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 64,
+      "depends_on": [
+        "T1.1"
+      ],
+      "doc_refs": [
+        "plan_md"
+      ],
+      "fp_refs": [
+        "FP-WPPS-T3"
+      ],
+      "notes": [
+        "support explicit false for expand_first_wave"
+      ]
+    },
+    "T4.1": {
+      "task": "T4",
+      "title": "Implement watcher polling and exported PollOnce helper",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 65,
+      "depends_on": [
+        "T1.1",
+        "T2.1"
+      ],
+      "doc_refs": [
+        "plan_md"
+      ],
+      "fp_refs": [
+        "FP-WPPS-T4"
+      ],
+      "notes": [
+        "avoid duplicating single-shot load logic in CLI"
+      ]
+    },
+    "T5.1": {
+      "task": "T5",
+      "title": "Implement tview rendering and exact step_id log correlation",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 66,
+      "depends_on": [
+        "T1.1"
+      ],
+      "doc_refs": [
+        "plan_md"
+      ],
+      "fp_refs": [
+        "FP-WPPS-T5"
+      ],
+      "notes": [
+        "match task IDs from step_id segments, not substrings"
+      ]
+    },
+    "T6.1": {
+      "task": "T6",
+      "title": "Implement CLI flags, plan filtering, snapshot mode, and page-refreshing TUI",
+      "kind": "impl",
+      "wave": 4,
+      "plan_line": 67,
+      "depends_on": [
+        "T2.1",
+        "T3.1",
+        "T4.1",
+        "T5.1"
+      ],
+      "doc_refs": [
+        "plan_md"
+      ],
+      "fp_refs": [
+        "FP-WPPS-T6"
+      ],
+      "notes": [
+        "--plan must filter plan and state paths",
+        "live TUI updates must replace the active page with QueueUpdateDraw"
+      ]
+    },
+    "T7.1": {
+      "task": "T7",
+      "title": "Add integration test for --once snapshot output",
+      "kind": "test",
+      "wave": 5,
+      "plan_line": 68,
+      "depends_on": [
+        "T6.1"
+      ],
+      "doc_refs": [
+        "plan_md"
+      ],
+      "fp_refs": [
+        "FP-WPPS-T7"
+      ],
+      "notes": []
+    },
+    "T8.1": {
+      "task": "T8",
+      "title": "Document usage, flags, and recursive log directory config",
+      "kind": "doc",
+      "wave": 5,
+      "plan_line": 69,
+      "depends_on": [
+        "T6.1"
+      ],
+      "doc_refs": [
+        "plan_md"
+      ],
+      "fp_refs": [
+        "FP-WPPS-T8"
+      ],
+      "notes": [
+        "log_dirs are recursive directory roots, not glob patterns"
+      ]
+    },
+    "T9.1": {
+      "task": "T9",
+      "title": "Emit and validate execution-waves JSON from canonical source",
+      "kind": "verify",
+      "wave": 6,
+      "plan_line": 70,
+      "depends_on": [
+        "T7.1",
+        "T8.1"
+      ],
+      "doc_refs": [
+        "plan_md"
+      ],
+      "fp_refs": [
+        "FP-WPPS-T9"
+      ],
+      "notes": [
+        "output must validate against waveplan-plan-schema.json"
+      ]
+    },
+    "T10.1": {
+      "task": "T10",
+      "title": "Compile SWIM execution schedule from validated execution-waves JSON",
+      "kind": "verify",
+      "wave": 7,
+      "plan_line": 71,
+      "depends_on": [
+        "T9.1"
+      ],
+      "doc_refs": [
+        "plan_md"
+      ],
+      "fp_refs": [
+        "FP-WPPS-T10"
+      ],
+      "notes": [
+        "compile schedule after canonical plan JSON validation"
+      ]
+    }
+  },
+  "waves": [
+    {
+      "wave": 1,
+      "units": [
+        "T1.1"
+      ]
+    },
+    {
+      "wave": 2,
+      "units": [
+        "T2.1",
+        "T3.1"
+      ]
+    },
+    {
+      "wave": 3,
+      "units": [
+        "T4.1",
+        "T5.1"
+      ]
+    },
+    {
+      "wave": 4,
+      "units": [
+        "T6.1"
+      ]
+    },
+    {
+      "wave": 5,
+      "units": [
+        "T7.1",
+        "T8.1"
+      ]
+    },
+    {
+      "wave": 6,
+      "units": [
+        "T9.1"
+      ]
+    },
+    {
+      "wave": 7,
+      "units": [
+        "T10.1"
+      ]
+    }
+  ]
+}

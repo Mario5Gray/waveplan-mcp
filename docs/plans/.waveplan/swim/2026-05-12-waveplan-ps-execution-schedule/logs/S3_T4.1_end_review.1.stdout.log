@@ -1,0 +1,8 @@
+{
+  "review_ended_at": "2026-05-12 14:49",
+  "review_note": "${WP_COMMENT:-}",
+  "reviewer": "sigma",
+  "success": true,
+  "task_id": "T4.1",
+  "title": "Implement watcher polling and exported PollOnce helper"
+}

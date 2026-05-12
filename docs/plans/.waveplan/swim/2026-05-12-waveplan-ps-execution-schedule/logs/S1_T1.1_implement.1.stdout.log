@@ -1,0 +1,15 @@
+Implemented T1.1 in `waveplan-ps` with a root Go module and domain model loaders.
+
+Changed files:
+- [go.mod](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/go.mod:1): root module plus declared deps: `tview`, `cobra`, `yaml.v3`. I checked `tview` v0.42.0 on [pkg.go.dev](https://pkg.go.dev/github.com/rivo/tview).
+- [go.sum](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/go.sum:1): populated available cached sums.
+- [plan.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/model/plan.go:10): execution-waves plan structs and `LoadPlan`/`DecodePlan`.
+- [state.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/model/state.go:10): state structs, status constants, and `StatusOf`.
+- [log.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/model/log.go:13): SWIM journal structs, journal loader, and log filename parser.
+- [note.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/model/note.go:10): txtstore-style note section parser.
+- [model_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/model/model_test.go:9): TDD coverage for all loaders/parsers.
+
+Verification:
+- `GOCACHE=/private/tmp/waveplan-ps-gocache go test -count=1 ./...` -> passed.
+- `GOCACHE=/private/tmp/waveplan-ps-gocache go vet ./...` -> passed.
+- `go mod verify` could not complete because the sandbox has no DNS access to `proxy.golang.org` for `github.com/rivo/tview@v0.42.0`.

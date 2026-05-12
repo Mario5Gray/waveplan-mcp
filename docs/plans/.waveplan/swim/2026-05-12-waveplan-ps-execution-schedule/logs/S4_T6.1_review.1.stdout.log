@@ -1,0 +1,75 @@
+I have everything needed. Here is the full review.
+
+---
+
+## Code Review: T6.1 — CLI flags, plan filtering, snapshot mode, page-refreshing TUI
+
+### Requirements checked
+1. `--plan` must filter plan AND state paths
+2. Live TUI updates must replace the active page via `QueueUpdateDraw`
+
+---
+
+## Findings (severity order)
+
+### [Important] `cobra` in go.mod but never imported
+
+`go.mod:7` requires `github.com/spf13/cobra v1.9.1`. Every CLI flag in `main.go` uses `flag` from the stdlib. Cobra is not imported anywhere in the module. Unused dependency adds build weight and a transitive dependency surface.
+
+**Required fix:** `go mod tidy` to remove it.
+
+---
+
+### [Important] `appendExplicitPlans` fallback is untested
+
+The two-tier fallback in `buildWatchOptions` (`main.go:177–186`) is central to the `--plan <path>` contract: if a plan path is not discovered via `--plan-dir`, it must be accepted as a direct file path. `appendExplicitPlans` implements this, but there is no test that exercises the path where `filterPlanPaths` returns empty and the fallback fires.
+
+`TestOnceCommandPrintsSnapshotForSelectedPlan` always passes `--plan-dir`, so the selected plan IS discovered and `appendExplicitPlans` is never called. A user doing `waveplan-ps --once --plan /abs/path/plan.json` (no `--plan-dir`) would hit the fallback; if it regresses it would go unnoticed.
+
+**Required fix:** Add a test where `--plan <full-path>` is passed without any `--plan-dir`; assert the plan is loaded and rendered.
+
+---
+
+### [Minor] No basename-only `--plan` filter test
+
+`filterPlanPaths` matches on both `filepath.Clean(filter)` and `filepath.Base(filter)`. The basename branch (`--plan 2026-alpha-execution-waves.json`) is only reachable when the filter has no path separators. Existing tests always pass an absolute path. A regression there would be silent.
+
+**Required fix (or acknowledge):** Add a test with `planFilters: []string{"2026-alpha-execution-waves.json"}` and two plans with distinct basenames.
+
+---
+
+### [Minor] `DiscoverAll` silently drops `ParseLogPath` errors; `DiscoverLogs` propagates them
+
+`discover.go:48–51`: when invoked via `DiscoverAll`, a malformed log filename is swallowed (`return nil`). `DiscoverLogs` (line 90) propagates the same error. The T6 path uses `DiscoverLogs` at poll time, so the inconsistency does not manifest in the live flow — but it's a latent correctness gap for callers of `DiscoverAll`.
+
+This is pre-T6 code; flag it but do not block.
+
+---
+
+### [Minor] `stateForPlan` falls back to `states[0]` on no match
+
+`tui.go:216`: when multiple states are loaded and none match the plan by basename, the first state in the slice is returned. For a multi-plan setup where the user adds a state for a new plan but it sorts first alphabetically, every plan would show the wrong state. Not a T6 regression (the matching logic is correct), but the silent fallback is fragile.
+
+---
+
+## What is correct
+
+| Contract item | Status |
+|---|---|
+| `--plan` narrows `PlanPaths` AND `StatePaths` | ✅ `filterPlanPaths` + `filterStatePaths` + sidecar fallback |
+| Explicit path fallback when nothing discovered | ✅ `appendExplicitPlans` |
+| `QueueUpdateDraw` wraps page replacement | ✅ `queueLiveSnapshot` — Replace runs inside the queued fn |
+| `tviewPageReplacer.Replace` does remove-then-add | ✅ matches `livePageName` constant |
+| `StatusOf` nil-safe on no-state plans | ✅ nil guard at `state.go:81` |
+| CLI bool default does not stomp config file | ✅ `flagWasPassed` gate |
+| tview shim enables headless tests | ✅ `replace github.com/rivo/tview => ./internal/tviewshim` |
+| TUI test asserts `QueueUpdateDraw` called once, page replaced, typed as `*ui.Root` | ✅ all three assertions pass by inspection |
+
+---
+
+## Required fixes before approval
+
+1. **Remove `cobra` dependency** — run `go mod tidy`
+2. **Add test for `--plan <direct-path>` (no `--plan-dir`)** — exercises the `appendExplicitPlans` fallback that is currently dead in tests
+
+Everything else is informational. The two hard requirements from the task notes are implemented correctly.

@@ -1,0 +1,7 @@
+{
+  "finished_at": "2026-05-12 15:00",
+  "git_sha": "${GIT_SHA:-DEFERRED}",
+  "success": true,
+  "task_id": "T5.1",
+  "title": "Implement tview rendering and exact step_id log correlation"
+}

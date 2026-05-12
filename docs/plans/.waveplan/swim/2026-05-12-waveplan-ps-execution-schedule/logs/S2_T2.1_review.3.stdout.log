@@ -1,0 +1,50 @@
+Review complete. No critical defects. Three important issues, five minor.
+
+---
+
+## T2.1 Review — Findings (sigma)
+
+**Status: Review complete — requires fixes before close**
+
+---
+
+### Important
+
+**I-1. Greedy regex silently mangles step IDs with numeric dot-segments**
+`internal/model/log.go:21`
+
+Pattern `^(.+)\.([0-9]+)\.(stdout|stderr)\.log$` — `(.+)` is greedy. For a name like `S1_T1.1_r2_implement.1.2.stdout.log`, the engine absorbs the first `1` into the step ID, silently producing wrong output with no error. Fix: use non-greedy `(.+?)` or anchor to the actual naming convention. Needs a test asserting the exact extraction for a step ID containing a numeric segment.
+
+**I-2. Malformed log file in `DiscoverAll` kills the entire inventory**
+`internal/discovery/discover.go:44–51`
+
+`isLogLikePath` is a broad pre-filter. If any `.stdout.log`/`.stderr.log` file fails `ParseLogPath`, `DiscoverAll` returns `nil` — discarding all accumulated plan paths, state paths, journals. A CI tool dropping a stale conformant-looking log file makes the observer fully blind. Fix options: (a) tighten `isLogLikePath` to reject non-conformant names before calling `ParseLogPath`, or (b) collect warnings into `Inventory.Warnings []error` instead of aborting.
+
+**I-3. Multi-root determinism test relies on `t.TempDir()` sequential numbering**
+`internal/discovery/discover_test.go:92–110`
+
+`TestDiscoverAllCombinesMultipleRootsDeterministically` asserts `first` sorts before `second` because the first `t.TempDir()` call gets `.../001` and the second gets `.../002`. This is a Go stdlib implementation detail, not a spec guarantee. Fix: use filenames that force sort order regardless of directory (e.g., `aaa-execution-waves.json` in one root, `zzz-execution-waves.json` in the other) so the assertion is path-name-driven.
+
+---
+
+### Minor
+
+**M-1.** `discoverPaths`/`DiscoverLogs` return `nil` on empty match; `DecodeJournal` normalizes to `[]T{}` — inconsistency causes `reflect.DeepEqual` surprises for callers.
+
+**M-2.** Switch ordering in `DiscoverAll` classifier is load-bearing but has no comment; a future reorder could silently misclassify state/journal/log files.
+
+**M-3.** No test for non-existent root — confirms error is propagated, not swallowed.
+
+**M-4.** `attempt = 0` passes regex validation silently if attempts are 1-indexed by convention; no floor check or test.
+
+**M-5.** `isNotePath` uses `strings.EqualFold` (case-insensitive) while all other classifiers use `strings.HasSuffix` (case-sensitive) — inconsistency undocumented, no test for `.MD`/`.Md`.
+
+---
+
+### Contract Adherence
+
+Clean. Discovery owns scanning (`WalkDir` + classification), model owns `ParseLogPath` (pure parse, no I/O) and all `Load*` functions. Boundary is correctly maintained.
+
+---
+
+**Required fixes before merge:** I-1, I-2, I-3. Minors can ship as follow-ups.

@@ -1,0 +1,16 @@
+Implemented the required reviewer fixes.
+
+Changed:
+- [internal/model/log.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/model/log.go:21): replaced the greedy generic log regex with a SWIM step-shaped pattern. It now rejects ambiguous filenames like `S1_T1.1_implement.1.2.stdout.log` and rejects `attempt=0`.
+- [internal/discovery/discover.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/discovery/discover.go:34): `DiscoverAll` now ignores malformed log-looking files instead of aborting the whole inventory. `DiscoverLogs` remains strict.
+- [internal/model/model_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/model/model_test.go:178): added log parsing coverage for numeric step segments and ambiguous numeric dot segments.
+- [internal/discovery/discover_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/discovery/discover_test.go:92): added `DiscoverAll` malformed-log coverage and rewrote the multi-root determinism test to use explicit root names instead of relying on `t.TempDir()` ordering.
+
+Verification:
+- Red run before fixes: `GOCACHE=/private/tmp/waveplan-ps-gocache go test ./internal/model ./internal/discovery` failed on the new malformed log and `DiscoverAll` tests.
+- Targeted pass: `GOCACHE=/private/tmp/waveplan-ps-gocache go test ./internal/model ./internal/discovery` passed.
+- Full uncached suite: `GOCACHE=/private/tmp/waveplan-ps-gocache go test -count=1 ./...` passed:
+  - `internal/discovery 0.011s`
+  - `internal/model 0.007s`
+
+No waveplan write actions were run.

@@ -1,0 +1,5403 @@
+OpenAI Codex v0.130.0
+--------
+workdir: /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/darkbit1001/.codex/memories]
+reasoning effort: high
+reasoning summaries: none
+session id: 019e1e1d-55d3-73d3-97f8-5175f089089f
+--------
+user
+new task for implementation.
+
+hard requirements:
+- use superpowers skill workflow while implementing.
+- waveplan-cli / waveplan-mcp usage in this task is read-only only.
+- do not execute waveplan write actions: no pop, no fin, no start_review, no end_review, no plan mutations.
+- allowed waveplan reads: peek, get, deptree, list_plans.
+
+execute implementation directly in repository.
+run tests relevant to changes.
+return concrete file changes + verification commands/results.
+
+plan: /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json
+claimed_by: phi
+mode: implement
+task_source: pop
+
+task_json:
+{
+  "claimed": true,
+  "depends_on": [
+    "T1.1"
+  ],
+  "doc_refs": [
+    {
+      "kind": "plan",
+      "line": 1,
+      "path": "dagdir2waveplan/../workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md",
+      "ref": "plan_md"
+    }
+  ],
+  "fp_refs": [
+    {
+      "fp_id": "FP-WPPS-T3",
+      "ref": "FP-WPPS-T3"
+    }
+  ],
+  "kind": "impl",
+  "notes": [
+    "support explicit false for expand_first_wave"
+  ],
+  "plan_line": 64,
+  "started_at": "2026-05-12 14:34",
+  "taken_by": "phi",
+  "task": "T3",
+  "task_id": "T3.1",
+  "title": "Implement config loading with safe boolean pointer defaults",
+  "wave": 2
+}
+
+
+codex
+I’ll use the required superpowers workflow first, then inspect the relevant config code and tests. Waveplan will stay read-only for this task.
+exec
+/bin/zsh -lc "sed -n '1,220p' /Users/darkbit1001/.codex/superpowers/skills/using-superpowers/SKILL.md && sed -n '1,240p' /Users/darkbit1001/.codex/superpowers/skills/brainstorming/SKILL.md && sed -n '1,240p' /Users/darkbit1001/.codex/superpowers/skills/test-driven-development/SKILL.md && sed -n '1,220p' /Users/darkbit1001/.codex/superpowers/skills/verification-before-completion/SKILL.md && sed -n '1,180p' ./agent-policy.rdf && sed -n '1,220p' ./project-forward-notes.md" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ exited 1 in 0ms:
+---
+name: using-superpowers
+description: Use when starting any conversation - establishes how to find and use skills, requiring Skill tool invocation before ANY response including clarifying questions
+---
+
+<SUBAGENT-STOP>
+If you were dispatched as a subagent to execute a specific task, skip this skill.
+</SUBAGENT-STOP>
+
+<EXTREMELY-IMPORTANT>
+If you think there is even a 1% chance a skill might apply to what you are doing, you ABSOLUTELY MUST invoke the skill.
+
+IF A SKILL APPLIES TO YOUR TASK, YOU DO NOT HAVE A CHOICE. YOU MUST USE IT.
+
+This is not negotiable. This is not optional. You cannot rationalize your way out of this.
+</EXTREMELY-IMPORTANT>
+
+## Instruction Priority
+
+Superpowers skills override default system prompt behavior, but **user instructions always take precedence**:
+
+1. **User's explicit instructions** (CLAUDE.md, GEMINI.md, AGENTS.md, direct requests) — highest priority
+2. **Superpowers skills** — override default system behavior where they conflict
+3. **Default system prompt** — lowest priority
+
+If CLAUDE.md, GEMINI.md, or AGENTS.md says "don't use TDD" and a skill says "always use TDD," follow the user's instructions. The user is in control.
+
+## How to Access Skills
+
+**In Claude Code:** Use the `Skill` tool. When you invoke a skill, its content is loaded and presented to you—follow it directly. Never use the Read tool on skill files.
+
+**In Gemini CLI:** Skills activate via the `activate_skill` tool. Gemini loads skill metadata at session start and activates the full content on demand.
+
+**In other environments:** Check your platform's documentation for how skills are loaded.
+
+## Platform Adaptation
+
+Skills use Claude Code tool names. Non-CC platforms: see `references/codex-tools.md` (Codex) for tool equivalents. Gemini CLI users get the tool mapping loaded automatically via GEMINI.md.
+
+# Using Skills
+
+## The Rule
+
+**Invoke relevant or requested skills BEFORE any response or action.** Even a 1% chance a skill might apply means that you should invoke the skill to check. If an invoked skill turns out to be wrong for the situation, you don't need to use it.
+
+```dot
+digraph skill_flow {
+    "User message received" [shape=doublecircle];
+    "About to EnterPlanMode?" [shape=doublecircle];
+    "Already brainstormed?" [shape=diamond];
+    "Invoke brainstorming skill" [shape=box];
+    "Might any skill apply?" [shape=diamond];
+    "Invoke Skill tool" [shape=box];
+    "Announce: 'Using [skill] to [purpose]'" [shape=box];
+    "Has checklist?" [shape=diamond];
+    "Create TodoWrite todo per item" [shape=box];
+    "Follow skill exactly" [shape=box];
+    "Respond (including clarifications)" [shape=doublecircle];
+
+    "About to EnterPlanMode?" -> "Already brainstormed?";
+    "Already brainstormed?" -> "Invoke brainstorming skill" [label="no"];
+    "Already brainstormed?" -> "Might any skill apply?" [label="yes"];
+    "Invoke brainstorming skill" -> "Might any skill apply?";
+
+    "User message received" -> "Might any skill apply?";
+    "Might any skill apply?" -> "Invoke Skill tool" [label="yes, even 1%"];
+    "Might any skill apply?" -> "Respond (including clarifications)" [label="definitely not"];
+    "Invoke Skill tool" -> "Announce: 'Using [skill] to [purpose]'";
+    "Announce: 'Using [skill] to [purpose]'" -> "Has checklist?";
+    "Has checklist?" -> "Create TodoWrite todo per item" [label="yes"];
+    "Has checklist?" -> "Follow skill exactly" [label="no"];
+    "Create TodoWrite todo per item" -> "Follow skill exactly";
+}
+```
+
+## Red Flags
+
+These thoughts mean STOP—you're rationalizing:
+
+| Thought | Reality |
+|---------|---------|
+| "This is just a simple question" | Questions are tasks. Check for skills. |
+| "I need more context first" | Skill check comes BEFORE clarifying questions. |
+| "Let me explore the codebase first" | Skills tell you HOW to explore. Check first. |
+| "I can check git/files quickly" | Files lack conversation context. Check for skills. |
+| "Let me gather information first" | Skills tell you HOW to gather information. |
+| "This doesn't need a formal skill" | If a skill exists, use it. |
+| "I remember this skill" | Skills evolve. Read current version. |
+| "This doesn't count as a task" | Action = task. Check for skills. |
+| "The skill is overkill" | Simple things become complex. Use it. |
+| "I'll just do this one thing first" | Check BEFORE doing anything. |
+| "This feels productive" | Undisciplined action wastes time. Skills prevent this. |
+| "I know what that means" | Knowing the concept ≠ using the skill. Invoke it. |
+
+## Skill Priority
+
+When multiple skills could apply, use this order:
+
+1. **Process skills first** (brainstorming, debugging) - these determine HOW to approach the task
+2. **Implementation skills second** (frontend-design, mcp-builder) - these guide execution
+
+"Let's build X" → brainstorming first, then implementation skills.
+"Fix this bug" → debugging first, then domain-specific skills.
+
+## Skill Types
+
+**Rigid** (TDD, debugging): Follow exactly. Don't adapt away discipline.
+
+**Flexible** (patterns): Adapt principles to context.
+
+The skill itself tells you which.
+
+## User Instructions
+
+Instructions say WHAT, not HOW. "Add X" or "Fix Y" doesn't mean skip workflows.
+---
+name: brainstorming
+description: "You MUST use this before any creative work - creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation."
+---
+
+# Brainstorming Ideas Into Designs
+
+Help turn ideas into fully formed designs and specs through natural collaborative dialogue.
+
+Start by understanding the current project context, then ask questions one at a time to refine the idea. Once you understand what you're building, present the design and get user approval.
+
+<HARD-GATE>
+Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it. This applies to EVERY project regardless of perceived simplicity.
+</HARD-GATE>
+
+## Anti-Pattern: "This Is Too Simple To Need A Design"
+
+Every project goes through this process. A todo list, a single-function utility, a config change — all of them. "Simple" projects are where unexamined assumptions cause the most wasted work. The design can be short (a few sentences for truly simple projects), but you MUST present it and get approval.
+
+## Checklist
+
+You MUST create a task for each of these items and complete them in order:
+
+1. **Explore project context** — check files, docs, recent commits
+2. **Offer visual companion** (if topic will involve visual questions) — this is its own message, not combined with a clarifying question. See the Visual Companion section below.
+3. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria
+4. **Propose 2-3 approaches** — with trade-offs and your recommendation
+5. **Present design** — in sections scaled to their complexity, get user approval after each section
+6. **Write design doc** — save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit
+7. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope (see below)
+8. **User reviews written spec** — ask user to review the spec file before proceeding
+9. **Transition to implementation** — invoke writing-plans skill to create implementation plan
+
+## Process Flow
+
+```dot
+digraph brainstorming {
+    "Explore project context" [shape=box];
+    "Visual questions ahead?" [shape=diamond];
+    "Offer Visual Companion\n(own message, no other content)" [shape=box];
+    "Ask clarifying questions" [shape=box];
+    "Propose 2-3 approaches" [shape=box];
+    "Present design sections" [shape=box];
+    "User approves design?" [shape=diamond];
+    "Write design doc" [shape=box];
+    "Spec self-review\n(fix inline)" [shape=box];
+    "User reviews spec?" [shape=diamond];
+    "Invoke writing-plans skill" [shape=doublecircle];
+
+    "Explore project context" -> "Visual questions ahead?";
+    "Visual questions ahead?" -> "Offer Visual Companion\n(own message, no other content)" [label="yes"];
+    "Visual questions ahead?" -> "Ask clarifying questions" [label="no"];
+    "Offer Visual Companion\n(own message, no other content)" -> "Ask clarifying questions";
+    "Ask clarifying questions" -> "Propose 2-3 approaches";
+    "Propose 2-3 approaches" -> "Present design sections";
+    "Present design sections" -> "User approves design?";
+    "User approves design?" -> "Present design sections" [label="no, revise"];
+    "User approves design?" -> "Write design doc" [label="yes"];
+    "Write design doc" -> "Spec self-review\n(fix inline)";
+    "Spec self-review\n(fix inline)" -> "User reviews spec?";
+    "User reviews spec?" -> "Write design doc" [label="changes requested"];
+    "User reviews spec?" -> "Invoke writing-plans skill" [label="approved"];
+}
+```
+
+**The terminal state is invoking writing-plans.** Do NOT invoke frontend-design, mcp-builder, or any other implementation skill. The ONLY skill you invoke after brainstorming is writing-plans.
+
+## The Process
+
+**Understanding the idea:**
+
+- Check out the current project state first (files, docs, recent commits)
+- Before asking detailed questions, assess scope: if the request describes multiple independent subsystems (e.g., "build a platform with chat, file storage, billing, and analytics"), flag this immediately. Don't spend questions refining details of a project that needs to be decomposed first.
+- If the project is too large for a single spec, help the user decompose into sub-projects: what are the independent pieces, how do they relate, what order should they be built? Then brainstorm the first sub-project through the normal design flow. Each sub-project gets its own spec → plan → implementation cycle.
+- For appropriately-scoped projects, ask questions one at a time to refine the idea
+- Prefer multiple choice questions when possible, but open-ended is fine too
+- Only one question per message - if a topic needs more exploration, break it into multiple questions
+- Focus on understanding: purpose, constraints, success criteria
+
+**Exploring approaches:**
+
+- Propose 2-3 different approaches with trade-offs
+- Present options conversationally with your recommendation and reasoning
+- Lead with your recommended option and explain why
+
+**Presenting the design:**
+
+- Once you believe you understand what you're building, present the design
+- Scale each section to its complexity: a few sentences if straightforward, up to 200-300 words if nuanced
+- Ask after each section whether it looks right so far
+- Cover: architecture, components, data flow, error handling, testing
+- Be ready to go back and clarify if something doesn't make sense
+
+**Design for isolation and clarity:**
+
+- Break the system into smaller units that each have one clear purpose, communicate through well-defined interfaces, and can be understood and tested independently
+- For each unit, you should be able to answer: what does it do, how do you use it, and what does it depend on?
+- Can someone understand what a unit does without reading its internals? Can you change the internals without breaking consumers? If not, the boundaries need work.
+- Smaller, well-bounded units are also easier for you to work with - you reason better about code you can hold in context at once, and your edits are more reliable when files are focused. When a file grows large, that's often a signal that it's doing too much.
+
+**Working in existing codebases:**
+
+- Explore the current structure before proposing changes. Follow existing patterns.
+- Where existing code has problems that affect the work (e.g., a file that's grown too large, unclear boundaries, tangled responsibilities), include targeted improvements as part of the design - the way a good developer improves code they're working in.
+- Don't propose unrelated refactoring. Stay focused on what serves the current goal.
+
+## After the Design
+
+**Documentation:**
+
+- Write the validated design (spec) to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+  - (User preferences for spec location override this default)
+- Use elements-of-style:writing-clearly-and-concisely skill if available
+- Commit the design document to git
+
+**Spec Self-Review:**
+After writing the spec document, look at it with fresh eyes:
+
+1. **Placeholder scan:** Any "TBD", "TODO", incomplete sections, or vague requirements? Fix them.
+2. **Internal consistency:** Do any sections contradict each other? Does the architecture match the feature descriptions?
+3. **Scope check:** Is this focused enough for a single implementation plan, or does it need decomposition?
+4. **Ambiguity check:** Could any requirement be interpreted two different ways? If so, pick one and make it explicit.
+
+Fix any issues inline. No need to re-review — just fix and move on.
+
+**User Review Gate:**
+After the spec review loop passes, ask the user to review the written spec before proceeding:
+
+> "Spec written and committed to `<path>`. Please review it and let me know if you want to make any changes before we start writing out the implementation plan."
+
+Wait for the user's response. If they request changes, make them and re-run the spec review loop. Only proceed once the user approves.
+
+**Implementation:**
+
+- Invoke the writing-plans skill to create a detailed implementation plan
+- Do NOT invoke any other skill. writing-plans is the next step.
+
+## Key Principles
+
+- **One question at a time** - Don't overwhelm with multiple questions
+- **Multiple choice preferred** - Easier to answer than open-ended when possible
+- **YAGNI ruthlessly** - Remove unnecessary features from all designs
+- **Explore alternatives** - Always propose 2-3 approaches before settling
+- **Incremental validation** - Present design, get approval before moving on
+- **Be flexible** - Go back and clarify when something doesn't make sense
+
+## Visual Companion
+
+A browser-based companion for showing mockups, diagrams, and visual options during brainstorming. Available as a tool — not a mode. Accepting the companion means it's available for questions that benefit from visual treatment; it does NOT mean every question goes through the browser.
+
+**Offering the companion:** When you anticipate that upcoming questions will involve visual content (mockups, layouts, diagrams), offer it once for consent:
+> "Some of what we're working on might be easier to explain if I can show it to you in a web browser. I can put together mockups, diagrams, comparisons, and other visuals as we go. This feature is still new and can be token-intensive. Want to try it? (Requires opening a local URL)"
+
+**This offer MUST be its own message.** Do not combine it with clarifying questions, context summaries, or any other content. The message should contain ONLY the offer above and nothing else. Wait for the user's response before continuing. If they decline, proceed with text-only brainstorming.
+
+**Per-question decision:** Even after the user accepts, decide FOR EACH QUESTION whether to use the browser or the terminal. The test: **would the user understand this better by seeing it than reading it?**
+
+- **Use the browser** for content that IS visual — mockups, wireframes, layout comparisons, architecture diagrams, side-by-side visual designs
+- **Use the terminal** for content that is text — requirements questions, conceptual choices, tradeoff lists, A/B/C/D text options, scope decisions
+
+A question about a UI topic is not automatically a visual question. "What does personality mean in this context?" is a conceptual question — use the terminal. "Which wizard layout works better?" is a visual question — use the browser.
+
+If they agree to the companion, read the detailed guide before proceeding:
+`skills/brainstorming/visual-companion.md`
+---
+name: test-driven-development
+description: Use when implementing any feature or bugfix, before writing implementation code
+---
+
+# Test-Driven Development (TDD)
+
+## Overview
+
+Write the test first. Watch it fail. Write minimal code to pass.
+
+**Core principle:** If you didn't watch the test fail, you don't know if it tests the right thing.
+
+**Violating the letter of the rules is violating the spirit of the rules.**
+
+## When to Use
+
+**Always:**
+- New features
+- Bug fixes
+- Refactoring
+- Behavior changes
+
+**Exceptions (ask your human partner):**
+- Throwaway prototypes
+- Generated code
+- Configuration files
+
+Thinking "skip TDD just this once"? Stop. That's rationalization.
+
+## The Iron Law
+
+```
+NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
+```
+
+Write code before the test? Delete it. Start over.
+
+**No exceptions:**
+- Don't keep it as "reference"
+- Don't "adapt" it while writing tests
+- Don't look at it
+- Delete means delete
+
+Implement fresh from tests. Period.
+
+## Red-Green-Refactor
+
+```dot
+digraph tdd_cycle {
+    rankdir=LR;
+    red [label="RED\nWrite failing test", shape=box, style=filled, fillcolor="#ffcccc"];
+    verify_red [label="Verify fails\ncorrectly", shape=diamond];
+    green [label="GREEN\nMinimal code", shape=box, style=filled, fillcolor="#ccffcc"];
+    verify_green [label="Verify passes\nAll green", shape=diamond];
+    refactor [label="REFACTOR\nClean up", shape=box, style=filled, fillcolor="#ccccff"];
+    next [label="Next", shape=ellipse];
+
+    red -> verify_red;
+    verify_red -> green [label="yes"];
+    verify_red -> red [label="wrong\nfailure"];
+    green -> verify_green;
+    verify_green -> refactor [label="yes"];
+    verify_green -> green [label="no"];
+    refactor -> verify_green [label="stay\ngreen"];
+    verify_green -> next;
+    next -> red;
+}
+```
+
+### RED - Write Failing Test
+
+Write one minimal test showing what should happen.
+
+<Good>
+```typescript
+test('retries failed operations 3 times', async () => {
+  let attempts = 0;
+  const operation = () => {
+    attempts++;
+    if (attempts < 3) throw new Error('fail');
+    return 'success';
+  };
+
+  const result = await retryOperation(operation);
+
+  expect(result).toBe('success');
+  expect(attempts).toBe(3);
+});
+```
+Clear name, tests real behavior, one thing
+</Good>
+
+<Bad>
+```typescript
+test('retry works', async () => {
+  const mock = jest.fn()
+    .mockRejectedValueOnce(new Error())
+    .mockRejectedValueOnce(new Error())
+    .mockResolvedValueOnce('success');
+  await retryOperation(mock);
+  expect(mock).toHaveBeenCalledTimes(3);
+});
+```
+Vague name, tests mock not code
+</Bad>
+
+**Requirements:**
+- One behavior
+- Clear name
+- Real code (no mocks unless unavoidable)
+
+### Verify RED - Watch It Fail
+
+**MANDATORY. Never skip.**
+
+```bash
+npm test path/to/test.test.ts
+```
+
+Confirm:
+- Test fails (not errors)
+- Failure message is expected
+- Fails because feature missing (not typos)
+
+**Test passes?** You're testing existing behavior. Fix test.
+
+**Test errors?** Fix error, re-run until it fails correctly.
+
+### GREEN - Minimal Code
+
+Write simplest code to pass the test.
+
+<Good>
+```typescript
+async function retryOperation<T>(fn: () => Promise<T>): Promise<T> {
+  for (let i = 0; i < 3; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i === 2) throw e;
+    }
+  }
+  throw new Error('unreachable');
+}
+```
+Just enough to pass
+</Good>
+
+<Bad>
+```typescript
+async function retryOperation<T>(
+  fn: () => Promise<T>,
+  options?: {
+    maxRetries?: number;
+    backoff?: 'linear' | 'exponential';
+    onRetry?: (attempt: number) => void;
+  }
+): Promise<T> {
+  // YAGNI
+}
+```
+Over-engineered
+</Bad>
+
+Don't add features, refactor other code, or "improve" beyond the test.
+
+### Verify GREEN - Watch It Pass
+
+**MANDATORY.**
+
+```bash
+npm test path/to/test.test.ts
+```
+
+Confirm:
+- Test passes
+- Other tests still pass
+- Output pristine (no errors, warnings)
+
+**Test fails?** Fix code, not test.
+
+**Other tests fail?** Fix now.
+
+### REFACTOR - Clean Up
+
+After green only:
+- Remove duplication
+- Improve names
+- Extract helpers
+
+Keep tests green. Don't add behavior.
+
+### Repeat
+
+Next failing test for next feature.
+
+## Good Tests
+
+| Quality | Good | Bad |
+|---------|------|-----|
+| **Minimal** | One thing. "and" in name? Split it. | `test('validates email and domain and whitespace')` |
+| **Clear** | Name describes behavior | `test('test1')` |
+| **Shows intent** | Demonstrates desired API | Obscures what code should do |
+
+## Why Order Matters
+
+**"I'll write tests after to verify it works"**
+
+Tests written after code pass immediately. Passing immediately proves nothing:
+- Might test wrong thing
+- Might test implementation, not behavior
+- Might miss edge cases you forgot
+- You never saw it catch the bug
+
+Test-first forces you to see the test fail, proving it actually tests something.
+
+**"I already manually tested all the edge cases"**
+
+Manual testing is ad-hoc. You think you tested everything but:
+- No record of what you tested
+- Can't re-run when code changes
+- Easy to forget cases under pressure
+- "It worked when I tried it" ≠ comprehensive
+
+Automated tests are systematic. They run the same way every time.
+
+**"Deleting X hours of work is wasteful"**
+
+Sunk cost fallacy. The time is already gone. Your choice now:
+- Delete and rewrite with TDD (X more hours, high confidence)
+- Keep it and add tests after (30 min, low confidence, likely bugs)
+
+The "waste" is keeping code you can't trust. Working code without real tests is technical debt.
+
+**"TDD is dogmatic, being pragmatic means adapting"**
+
+TDD IS pragmatic:
+- Finds bugs before commit (faster than debugging after)
+- Prevents regressions (tests catch breaks immediately)
+---
+name: verification-before-completion
+description: Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always
+---
+
+# Verification Before Completion
+
+## Overview
+
+Claiming work is complete without verification is dishonesty, not efficiency.
+
+**Core principle:** Evidence before claims, always.
+
+**Violating the letter of this rule is violating the spirit of this rule.**
+
+## The Iron Law
+
+```
+NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
+```
+
+If you haven't run the verification command in this message, you cannot claim it passes.
+
+## The Gate Function
+
+```
+BEFORE claiming any status or expressing satisfaction:
+
+1. IDENTIFY: What command proves this claim?
+2. RUN: Execute the FULL command (fresh, complete)
+3. READ: Full output, check exit code, count failures
+4. VERIFY: Does output confirm the claim?
+   - If NO: State actual status with evidence
+   - If YES: State claim WITH evidence
+5. ONLY THEN: Make the claim
+
+Skip any step = lying, not verifying
+```
+
+## Common Failures
+
+| Claim | Requires | Not Sufficient |
+|-------|----------|----------------|
+| Tests pass | Test command output: 0 failures | Previous run, "should pass" |
+| Linter clean | Linter output: 0 errors | Partial check, extrapolation |
+| Build succeeds | Build command: exit 0 | Linter passing, logs look good |
+| Bug fixed | Test original symptom: passes | Code changed, assumed fixed |
+| Regression test works | Red-green cycle verified | Test passes once |
+| Agent completed | VCS diff shows changes | Agent reports "success" |
+| Requirements met | Line-by-line checklist | Tests passing |
+
+## Red Flags - STOP
+
+- Using "should", "probably", "seems to"
+- Expressing satisfaction before verification ("Great!", "Perfect!", "Done!", etc.)
+- About to commit/push/PR without verification
+- Trusting agent success reports
+- Relying on partial verification
+- Thinking "just this once"
+- Tired and wanting work over
+- **ANY wording implying success without having run verification**
+
+## Rationalization Prevention
+
+| Excuse | Reality |
+|--------|---------|
+| "Should work now" | RUN the verification |
+| "I'm confident" | Confidence ≠ evidence |
+| "Just this once" | No exceptions |
+| "Linter passed" | Linter ≠ compiler |
+| "Agent said success" | Verify independently |
+| "I'm tired" | Exhaustion ≠ excuse |
+| "Partial check is enough" | Partial proves nothing |
+| "Different words so rule doesn't apply" | Spirit over letter |
+
+## Key Patterns
+
+**Tests:**
+```
+✅ [Run test command] [See: 34/34 pass] "All tests pass"
+❌ "Should pass now" / "Looks correct"
+```
+
+**Regression tests (TDD Red-Green):**
+```
+✅ Write → Run (pass) → Revert fix → Run (MUST FAIL) → Restore → Run (pass)
+❌ "I've written a regression test" (without red-green verification)
+```
+
+**Build:**
+```
+✅ [Run build] [See: exit 0] "Build passes"
+❌ "Linter passed" (linter doesn't check compilation)
+```
+
+**Requirements:**
+```
+✅ Re-read plan → Create checklist → Verify each → Report gaps or completion
+❌ "Tests pass, phase complete"
+```
+
+**Agent delegation:**
+```
+✅ Agent reports success → Check VCS diff → Verify changes → Report actual state
+❌ Trust agent report
+```
+
+## Why This Matters
+
+From 24 failure memories:
+- your human partner said "I don't believe you" - trust broken
+- Undefined functions shipped - would crash
+- Missing requirements shipped - incomplete features
+- Time wasted on false completion → redirect → rework
+- Violates: "Honesty is a core value. If you lie, you'll be replaced."
+
+## When To Apply
+
+**ALWAYS before:**
+- ANY variation of success/completion claims
+- ANY expression of satisfaction
+- ANY positive statement about work state
+- Committing, PR creation, task completion
+- Moving to next task
+- Delegating to agents
+
+**Rule applies to:**
+- Exact phrases
+- Paraphrases and synonyms
+- Implications of success
+- ANY communication suggesting completion/correctness
+
+## The Bottom Line
+
+**No shortcuts for verification.**
+
+Run the command. Read the output. THEN claim the result.
+
+This is non-negotiable.
+sed: ./agent-policy.rdf: No such file or directory
+
+codex
+The brainstorming skill has a design-approval gate, but this request already supplies an implementation task from an approved wave plan and explicitly says to execute directly. I’m treating the task JSON and referenced plan as the design input, while still following the implementation and verification skills.
+exec
+/bin/zsh -lc "sed -n '1,220p' /Users/darkbit1001/.codex/superpowers/skills/systematic-debugging/SKILL.md" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+---
+name: systematic-debugging
+description: Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes
+---
+
+# Systematic Debugging
+
+## Overview
+
+Random fixes waste time and create new bugs. Quick patches mask underlying issues.
+
+**Core principle:** ALWAYS find root cause before attempting fixes. Symptom fixes are failure.
+
+**Violating the letter of this process is violating the spirit of debugging.**
+
+## The Iron Law
+
+```
+NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST
+```
+
+If you haven't completed Phase 1, you cannot propose fixes.
+
+## When to Use
+
+Use for ANY technical issue:
+- Test failures
+- Bugs in production
+- Unexpected behavior
+- Performance problems
+- Build failures
+- Integration issues
+
+**Use this ESPECIALLY when:**
+- Under time pressure (emergencies make guessing tempting)
+- "Just one quick fix" seems obvious
+- You've already tried multiple fixes
+- Previous fix didn't work
+- You don't fully understand the issue
+
+**Don't skip when:**
+- Issue seems simple (simple bugs have root causes too)
+- You're in a hurry (rushing guarantees rework)
+- Manager wants it fixed NOW (systematic is faster than thrashing)
+
+## The Four Phases
+
+You MUST complete each phase before proceeding to the next.
+
+### Phase 1: Root Cause Investigation
+
+**BEFORE attempting ANY fix:**
+
+1. **Read Error Messages Carefully**
+   - Don't skip past errors or warnings
+   - They often contain the exact solution
+   - Read stack traces completely
+   - Note line numbers, file paths, error codes
+
+2. **Reproduce Consistently**
+   - Can you trigger it reliably?
+   - What are the exact steps?
+   - Does it happen every time?
+   - If not reproducible → gather more data, don't guess
+
+3. **Check Recent Changes**
+   - What changed that could cause this?
+   - Git diff, recent commits
+   - New dependencies, config changes
+   - Environmental differences
+
+4. **Gather Evidence in Multi-Component Systems**
+
+   **WHEN system has multiple components (CI → build → signing, API → service → database):**
+
+   **BEFORE proposing fixes, add diagnostic instrumentation:**
+   ```
+   For EACH component boundary:
+     - Log what data enters component
+     - Log what data exits component
+     - Verify environment/config propagation
+     - Check state at each layer
+
+   Run once to gather evidence showing WHERE it breaks
+   THEN analyze evidence to identify failing component
+   THEN investigate that specific component
+   ```
+
+   **Example (multi-layer system):**
+   ```bash
+   # Layer 1: Workflow
+   echo "=== Secrets available in workflow: ==="
+   echo "IDENTITY: ${IDENTITY:+SET}${IDENTITY:-UNSET}"
+
+   # Layer 2: Build script
+   echo "=== Env vars in build script: ==="
+   env | grep IDENTITY || echo "IDENTITY not in environment"
+
+   # Layer 3: Signing script
+   echo "=== Keychain state: ==="
+   security list-keychains
+   security find-identity -v
+
+   # Layer 4: Actual signing
+   codesign --sign "$IDENTITY" --verbose=4 "$APP"
+   ```
+
+   **This reveals:** Which layer fails (secrets → workflow ✓, workflow → build ✗)
+
+5. **Trace Data Flow**
+
+   **WHEN error is deep in call stack:**
+
+   See `root-cause-tracing.md` in this directory for the complete backward tracing technique.
+
+   **Quick version:**
+   - Where does bad value originate?
+   - What called this with bad value?
+   - Keep tracing up until you find the source
+   - Fix at source, not at symptom
+
+### Phase 2: Pattern Analysis
+
+**Find the pattern before fixing:**
+
+1. **Find Working Examples**
+   - Locate similar working code in same codebase
+   - What works that's similar to what's broken?
+
+2. **Compare Against References**
+   - If implementing pattern, read reference implementation COMPLETELY
+   - Don't skim - read every line
+   - Understand the pattern fully before applying
+
+3. **Identify Differences**
+   - What's different between working and broken?
+   - List every difference, however small
+   - Don't assume "that can't matter"
+
+4. **Understand Dependencies**
+   - What other components does this need?
+   - What settings, config, environment?
+   - What assumptions does it make?
+
+### Phase 3: Hypothesis and Testing
+
+**Scientific method:**
+
+1. **Form Single Hypothesis**
+   - State clearly: "I think X is the root cause because Y"
+   - Write it down
+   - Be specific, not vague
+
+2. **Test Minimally**
+   - Make the SMALLEST possible change to test hypothesis
+   - One variable at a time
+   - Don't fix multiple things at once
+
+3. **Verify Before Continuing**
+   - Did it work? Yes → Phase 4
+   - Didn't work? Form NEW hypothesis
+   - DON'T add more fixes on top
+
+4. **When You Don't Know**
+   - Say "I don't understand X"
+   - Don't pretend to know
+   - Ask for help
+   - Research more
+
+### Phase 4: Implementation
+
+**Fix the root cause, not the symptom:**
+
+1. **Create Failing Test Case**
+   - Simplest possible reproduction
+   - Automated test if possible
+   - One-off test script if no framework
+   - MUST have before fixing
+   - Use the `superpowers:test-driven-development` skill for writing proper failing tests
+
+2. **Implement Single Fix**
+   - Address the root cause identified
+   - ONE change at a time
+   - No "while I'm here" improvements
+   - No bundled refactoring
+
+3. **Verify Fix**
+   - Test passes now?
+   - No other tests broken?
+   - Issue actually resolved?
+
+4. **If Fix Doesn't Work**
+   - STOP
+   - Count: How many fixes have you tried?
+   - If < 3: Return to Phase 1, re-analyze with new information
+   - **If ≥ 3: STOP and question the architecture (step 5 below)**
+   - DON'T attempt Fix #4 without architectural discussion
+
+5. **If 3+ Fixes Failed: Question Architecture**
+
+   **Pattern indicating architectural problem:**
+   - Each fix reveals new shared state/coupling/problem in different place
+   - Fixes require "massive refactoring" to implement
+   - Each fix creates new symptoms elsewhere
+
+   **STOP and question fundamentals:**
+   - Is this pattern fundamentally sound?
+   - Are we "sticking with it through sheer inertia"?
+   - Should we refactor architecture vs. continue fixing symptoms?
+
+   **Discuss with your human partner before attempting more fixes**
+
+   This is NOT a failed hypothesis - this is a wrong architecture.
+
+## Red Flags - STOP and Follow Process
+
+If you catch yourself thinking:
+- "Quick fix for now, investigate later"
+- "Just try changing X and see if it works"
+- "Add multiple changes, run tests"
+
+exec
+/bin/zsh -lc "sed -n '1,220p' /Users/darkbit1001/.codex/superpowers/skills/executing-plans/SKILL.md" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+---
+name: executing-plans
+description: Use when you have a written implementation plan to execute in a separate session with review checkpoints
+---
+
+# Executing Plans
+
+## Overview
+
+Load plan, review critically, execute all tasks, report when complete.
+
+**Announce at start:** "I'm using the executing-plans skill to implement this plan."
+
+**Note:** Tell your human partner that Superpowers works much better with access to subagents. The quality of its work will be significantly higher if run on a platform with subagent support (such as Claude Code or Codex). If subagents are available, use superpowers:subagent-driven-development instead of this skill.
+
+## The Process
+
+### Step 1: Load and Review Plan
+1. Read plan file
+2. Review critically - identify any questions or concerns about the plan
+3. If concerns: Raise them with your human partner before starting
+4. If no concerns: Create TodoWrite and proceed
+
+### Step 2: Execute Tasks
+
+For each task:
+1. Mark as in_progress
+2. Follow each step exactly (plan has bite-sized steps)
+3. Run verifications as specified
+4. Mark as completed
+
+### Step 3: Complete Development
+
+After all tasks complete and verified:
+- Announce: "I'm using the finishing-a-development-branch skill to complete this work."
+- **REQUIRED SUB-SKILL:** Use superpowers:finishing-a-development-branch
+- Follow that skill to verify tests, present options, execute choice
+
+## When to Stop and Ask for Help
+
+**STOP executing immediately when:**
+- Hit a blocker (missing dependency, test fails, instruction unclear)
+- Plan has critical gaps preventing starting
+- You don't understand an instruction
+- Verification fails repeatedly
+
+**Ask for clarification rather than guessing.**
+
+## When to Revisit Earlier Steps
+
+**Return to Review (Step 1) when:**
+- Partner updates the plan based on your feedback
+- Fundamental approach needs rethinking
+
+**Don't force through blockers** - stop and ask.
+
+## Remember
+- Review plan critically first
+- Follow plan steps exactly
+- Don't skip verifications
+- Reference skills when plan says to
+- Stop when blocked, don't guess
+- Never start implementation on main/master branch without explicit user consent
+
+## Integration
+
+**Required workflow skills:**
+- **superpowers:using-git-worktrees** - REQUIRED: Set up isolated workspace before starting
+- **superpowers:writing-plans** - Creates the plan this skill executes
+- **superpowers:finishing-a-development-branch** - Complete development after all tasks
+
+exec
+/bin/zsh -lc "sed -n '1,160p' /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+{
+  "schema_version": 1,
+  "generated_on": "2026-05-12",
+  "plan": {
+    "id": "waveplan-ps",
+    "title": "waveplan-ps observer for waveplan execution",
+    "plan_doc": {
+      "path": "../workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md",
+      "line": 1
+    },
+    "spec_doc": {
+      "path": "../workspace/waveplan-mcp/docs/specs/swim-markdown-plan-format-v1.md",
+      "line": 1
+    }
+  },
+  "fp_index": {
+    "FP-WPPS-T1": "FP-WPPS-T1",
+    "FP-WPPS-T10": "FP-WPPS-T10",
+    "FP-WPPS-T2": "FP-WPPS-T2",
+    "FP-WPPS-T3": "FP-WPPS-T3",
+    "FP-WPPS-T4": "FP-WPPS-T4",
+    "FP-WPPS-T5": "FP-WPPS-T5",
+    "FP-WPPS-T6": "FP-WPPS-T6",
+    "FP-WPPS-T7": "FP-WPPS-T7",
+    "FP-WPPS-T8": "FP-WPPS-T8",
+    "FP-WPPS-T9": "FP-WPPS-T9",
+    "WAVEPLAN-PS": "waveplan-ps"
+  },
+  "doc_index": {
+    "intake_md": {
+      "path": "dagdir2waveplan/../workspace/waveplan-mcp/docs/specs/swim-markdown-plan-format-v1.md",
+      "line": 1,
+      "kind": "spec"
+    },
+    "plan_md": {
+      "path": "dagdir2waveplan/../workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md",
+      "line": 1,
+      "kind": "plan"
+    },
+    "waveplan_schema": {
+      "path": "/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/waveplan-plan-schema.json",
+      "line": 1,
+      "kind": "spec"
+    }
+  },
+  "tasks": {
+    "T1": {
+      "title": "Add Go dependencies and domain model loaders",
+      "plan_line": 62,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "go.mod",
+        "go.sum",
+        "internal/model/plan.go",
+        "internal/model/state.go",
+        "internal/model/note.go",
+        "internal/model/log.go"
+      ]
+    },
+    "T2": {
+      "title": "Implement deterministic discovery helpers and log validation",
+      "plan_line": 63,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "internal/discovery/discover.go",
+        "internal/discovery/discover_test.go"
+      ]
+    },
+    "T3": {
+      "title": "Implement config loading with safe boolean pointer defaults",
+      "plan_line": 64,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "internal/config/config.go",
+        "internal/config/config_test.go"
+      ]
+    },
+    "T4": {
+      "title": "Implement watcher polling and exported PollOnce helper",
+      "plan_line": 65,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "internal/watch/watcher.go",
+        "internal/watch/watcher_test.go"
+      ]
+    },
+    "T5": {
+      "title": "Implement tview rendering and exact step_id log correlation",
+      "plan_line": 66,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "internal/ui/tui.go",
+        "internal/ui/tui_test.go"
+      ]
+    },
+    "T6": {
+      "title": "Implement CLI flags, plan filtering, snapshot mode, and page-refreshing TUI",
+      "plan_line": 67,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "cmd/waveplan-ps/main.go",
+        "cmd/waveplan-ps/main_test.go"
+      ]
+    },
+    "T7": {
+      "title": "Add integration test for --once snapshot output",
+      "plan_line": 68,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "tests/integration/waveplan_ps_test.go"
+      ]
+    },
+    "T8": {
+      "title": "Document usage, flags, and recursive log directory config",
+      "plan_line": 69,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "README.md",
+        "docs/waveplan-ps-config-example.yaml"
+      ]
+    },
+    "T9": {
+      "title": "Emit and validate execution-waves JSON from canonical source",
+      "plan_line": 70,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "docs/plans/2026-05-12-waveplan-ps-execution-waves.json"
+      ]
+    },
+    "T10": {
+      "title": "Compile SWIM execution schedule from validated execution-waves JSON",
+      "plan_line": 71,
+      "doc_refs": [
+        "plan_md"
+      ],
+      "files": [
+        "docs/plans/2026-05-12-waveplan-ps-execution-schedule.json"
+      ]
+    }
+  },
+  "units": {
+    "T1.1": {
+
+exec
+/bin/zsh -lc "pwd && rg --files -g 'AGENTS.md' -g 'FP_CLAUDE.md' -g 'continuity_brief.md' -g 'project-forward-notes.md' -g 'agent-policy.rdf' -g 'planstack.md'" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ exited 1 in 0ms:
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+
+codex
+I’m using the executing-plans skill to implement this plan, adapted to the user’s constraints: no worktree setup and no waveplan mutations. I’ll run a tight TDD loop around the explicit false boolean behavior.
+exec
+/bin/zsh -lc "sed -n '1,220p' /Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+exec
+/bin/zsh -lc "sed -n '1,220p' /Users/darkbit1001/workspace/waveplan-mcp/docs/specs/swim-markdown-plan-format-v1.md" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+# Swim Markdown Plan Format v1
+
+## Purpose
+
+Define a **deterministic** markdown source format that can be compiled into `*-execution-waves.json` without interpretation drift.
+
+This format is intentionally strict:
+- human-editable
+- machine-parseable
+- fail-fast on ambiguity
+
+## Scope
+
+This spec defines:
+- required markdown sections
+- required table schemas
+- lexical and normalization rules
+- deterministic compile rules to JSON
+- validation/error behavior
+
+This spec does **not** define runtime execution semantics (see SWIM implementation spec for that).
+
+## File Requirements
+
+- File extension: `.md`
+- Encoding: UTF-8
+- Line endings: `\n` (LF)
+- Exactly one top-level `#` heading
+- Required sections in this exact order:
+  1. `## Meta`
+  2. `## Plan`
+  3. `## Doc Index`
+  4. `## FP Index`
+  5. `## Tasks`
+  6. `## Units`
+
+Anything outside those sections is ignored except:
+- the top-level heading text
+- markdown comments are ignored
+
+## Lexical Rules
+
+- Identifiers are case-sensitive.
+- `task_id`: `^T[0-9]+$`
+- `unit_id`: `^T[0-9]+\\.[0-9]+$`
+- `wave`: positive integer
+- `kind`: one of `impl|test|verify|doc|refactor|code`
+- List fields use comma-separated values with no escaped commas.
+- Empty list fields are `-`.
+
+## Section Schemas
+
+### 1) `## Meta`
+
+Required markdown table columns:
+- `key`
+- `value`
+
+Required keys:
+- `schema_version` (integer)
+- `generated_on` (`YYYY-MM-DD`)
+- `plan_version` (integer)
+- `plan_generation` (RFC3339 timestamp)
+
+Optional keys:
+- `title_override`
+
+Example:
+
+```markdown
+## Meta
+| key | value |
+|---|---|
+| schema_version | 1 |
+| generated_on | 2026-05-08 |
+| plan_version | 1 |
+| plan_generation | 2026-05-08T00:00:00Z |
+```
+
+### 2) `## Plan`
+
+Required markdown table columns:
+- `plan_id`
+- `plan_title`
+- `plan_doc_path`
+- `spec_doc_path`
+
+Exactly one data row is required.
+
+### 3) `## Doc Index`
+
+Required markdown table columns:
+- `ref`
+- `path`
+- `line`
+- `kind`
+
+`kind` must be one of: `plan|spec|code|test|doc`.
+
+`ref` must be unique.
+
+### 4) `## FP Index`
+
+Required markdown table columns:
+- `fp_ref`
+- `fp_id`
+
+Both must be unique.
+`fp_ref` is display key (e.g. `FP-abc12345`), `fp_id` is canonical backend ID.
+
+### 5) `## Tasks`
+
+Required markdown table columns:
+- `task_id`
+- `title`
+- `plan_line`
+- `doc_refs`
+- `files`
+
+Rules:
+- `task_id` unique, `Tn` format.
+- `doc_refs` list values must exist in Doc Index `ref`.
+- `files` is comma-separated path list or `-`.
+
+### 6) `## Units`
+
+Required markdown table columns:
+- `unit_id`
+- `task_id`
+- `title`
+- `kind`
+- `wave`
+- `plan_line`
+- `depends_on`
+- `fp_refs`
+- `doc_refs`
+
+Rules:
+- `unit_id` unique, `Tn.m` format.
+- `task_id` must exist in Tasks.
+- `depends_on` entries must be valid `unit_id` values.
+- `fp_refs` entries must exist in FP Index.
+- `doc_refs` entries must exist in Doc Index.
+
+## Normalization Rules (Deterministic Compile)
+
+Compiler MUST:
+
+1. Trim outer whitespace for every scalar cell.
+2. Treat `-` as empty list for list fields.
+3. Split list fields on `,`, trim each element, drop empties.
+4. Enforce uniqueness and schema constraints before emit.
+5. Sort object keys deterministically in output:
+  - `fp_index`: lexical by key
+  - `doc_index`: lexical by key
+  - `tasks`: numeric `Tn`
+  - `units`: numeric `Tn.m`
+6. Preserve declared `depends_on` order only if it is already stable; otherwise sort `depends_on` by numeric unit order.
+7. Emit canonical JSON formatting: `indent=2`, trailing newline, no trailing spaces.
+
+## JSON Emission Mapping
+
+Compiler outputs `*-execution-waves.json` with:
+
+- `schema_version`, `generated_on`, `plan_version`, `plan_generation` from Meta
+- `plan` object:
+  - `id`, `title`
+  - `plan_doc.path`, `plan_doc.line=1`
+  - `spec_doc.path`, `spec_doc.line=1`
+  - optional `notes` if implemented by extension
+- `fp_index` map from FP Index section
+- `doc_index` map from Doc Index section
+- `tasks` object keyed by `task_id`
+- `units` object keyed by `unit_id`
+
+## Determinism Guarantees
+
+For identical markdown bytes, compiler must produce identical JSON bytes.
+
+For semantically identical markdown with reordered rows, compiler must produce identical JSON bytes after normalization.
+
+## Failure Semantics
+
+Compiler must exit nonzero on any violation and print one deterministic primary error.
+
+Primary error classes:
+- `FORMAT_ERROR`: section/table shape invalid
+- `SCHEMA_ERROR`: field missing/invalid enum/type
+- `REFERENCE_ERROR`: missing doc/fp/task/unit references
+- `GRAPH_ERROR`: unit dependency cycle
+- `DUPLICATE_ERROR`: duplicate IDs/refs
+
+No best-effort output on failure.
+
+## Example (Minimal Valid Skeleton)
+
+```markdown
+# Swim Plan Source
+
+## Meta
+| key | value |
+|---|---|
+| schema_version | 1 |
+| generated_on | 2026-05-08 |
+| plan_version | 1 |
+| plan_generation | 2026-05-08T00:00:00Z |
+
+## Plan
+| plan_id | plan_title | plan_doc_path | spec_doc_path |
+|---|---|---|---|
+| swim-implementation | Swim — Durable Execution State Machine | docs/specs/2026-05-05-swim-implementation-plan.md | docs/specs/2026-05-05-swim-implementation-plan.md |
+
+## Doc Index
+| ref | path | line | kind |
+|---|---|---:|---|
+| spec | docs/specs/2026-05-05-swim-implementation-plan.md | 1 | spec |
+
+## FP Index
+| fp_ref | fp_id |
+|---|---|
+
+ succeeded in 0ms:
+# waveplan-ps
+
+## Meta
+| key | value |
+|---|---|
+| schema_version | 1 |
+| generated_on | 2026-05-12 |
+| plan_version | 1 |
+| plan_generation | 2026-05-12T00:00:00Z |
+
+## Plan
+| plan_id | plan_title | plan_doc_path | spec_doc_path |
+|---|---|---|---|
+| waveplan-ps | waveplan-ps observer for waveplan execution | docs/superpowers/plans/2026-05-12-waveplan-ps.md | docs/specs/swim-markdown-plan-format-v1.md |
+
+## Doc Index
+| ref | path | line | kind |
+|---|---|---:|---|
+| cli | cmd/waveplan-ps/main.go | 1 | code |
+| cli_test | cmd/waveplan-ps/main_test.go | 1 | test |
+| config | internal/config/config.go | 1 | code |
+| config_example | docs/waveplan-ps-config-example.yaml | 1 | doc |
+| config_test | internal/config/config_test.go | 1 | test |
+| discovery | internal/discovery/discover.go | 1 | code |
+| discovery_test | internal/discovery/discover_test.go | 1 | test |
+| go_mod | go.mod | 1 | code |
+| integration_test | tests/integration/waveplan_ps_test.go | 1 | test |
+| model_log | internal/model/log.go | 1 | code |
+| model_note | internal/model/note.go | 1 | code |
+| model_plan | internal/model/plan.go | 1 | code |
+| model_state | internal/model/state.go | 1 | code |
+| plan | docs/superpowers/plans/2026-05-12-waveplan-ps.md | 1 | plan |
+| plan_format | docs/specs/swim-markdown-plan-format-v1.md | 1 | spec |
+| readme | README.md | 1 | doc |
+| schedule_schema | docs/specs/swim-schedule-schema-v2.json | 1 | spec |
+| ui | internal/ui/tui.go | 1 | code |
+| ui_test | internal/ui/tui_test.go | 1 | test |
+| watch | internal/watch/watcher.go | 1 | code |
+| watch_test | internal/watch/watcher_test.go | 1 | test |
+| waveplan_cli | waveplan-cli | 1 | code |
+
+## FP Index
+| fp_ref | fp_id |
+|---|---|
+
+## Tasks
+| task_id | title | plan_line | doc_refs | files |
+|---|---|---:|---|---|
+| T1 | Add project dependencies and domain model types | 49 | plan, go_mod, model_plan, model_state, model_note, model_log | go.mod, go.sum, internal/model/plan.go, internal/model/state.go, internal/model/note.go, internal/model/log.go |
+| T2 | Add recursive discovery engine for plans, states, notes, and logs | 50 | plan, discovery, discovery_test, model_log | internal/discovery/discover.go, internal/discovery/discover_test.go |
+| T3 | Add YAML config loader with pointer-safe display defaults | 51 | plan, config, config_test | internal/config/config.go, internal/config/config_test.go |
+| T4 | Add watcher polling and reusable single-shot loading | 52 | plan, watch, watch_test, model_plan, model_state, model_note, model_log | internal/watch/watcher.go, internal/watch/watcher_test.go |
+| T5 | Add tview renderer with wave state, tail state, and exact step log matching | 53 | plan, ui, ui_test, schedule_schema | internal/ui/tui.go, internal/ui/tui_test.go |
+| T6 | Add cobra CLI entrypoint with --once, --plan, recursive logs, and live TUI refresh | 54 | plan, cli, cli_test, config, discovery, watch, ui | cmd/waveplan-ps/main.go, cmd/waveplan-ps/main_test.go |
+| T7 | Add snapshot integration test for compiled binary behavior | 55 | plan, integration_test, cli | tests/integration/waveplan_ps_test.go |
+| T8 | Add waveplan-ps usage docs and config example | 56 | plan, readme, config_example | README.md, docs/waveplan-ps-config-example.yaml |
+| T9 | Validate canonical plan JSON and compile SWIM schedule | 57 | plan, plan_format, waveplan_cli, schedule_schema | docs/plans/2026-05-12-waveplan-ps-execution-waves.json, docs/plans/2026-05-12-waveplan-ps-execution-schedule.json |
+
+## Units
+| unit_id | task_id | title | kind | wave | plan_line | depends_on | fp_refs | doc_refs |
+|---|---|---|---|---:|---:|---|---|---|
+| T1.1 | T1 | Add Go dependencies and domain model loaders | impl | 1 | 62 | - | - | go_mod, model_plan, model_state, model_note, model_log |
+| T2.1 | T2 | Implement deterministic discovery helpers and log validation | impl | 2 | 63 | T1.1 | - | discovery, discovery_test, model_log |
+| T3.1 | T3 | Implement config loading with safe boolean pointer defaults | impl | 2 | 64 | T1.1 | - | config, config_test |
+| T4.1 | T4 | Implement watcher polling and exported PollOnce helper | impl | 3 | 65 | T1.1, T2.1 | - | watch, watch_test |
+| T5.1 | T5 | Implement tview rendering and exact step_id log correlation | impl | 3 | 66 | T1.1 | - | ui, ui_test, schedule_schema |
+| T6.1 | T6 | Implement CLI flags, plan filtering, snapshot mode, and page-refreshing TUI | impl | 4 | 67 | T2.1, T3.1, T4.1, T5.1 | - | cli, cli_test, config, discovery, watch, ui |
+| T7.1 | T7 | Add integration test for --once snapshot output | test | 5 | 68 | T6.1 | - | integration_test, cli |
+| T8.1 | T8 | Document usage, flags, and recursive log directory config | doc | 5 | 69 | T6.1 | - | readme, config_example |
+| T9.1 | T9 | Emit and validate execution-waves JSON from canonical source | verify | 6 | 70 | T7.1, T8.1 | - | plan, plan_format, waveplan_cli |
+| T9.2 | T9 | Compile SWIM execution schedule from validated execution-waves JSON | verify | 7 | 71 | T9.1 | - | waveplan_cli, schedule_schema |
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+go.sum
+internal/model/note.go
+internal/model/state.go
+internal/model/plan.go
+internal/model/model_test.go
+internal/model/log.go
+internal/discovery/discover_test.go
+internal/discovery/discover.go
+go.mod
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+ M ../main.go
+ M ../main_test.go
+ M ../waveplan-cli
+?? ../FP_AGENTS.md
+?? ../docs/agent_notes/
+?? ../docs/plans/.waveplan/
+?? ../docs/plans/2026-05-12-waveplan-ps-execution-schedule.json
+?? ../docs/plans/2026-05-12-waveplan-ps-execution-schedule.json.journal.json
+?? ../docs/plans/2026-05-12-waveplan-ps-execution-waves.json
+?? ../docs/plans/2026-05-12-waveplan-ps-execution-waves.json.state.json
+?? ../docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml
+?? ../docs/superpowers/plans/2026-05-12-waveplan-ps.md
+?? ../waveplan-ps.png
+?? ./
+
+  → Review T3 plan context and current package patterns
+  • Add failing config tests for boolean pointer defaults
+  • Implement config loader minimally
+  • Run relevant Go tests and inspect diff
+exec
+/bin/zsh -lc "sed -n '1,240p' internal/model/state.go" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+exec
+/bin/zsh -lc "sed -n '1,240p' internal/model/plan.go" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+package model
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+)
+
+// TaskStatus is the lifecycle status used by waveplan state and SWIM rows.
+type TaskStatus string
+
+const (
+	StatusAvailable   TaskStatus = "available"
+	StatusTaken       TaskStatus = "taken"
+	StatusReviewTaken TaskStatus = "review_taken"
+	StatusReviewEnded TaskStatus = "review_ended"
+	StatusCompleted   TaskStatus = "completed"
+)
+
+// StateFile is a waveplan .state.json sidecar.
+type StateFile struct {
+	Plan      string               `json:"plan"`
+	Taken     map[string]TaskEntry `json:"taken"`
+	Completed map[string]TaskEntry `json:"completed"`
+	Tail      map[string]TaskEntry `json:"tail"`
+}
+
+// TaskEntry records lifecycle metadata for a unit.
+type TaskEntry struct {
+	TakenBy         string `json:"taken_by"`
+	StartedAt       string `json:"started_at"`
+	ReviewEnteredAt string `json:"review_entered_at"`
+	ReviewEndedAt   string `json:"review_ended_at"`
+	Reviewer        string `json:"reviewer"`
+	ReviewNote      string `json:"review_note,omitempty"`
+	GitSHA          string `json:"git_sha,omitempty"`
+	FinishedAt      string `json:"finished_at"`
+}
+
+// StatusWrapper is used by SWIM schedules and journals.
+type StatusWrapper struct {
+	TaskStatus TaskStatus `json:"task_status"`
+}
+
+// LoadState reads a waveplan state file from path.
+func LoadState(path string) (*StateFile, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open state %q: %w", path, err)
+	}
+	defer file.Close()
+
+	state, err := DecodeState(file)
+	if err != nil {
+		return nil, fmt.Errorf("decode state %q: %w", path, err)
+	}
+	return state, nil
+}
+
+// DecodeState decodes a waveplan state file from r.
+func DecodeState(r io.Reader) (*StateFile, error) {
+	var state StateFile
+	if err := json.NewDecoder(r).Decode(&state); err != nil {
+		return nil, err
+	}
+	if state.Taken == nil {
+		state.Taken = map[string]TaskEntry{}
+	}
+	if state.Completed == nil {
+		state.Completed = map[string]TaskEntry{}
+	}
+	if state.Tail == nil {
+		state.Tail = map[string]TaskEntry{}
+	}
+	return &state, nil
+}
+
+// StatusOf derives a unit's lifecycle state from completed and taken maps.
+func (s *StateFile) StatusOf(taskID string) TaskStatus {
+	if s == nil {
+		return StatusAvailable
+	}
+	if _, ok := s.Completed[taskID]; ok {
+		return StatusCompleted
+	}
+	entry, ok := s.Taken[taskID]
+	if !ok {
+		return StatusAvailable
+	}
+	if entry.ReviewEndedAt != "" {
+		return StatusReviewEnded
+	}
+	if entry.ReviewEnteredAt != "" {
+		return StatusReviewTaken
+	}
+	return StatusTaken
+}
+
+ succeeded in 0ms:
+package model
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+)
+
+// PlanFile is the root execution-waves JSON document.
+type PlanFile struct {
+	SchemaVersion int               `json:"schema_version"`
+	GeneratedOn   string            `json:"generated_on"`
+	Plan          PlanMetadata      `json:"plan"`
+	FPIndex       map[string]string `json:"fp_index"`
+	DocIndex      map[string]DocRef `json:"doc_index"`
+	Tasks         map[string]Task   `json:"tasks"`
+	Units         map[string]Unit   `json:"units"`
+	Waves         []Wave            `json:"waves,omitempty"`
+}
+
+// PlanMetadata describes the source plan and spec documents.
+type PlanMetadata struct {
+	ID      string   `json:"id"`
+	Title   string   `json:"title"`
+	PlanDoc DocRef   `json:"plan_doc"`
+	SpecDoc DocRef   `json:"spec_doc"`
+	Notes   []string `json:"notes,omitempty"`
+}
+
+// DocRef points to an indexed document or plan/spec source.
+type DocRef struct {
+	Path string `json:"path"`
+	Line int    `json:"line"`
+	Kind string `json:"kind,omitempty"`
+}
+
+// Task is a coarse task entry in an execution-waves plan.
+type Task struct {
+	Title    string   `json:"title"`
+	PlanLine int      `json:"plan_line"`
+	DocRefs  []string `json:"doc_refs"`
+	Files    []string `json:"files"`
+}
+
+// Unit is a concrete executable task unit.
+type Unit struct {
+	Task      string   `json:"task"`
+	Title     string   `json:"title"`
+	Kind      string   `json:"kind"`
+	Wave      int      `json:"wave"`
+	PlanLine  int      `json:"plan_line"`
+	DependsOn []string `json:"depends_on"`
+	DocRefs   []string `json:"doc_refs"`
+	FPRefs    []string `json:"fp_refs"`
+	Notes     []string `json:"notes"`
+	Command   string   `json:"command,omitempty"`
+}
+
+// Wave groups unit IDs by execution wave.
+type Wave struct {
+	Wave  int      `json:"wave"`
+	Units []string `json:"units"`
+}
+
+// LoadPlan reads an execution-waves plan from path.
+func LoadPlan(path string) (*PlanFile, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open plan %q: %w", path, err)
+	}
+	defer file.Close()
+
+	plan, err := DecodePlan(file)
+	if err != nil {
+		return nil, fmt.Errorf("decode plan %q: %w", path, err)
+	}
+	return plan, nil
+}
+
+// DecodePlan decodes an execution-waves plan from r.
+func DecodePlan(r io.Reader) (*PlanFile, error) {
+	var plan PlanFile
+	if err := json.NewDecoder(r).Decode(&plan); err != nil {
+		return nil, err
+	}
+	if plan.FPIndex == nil {
+		plan.FPIndex = map[string]string{}
+	}
+	if plan.DocIndex == nil {
+		plan.DocIndex = map[string]DocRef{}
+	}
+	if plan.Tasks == nil {
+		plan.Tasks = map[string]Task{}
+	}
+	if plan.Units == nil {
+		plan.Units = map[string]Unit{}
+	}
+	return &plan, nil
+}
+
+exec
+/bin/zsh -lc "sed -n '1,240p' internal/discovery/discover.go" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+package discovery
+
+import (
+	"fmt"
+	"io/fs"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/model"
+)
+
+// Inventory is the discovered set of files that later packages can load.
+type Inventory struct {
+	PlanPaths    []string
+	StatePaths   []string
+	JournalPaths []string
+	NotePaths    []string
+	Logs         []model.LogRef
+}
+
+// Discover recursively scans one root for known waveplan observer files.
+func Discover(root string) (*Inventory, error) {
+	return DiscoverAll([]string{root})
+}
+
+// DiscoverAll recursively scans roots and returns deterministic sorted results.
+func DiscoverAll(roots []string) (*Inventory, error) {
+	inventory := &Inventory{}
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		if err := walkFiles(root, func(path string) error {
+			// Classify specific sidecars before broader suffixes such as notes
+			// or logs so a future case reorder does not change ownership.
+			switch {
+			case isPlanPath(path):
+				inventory.PlanPaths = append(inventory.PlanPaths, path)
+			case isStatePath(path):
+				inventory.StatePaths = append(inventory.StatePaths, path)
+			case isJournalPath(path):
+				inventory.JournalPaths = append(inventory.JournalPaths, path)
+			case isNotePath(path):
+				inventory.NotePaths = append(inventory.NotePaths, path)
+			case isLogLikePath(path):
+				logRef, err := model.ParseLogPath(path)
+				if err != nil {
+					return nil
+				}
+				inventory.Logs = append(inventory.Logs, *logRef)
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+	inventory.sort()
+	return inventory, nil
+}
+
+// DiscoverPlans recursively scans root for execution-waves plan JSON files.
+func DiscoverPlans(root string) ([]string, error) {
+	return discoverPaths(root, isPlanPath)
+}
+
+// DiscoverStates recursively scans root for waveplan state sidecars.
+func DiscoverStates(root string) ([]string, error) {
+	return discoverPaths(root, isStatePath)
+}
+
+// DiscoverJournals recursively scans root for SWIM journal sidecars.
+func DiscoverJournals(root string) ([]string, error) {
+	return discoverPaths(root, isJournalPath)
+}
+
+// DiscoverNotes recursively scans root for markdown notes.
+func DiscoverNotes(root string) ([]string, error) {
+	return discoverPaths(root, isNotePath)
+}
+
+// DiscoverLogs recursively scans root for SWIM log files and validates names.
+func DiscoverLogs(root string) ([]model.LogRef, error) {
+	var logs []model.LogRef
+	if err := walkFiles(root, func(path string) error {
+		if !isLogLikePath(path) {
+			return nil
+		}
+		logRef, err := model.ParseLogPath(path)
+		if err != nil {
+			return fmt.Errorf("parse log %q: %w", path, err)
+		}
+		logs = append(logs, *logRef)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	sort.Slice(logs, func(i, j int) bool {
+		return logs[i].Path < logs[j].Path
+	})
+	return logs, nil
+}
+
+func discoverPaths(root string, match func(string) bool) ([]string, error) {
+	var paths []string
+	if err := walkFiles(root, func(path string) error {
+		if match(path) {
+			paths = append(paths, path)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
+func walkFiles(root string, visit func(string) error) error {
+	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return fmt.Errorf("walk %q: %w", path, err)
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		return visit(path)
+	})
+}
+
+func (i *Inventory) sort() {
+	sort.Strings(i.PlanPaths)
+	sort.Strings(i.StatePaths)
+	sort.Strings(i.JournalPaths)
+	sort.Strings(i.NotePaths)
+	sort.Slice(i.Logs, func(left, right int) bool {
+		return i.Logs[left].Path < i.Logs[right].Path
+	})
+}
+
+func isPlanPath(path string) bool {
+	return strings.HasSuffix(filepath.Base(path), "-execution-waves.json")
+}
+
+func isStatePath(path string) bool {
+	return strings.HasSuffix(filepath.Base(path), ".state.json")
+}
+
+func isJournalPath(path string) bool {
+	return strings.HasSuffix(filepath.Base(path), ".journal.json")
+}
+
+func isNotePath(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".md")
+}
+
+func isLogLikePath(path string) bool {
+	name := filepath.Base(path)
+	return strings.HasSuffix(name, ".stdout.log") || strings.HasSuffix(name, ".stderr.log")
+}
+
+exec
+/bin/zsh -lc "sed -n '1,260p' internal/discovery/discover_test.go" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+exec
+/bin/zsh -lc "sed -n '1,220p' go.mod" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+module github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps
+
+go 1.26.1
+
+require (
+	github.com/rivo/tview v0.42.0
+	github.com/spf13/cobra v1.9.1
+	gopkg.in/yaml.v3 v3.0.1
+)
+
+ succeeded in 0ms:
+package discovery
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/model"
+)
+
+func TestDiscoverRecursivelyReturnsDeterministicFileSets(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "b", "notes", "review.md"), "## Review\nok\n")
+	writeFile(t, filepath.Join(root, "a", "2026-demo-execution-waves.json"), "{}")
+	writeFile(t, filepath.Join(root, "b", "2026-demo-execution-waves.json.state.json"), "{}")
+	writeFile(t, filepath.Join(root, "a", "2026-demo-execution-schedule.json.journal.json"), "{}")
+	writeFile(t, filepath.Join(root, "a", "ignore-execution-schedule.json"), "{}")
+	writeFile(t, filepath.Join(root, "b", "ignore.json"), "{}")
+
+	inventory, err := Discover(root)
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	wantPlans := []string{filepath.Join(root, "a", "2026-demo-execution-waves.json")}
+	if !reflect.DeepEqual(inventory.PlanPaths, wantPlans) {
+		t.Fatalf("PlanPaths = %#v, want %#v", inventory.PlanPaths, wantPlans)
+	}
+
+	wantStates := []string{filepath.Join(root, "b", "2026-demo-execution-waves.json.state.json")}
+	if !reflect.DeepEqual(inventory.StatePaths, wantStates) {
+		t.Fatalf("StatePaths = %#v, want %#v", inventory.StatePaths, wantStates)
+	}
+
+	wantJournals := []string{filepath.Join(root, "a", "2026-demo-execution-schedule.json.journal.json")}
+	if !reflect.DeepEqual(inventory.JournalPaths, wantJournals) {
+		t.Fatalf("JournalPaths = %#v, want %#v", inventory.JournalPaths, wantJournals)
+	}
+
+	wantNotes := []string{filepath.Join(root, "b", "notes", "review.md")}
+	if !reflect.DeepEqual(inventory.NotePaths, wantNotes) {
+		t.Fatalf("NotePaths = %#v, want %#v", inventory.NotePaths, wantNotes)
+	}
+}
+
+func TestDiscoverLogsParsesAndSortsValidLogFiles(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "z", "S2_T2.1_implement.1.stderr.log"), "err")
+	writeFile(t, filepath.Join(root, "a", "S1_T1.1_review.2.stdout.log"), "out")
+	writeFile(t, filepath.Join(root, "a", "receipt.dispatch.json"), "{}")
+
+	logs, err := DiscoverLogs(root)
+	if err != nil {
+		t.Fatalf("DiscoverLogs() error = %v", err)
+	}
+
+	want := []model.LogRef{
+		{
+			Path:    filepath.Join(root, "a", "S1_T1.1_review.2.stdout.log"),
+			StepID:  "S1_T1.1_review",
+			Attempt: 2,
+			Stream:  model.LogStreamStdout,
+		},
+		{
+			Path:    filepath.Join(root, "z", "S2_T2.1_implement.1.stderr.log"),
+			StepID:  "S2_T2.1_implement",
+			Attempt: 1,
+			Stream:  model.LogStreamStderr,
+		},
+	}
+	if !reflect.DeepEqual(logs, want) {
+		t.Fatalf("DiscoverLogs() = %#v, want %#v", logs, want)
+	}
+}
+
+func TestDiscoverLogsRejectsMalformedLogNames(t *testing.T) {
+	root := t.TempDir()
+	badPath := filepath.Join(root, "S1_T1.1_implement.stdout.log")
+	writeFile(t, badPath, "missing attempt")
+
+	_, err := DiscoverLogs(root)
+	if err == nil {
+		t.Fatal("DiscoverLogs() error = nil, want malformed log error")
+	}
+	if !strings.Contains(err.Error(), badPath) {
+		t.Fatalf("DiscoverLogs() error = %q, want path %q", err, badPath)
+	}
+}
+
+func TestDiscoverAllIgnoresMalformedLogLikeFile(t *testing.T) {
+	root := t.TempDir()
+	planPath := filepath.Join(root, "2026-demo-execution-waves.json")
+	badLogPath := filepath.Join(root, "S1_T1.1_implement.stdout.log")
+	writeFile(t, planPath, "{}")
+	writeFile(t, badLogPath, "missing attempt")
+
+	inventory, err := DiscoverAll([]string{root})
+	if err != nil {
+		t.Fatalf("DiscoverAll() error = %v", err)
+	}
+
+	wantPlans := []string{planPath}
+	if !reflect.DeepEqual(inventory.PlanPaths, wantPlans) {
+		t.Fatalf("PlanPaths = %#v, want %#v", inventory.PlanPaths, wantPlans)
+	}
+	if len(inventory.Logs) != 0 {
+		t.Fatalf("Logs = %#v, want empty", inventory.Logs)
+	}
+}
+
+func TestDiscoverAllCombinesMultipleRootsDeterministically(t *testing.T) {
+	parent := t.TempDir()
+	first := filepath.Join(parent, "zzz-root")
+	second := filepath.Join(parent, "aaa-root")
+	firstPath := filepath.Join(first, "zzz-execution-waves.json")
+	secondPath := filepath.Join(second, "aaa-execution-waves.json")
+	writeFile(t, secondPath, "{}")
+	writeFile(t, firstPath, "{}")
+
+	inventory, err := DiscoverAll([]string{second, first})
+	if err != nil {
+		t.Fatalf("DiscoverAll() error = %v", err)
+	}
+
+	want := []string{
+		secondPath,
+		firstPath,
+	}
+	if !reflect.DeepEqual(inventory.PlanPaths, want) {
+		t.Fatalf("PlanPaths = %#v, want %#v", inventory.PlanPaths, want)
+	}
+}
+
+func writeFile(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %q: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write %q: %v", path, err)
+	}
+}
+
+exec
+/bin/zsh -lc "sed -n '1,260p' internal/model/log.go && sed -n '1,220p' internal/model/note.go" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+exec
+/bin/zsh -lc 'rg -n "expand_first_wave|Config|config|log" /Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md /Users/darkbit1001/workspace/waveplan-mcp/docs/specs/swim-markdown-plan-format-v1.md README.md docs 2>/dev/null' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ exited 2 in 0ms:
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:21:| config | internal/config/config.go | 1 | code |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:22:| config_example | docs/waveplan-ps-config-example.yaml | 1 | doc |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:23:| config_test | internal/config/config_test.go | 1 | test |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:28:| model_log | internal/model/log.go | 1 | code |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:49:| T1 | Add project dependencies and domain model types | 49 | plan, go_mod, model_plan, model_state, model_note, model_log | go.mod, go.sum, internal/model/plan.go, internal/model/state.go, internal/model/note.go, internal/model/log.go |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:50:| T2 | Add recursive discovery engine for plans, states, notes, and logs | 50 | plan, discovery, discovery_test, model_log | internal/discovery/discover.go, internal/discovery/discover_test.go |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:51:| T3 | Add YAML config loader with pointer-safe display defaults | 51 | plan, config, config_test | internal/config/config.go, internal/config/config_test.go |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:52:| T4 | Add watcher polling and reusable single-shot loading | 52 | plan, watch, watch_test, model_plan, model_state, model_note, model_log | internal/watch/watcher.go, internal/watch/watcher_test.go |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:53:| T5 | Add tview renderer with wave state, tail state, and exact step log matching | 53 | plan, ui, ui_test, schedule_schema | internal/ui/tui.go, internal/ui/tui_test.go |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:54:| T6 | Add cobra CLI entrypoint with --once, --plan, recursive logs, and live TUI refresh | 54 | plan, cli, cli_test, config, discovery, watch, ui | cmd/waveplan-ps/main.go, cmd/waveplan-ps/main_test.go |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:56:| T8 | Add waveplan-ps usage docs and config example | 56 | plan, readme, config_example | README.md, docs/waveplan-ps-config-example.yaml |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:62:| T1.1 | T1 | Add Go dependencies and domain model loaders | impl | 1 | 62 | - | - | go_mod, model_plan, model_state, model_note, model_log |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:63:| T2.1 | T2 | Implement deterministic discovery helpers and log validation | impl | 2 | 63 | T1.1 | - | discovery, discovery_test, model_log |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:64:| T3.1 | T3 | Implement config loading with safe boolean pointer defaults | impl | 2 | 64 | T1.1 | - | config, config_test |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:66:| T5.1 | T5 | Implement tview rendering and exact step_id log correlation | impl | 3 | 66 | T1.1 | - | ui, ui_test, schedule_schema |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:67:| T6.1 | T6 | Implement CLI flags, plan filtering, snapshot mode, and page-refreshing TUI | impl | 4 | 67 | T2.1, T3.1, T4.1, T5.1 | - | cli, cli_test, config, discovery, watch, ui |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:69:| T8.1 | T8 | Document usage, flags, and recursive log directory config | doc | 5 | 69 | T6.1 | - | readme, config_example |
+
+ succeeded in 0ms:
+package model
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+)
+
+// LogStream identifies a SWIM stdout or stderr log stream.
+type LogStream string
+
+const (
+	LogStreamStdout LogStream = "stdout"
+	LogStreamStderr LogStream = "stderr"
+)
+
+var logFilePattern = regexp.MustCompile(`^(S[0-9]+_[A-Za-z0-9.\-]+_(?:implement|end_review|finish|review(?:_r[0-9]+)?|fix(?:_r[0-9]+)?))\.([1-9][0-9]*)\.(stdout|stderr)\.log$`)
+
+// LogRef identifies a SWIM step log file by filename.
+type LogRef struct {
+	Path    string    `json:"path"`
+	StepID  string    `json:"step_id"`
+	Attempt int       `json:"attempt"`
+	Stream  LogStream `json:"stream"`
+}
+
+// Journal is the SWIM execution journal sidecar.
+type Journal struct {
+	SchemaVersion int            `json:"schema_version"`
+	SchedulePath  string         `json:"schedule_path"`
+	Cursor        int            `json:"cursor"`
+	LastEvent     *JournalEvent  `json:"last_event,omitempty"`
+	Events        []JournalEvent `json:"events"`
+}
+
+// JournalEvent is one append-only SWIM event row.
+type JournalEvent struct {
+	EventID     string        `json:"event_id"`
+	StepID      string        `json:"step_id"`
+	Seq         int           `json:"seq"`
+	TaskID      string        `json:"task_id"`
+	Action      string        `json:"action"`
+	Attempt     int           `json:"attempt"`
+	StartedOn   string        `json:"started_on"`
+	CompletedOn string        `json:"completed_on,omitempty"`
+	Outcome     string        `json:"outcome,omitempty"`
+	StateBefore StatusWrapper `json:"state_before"`
+	StateAfter  StatusWrapper `json:"state_after"`
+	ExitCode    *int          `json:"exit_code,omitempty"`
+	StdoutPath  string        `json:"stdout_path,omitempty"`
+	StderrPath  string        `json:"stderr_path,omitempty"`
+	Operator    string        `json:"operator,omitempty"`
+	Reason      string        `json:"reason,omitempty"`
+	WaivedOn    string        `json:"waived_on,omitempty"`
+}
+
+// LoadJournal reads a SWIM journal from path.
+func LoadJournal(path string) (*Journal, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open journal %q: %w", path, err)
+	}
+	defer file.Close()
+
+	journal, err := DecodeJournal(file)
+	if err != nil {
+		return nil, fmt.Errorf("decode journal %q: %w", path, err)
+	}
+	return journal, nil
+}
+
+// DecodeJournal decodes a SWIM journal from r.
+func DecodeJournal(r io.Reader) (*Journal, error) {
+	var journal Journal
+	if err := json.NewDecoder(r).Decode(&journal); err != nil {
+		return nil, err
+	}
+	if journal.Events == nil {
+		journal.Events = []JournalEvent{}
+	}
+	return &journal, nil
+}
+
+// ParseLogPath extracts the SWIM step ID, attempt, and stream from a log path.
+func ParseLogPath(path string) (*LogRef, error) {
+	name := filepath.Base(path)
+	matches := logFilePattern.FindStringSubmatch(name)
+	if matches == nil {
+		return nil, fmt.Errorf("invalid log filename %q", name)
+	}
+	attempt, err := strconv.Atoi(matches[2])
+	if err != nil {
+		return nil, fmt.Errorf("invalid log attempt in %q: %w", name, err)
+	}
+	return &LogRef{
+		Path:    path,
+		StepID:  matches[1],
+		Attempt: attempt,
+		Stream:  LogStream(matches[3]),
+	}, nil
+}
+package model
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strings"
+)
+
+// NotesFile is a txtstore-style sectioned markdown document.
+type NotesFile struct {
+	Path     string        `json:"path"`
+	Sections []NoteSection `json:"sections"`
+}
+
+// NoteSection represents one markdown heading and its body.
+type NoteSection struct {
+	Heading string `json:"heading"`
+	Unit    string `json:"unit,omitempty"`
+	Section string `json:"section,omitempty"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+}
+
+// LoadNotes reads a txtstore-style markdown notes file.
+func LoadNotes(path string) (*NotesFile, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read notes %q: %w", path, err)
+	}
+	return ParseNotes(path, string(body)), nil
+}
+
+// ParseNotes parses level-two markdown headings into note sections.
+func ParseNotes(path, body string) *NotesFile {
+	notes := &NotesFile{Path: path}
+	scanner := bufio.NewScanner(strings.NewReader(body))
+	var current *NoteSection
+	var lines []string
+
+	flush := func() {
+		if current == nil {
+			return
+		}
+		current.Content = strings.TrimSpace(strings.Join(lines, "\n"))
+		notes.Sections = append(notes.Sections, *current)
+		lines = nil
+	}
+
+	inIndex := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch strings.TrimSpace(line) {
+		case "<!-- INDEX -->":
+			inIndex = true
+			continue
+		case "<!-- /INDEX -->":
+			inIndex = false
+			continue
+		}
+		if inIndex {
+			continue
+		}
+		if strings.HasPrefix(line, "## ") {
+			flush()
+			current = newNoteSection(strings.TrimSpace(strings.TrimPrefix(line, "## ")))
+			continue
+		}
+		if current != nil {
+			lines = append(lines, line)
+		}
+	}
+	flush()
+	return notes
+}
+
+func newNoteSection(heading string) *NoteSection {
+	parts := strings.Split(heading, " > ")
+	section := &NoteSection{
+		Heading: heading,
+		Title:   heading,
+	}
+	switch len(parts) {
+	case 0:
+	case 1:
+		section.Title = parts[0]
+	case 2:
+		section.Unit = parts[0]
+		section.Title = parts[1]
+	default:
+		section.Unit = parts[0]
+		section.Section = strings.Join(parts[1:len(parts)-1], " > ")
+		section.Title = parts[len(parts)-1]
+	}
+	return section
+}
+
+codex
+Current `go test ./...` is blocked by the sandboxed default Go cache under `~/Library/Caches`; I’ll rerun with `GOCACHE=/private/tmp/...` for verification. The repository currently has T1/T2 code only, so T3 needs a new `internal/config` package.
+  ✓ Review T3 plan context and current package patterns
+  → Add failing config tests for boolean pointer defaults
+  • Implement config loader minimally
+  • Run relevant Go tests and inspect diff
+exec
+/bin/zsh -lc "rg -n \"expand_first_wave|display|log_dirs|recursive|config\" /Users/darkbit1001/workspace/waveplan-mcp -g '*.md' -g '*.yaml' -g '*.yml' -g '*.go'" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+/Users/darkbit1001/workspace/waveplan-mcp/main_test.go:657:	configDir := filepath.Join(homeDir, ".config", "waveplan-mcp")
+/Users/darkbit1001/workspace/waveplan-mcp/main_test.go:658:	if err := os.MkdirAll(configDir, 0o755); err != nil {
+/Users/darkbit1001/workspace/waveplan-mcp/main_test.go:661:	agentsPath := filepath.Join(configDir, "waveagents.json")
+/Users/darkbit1001/workspace/waveplan-mcp/main.go:307:				mcp.WithString("agents", mcp.Description("Input waveagents JSON path (default: ~/.config/waveplan-mcp/waveagents.json)")),
+/Users/darkbit1001/workspace/waveplan-mcp/main.go:1385:		return filepath.Join(".config", "waveplan-mcp", "waveagents.json")
+/Users/darkbit1001/workspace/waveplan-mcp/main.go:1387:	return filepath.Join(home, ".config", "waveplan-mcp", "waveagents.json")
+/Users/darkbit1001/workspace/waveplan-mcp/AGENTS.md:40:`grep` is acceptable for raw text search (log output, config values, comments). It is not acceptable for finding where a type is defined or who calls a function.
+/Users/darkbit1001/workspace/waveplan-mcp/AGENTS.md:54:- **Drift** — track infrastructure state; check bindings before editing docs or config
+/Users/darkbit1001/workspace/waveplan-mcp/README.md:62:`~/.config/waveplan-mcp/waveagents.json` if it does not already exist.
+/Users/darkbit1001/workspace/waveplan-mcp/README.md:93:Configure `waveplan-mcp` in your MCP client config (e.g. Claude Code `claude.json`):
+/Users/darkbit1001/workspace/waveplan-mcp/README.md:237:Create or review the agent rotation config:
+/Users/darkbit1001/workspace/waveplan-mcp/README.md:240:$EDITOR ~/.config/waveplan-mcp/waveagents.json
+/Users/darkbit1001/workspace/waveplan-mcp/README.md:338:That launcher path depends on a configured waveplan CLI/MCP that supports
+/Users/darkbit1001/workspace/waveplan-mcp/README.md:396:- `compile-schedule`: compile a v2 schedule from a plan and agents config.
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-dev.md:16:- Review timestamps (review_entered_at, review_ended_at, reviewer) stored in state and displayed by get
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-dev-root.md:16:- Review timestamps (review_entered_at, review_ended_at, reviewer) stored in state and displayed by get
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/discovery/discover.go:22:// Discover recursively scans one root for known waveplan observer files.
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/discovery/discover.go:27:// DiscoverAll recursively scans roots and returns deterministic sorted results.
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/discovery/discover.go:62:// DiscoverPlans recursively scans root for execution-waves plan JSON files.
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/discovery/discover.go:67:// DiscoverStates recursively scans root for waveplan state sidecars.
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/discovery/discover.go:72:// DiscoverJournals recursively scans root for SWIM journal sidecars.
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/discovery/discover.go:77:// DiscoverNotes recursively scans root for markdown notes.
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/discovery/discover.go:82:// DiscoverLogs recursively scans root for SWIM log files and validates names.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-05-05-swim-ops.md:14:# 1) Compile the schedule from a plan + agents config.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-05-05-swim-ops.md:35:Generates a v2 schedule from a plan + agents config by shelling to `wp-emit-wave-execution.sh`.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-05-05-swim-ops.md:45:| `--agents` | yes | agents config (`{agents: [{name,provider}], schedule: [...]}`) |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-05-05-swim-ops.md:272:| `until_reached` | the configured `--until` condition fired on an `applied` row |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-05-05-swim-ops.md:299:3. **Stdout/stderr heuristics.** Last resort, gated by config; off by default. Not implemented.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-05-05-swim-ops.md:312:  "inquiry_hint": "target CLI requested permission; answer in TUI or configure non-interactive policy"
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:21:| config | internal/config/config.go | 1 | code |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:22:| config_example | docs/waveplan-ps-config-example.yaml | 1 | doc |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:23:| config_test | internal/config/config_test.go | 1 | test |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:50:| T2 | Add recursive discovery engine for plans, states, notes, and logs | 50 | plan, discovery, discovery_test, model_log | internal/discovery/discover.go, internal/discovery/discover_test.go |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:51:| T3 | Add YAML config loader with pointer-safe display defaults | 51 | plan, config, config_test | internal/config/config.go, internal/config/config_test.go |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:54:| T6 | Add cobra CLI entrypoint with --once, --plan, recursive logs, and live TUI refresh | 54 | plan, cli, cli_test, config, discovery, watch, ui | cmd/waveplan-ps/main.go, cmd/waveplan-ps/main_test.go |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:56:| T8 | Add waveplan-ps usage docs and config example | 56 | plan, readme, config_example | README.md, docs/waveplan-ps-config-example.yaml |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:64:| T3.1 | T3 | Implement config loading with safe boolean pointer defaults | impl | 2 | 64 | T1.1 | - | config, config_test |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:67:| T6.1 | T6 | Implement CLI flags, plan filtering, snapshot mode, and page-refreshing TUI | impl | 4 | 67 | T2.1, T3.1, T4.1, T5.1 | - | cli, cli_test, config, discovery, watch, ui |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md:69:| T8.1 | T8 | Document usage, flags, and recursive log directory config | doc | 5 | 69 | T6.1 | - | readme, config_example |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-09-txtstore-mcp.md:688:Expected: Usage text displayed
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-05-05-swim-implementation-plan.md:123:- `wp_invoke` display/debug string only (must not be used as swim runner execution source)
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-05-05-swim-implementation-plan.md:282:- [ ] Emit `invoke.argv` as the canonical execution payload; keep `wp_invoke` optional for display only.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-05-05-swim-implementation-plan.md:443:- Should `wp_invoke` remain as optional display/debug text, or be dropped entirely after migration completes?
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/swim-markdown-plan-format-v1.md:109:`fp_ref` is display key (e.g. `FP-abc12345`), `fp_id` is canonical backend ID.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/waveplan-cli-design-critique.md:5:- Gap: Verification panel requires checks (`tests/lint/typecheck/build/review/acceptance`), but state schema has no per-check model. | Why it matters: Tile counts and failure lists are synthetic/non-authoritative. | Concrete failure scenario: `28/35` displayed from stale cache while latest run is failing.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml:46:  - source_id: config
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml:48:    title: Implement config loading with safe boolean pointer defaults
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml:56:      - internal/config/config.go
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml:57:      - internal/config/config_test.go
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml:59:      - support explicit false for expand_first_wave
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml:100:      - config
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml:126:    title: Document usage, flags, and recursive log directory config
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml:135:      - docs/waveplan-ps-config-example.yaml
+/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml:137:      - log_dirs are recursive directory roots, not glob patterns
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-04-28-plan-state-dashboard-design.md:158:Color is one channel; the design must not collapse to a single channel under accessibility constraints (colorblindness, grayscale screenshots, e-ink, low-end displays).
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-04-28-plan-state-dashboard-design.md:492:The dashboard mutates visual state from many independent sources: polling frames, mode toggles, filter changes, selections, hovers, drift-chip clicks, scroll-jumps, animations. Without a single contract, these can race and produce ghost selections, conflicting visibility, mixed-time displays, and pulses landing on vanished nodes. The following rules are normative.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-04-28-plan-state-dashboard-design.md:643:The silhouette set is hand-picked so each is distinct at 16px without color: ring vs dashed-ring vs spinner vs check-in-circle vs clock vs lock vs triangle vs arrow. No two share a basic shape category (open shape vs filled vs angular). Tested with three deuteranopia simulator passes at 100%, 75%, and 50% display saturation — all states remain identifiable.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-04-28-plan-state-dashboard-design.md:806:4. **Owner pill**: max 1 line, truncate at 12 characters of the display name; full owner shown on hover.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-04-28-plan-state-dashboard-design.md:809:7. **CJK and RTL**: labels render with `unicode-bidi: plaintext` so RTL text displays correctly within the LTR card chrome.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-04-28-plan-state-dashboard-design.md:876:3. The active-set chip strip shows the handoff visually too: a chip displays `bob (was alice)` with the prior owner muted.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-04-28-plan-state-dashboard-design.md:886:2. **Skew tolerance**: when a unit's `started_at` is later than its `finished_at`, the dashboard logs a `clockSkew` warning on `UnitView.warnings` but renders the unit normally; the timeline displays "skewed" in the drawer's middle stratum.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-04-28-plan-state-dashboard-design.md:1063:Default to a small React dashboard component, single-page app, polling local JSON files at a configurable interval (default 2s). Static-build deployable; no server required for v1.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/2026-04-28-plan-state-dashboard-design.md:1241:69. **Deuteranopia survival**: rendering the dashboard through a deuteranopia simulator at 100/75/50% display saturation keeps every status identifiable by silhouette + border pattern + accent strip alone.
+/Users/darkbit1001/workspace/waveplan-mcp/planstack.md:56:- **Disabled by default** — not loaded unless explicitly configured
+/Users/darkbit1001/workspace/waveplan-mcp/planstack.md:115:Follow the respective documentation at [fiberplane.com](https://fiberplane.com) for setup and configuration.
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:22:| `dashboard/vite.config.ts` | Vite config + Vitest config |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:23:| `dashboard/tsconfig.json` | Strict TS config |
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:382:- Create: `dashboard/package.json`, `dashboard/vite.config.ts`, `dashboard/tsconfig.json`, `dashboard/index.html`, `dashboard/src/main.tsx`, `dashboard/src/App.tsx`
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:436:- [ ] **Step 3: Add `tsconfig.json`**
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:438:Write `dashboard/tsconfig.json`:
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:462:- [ ] **Step 4: Add `vite.config.ts`**
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:464:Write `dashboard/vite.config.ts`:
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:1856:.task-card__row1 { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:1859:.task-card__row3 { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: var(--fs-xs); }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:1860:.task-card__row4 { display: flex; gap: 6px; margin-top: 2px; font-size: var(--fs-xs); }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2129:  display: flex; align-items: center; font-weight: 600; color: var(--gray-11);
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2208:  display: flex; gap: 16px; align-items: center; padding: 8px 16px;
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2288:  display: flex; gap: 4px; padding: 8px 16px;
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2406:.drawer { display: flex; flex-direction: column; height: 100%; background: white; border-left: 1px solid var(--gray-6); }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2409:.drawer__chips { display: flex; gap: 4px; margin-bottom: 6px; flex-wrap: wrap; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2412:.drawer__title { display: flex; align-items: center; gap: 8px; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2416:.drawer__footer { padding: 8px 12px; border-top: 1px solid var(--gray-6); display: flex; gap: 6px; flex-wrap: wrap; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2486:.drift-bucket > summary { display: flex; gap: 8px; cursor: pointer; align-items: center; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2490:.drift-bucket__rows { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 0 0 0; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2604:.verify-tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2683:.heartbeat { display: flex; gap: 16px; padding: 6px 12px; background: var(--gray-2); border-top: 1px solid var(--gray-6); font-size: var(--fs-sm); align-items: center; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2684:.heartbeat__left { display: flex; gap: 6px; align-items: center; min-width: 200px; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2685:.heartbeat__center { flex: 1; display: flex; gap: 12px; overflow: hidden; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2763:.filter-toolbar { display: flex; gap: 8px; padding: 6px 12px; background: var(--gray-1); border-bottom: 1px solid var(--gray-6); align-items: center; font-size: var(--fs-sm); }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2765:.filter-toolbar .check { display: flex; gap: 4px; align-items: center; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2766:.mode-switch { display: flex; margin-left: auto; border-radius: var(--radius-card); overflow: hidden; border: 1px solid var(--gray-6); }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2842:.dashboard-shell { display: flex; flex-direction: column; height: 100vh; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2843:.dashboard-main { flex: 1; display: grid; grid-template-columns: 1fr 360px; min-height: 0; }
+/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-04-29-plan-state-dashboard.md:2845:.dashboard-bottom { display: grid; grid-template-columns: 1fr 1fr; }
+
+exec
+/bin/zsh -lc 'GOCACHE=/private/tmp/waveplan-ps-gocache go test ./...' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 168ms:
+ok  	github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/discovery	(cached)
+ok  	github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/model	(cached)
+
+exec
+/bin/zsh -lc "sed -n '35,75p' /Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml && sed -n '125,145p' /Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+    wave: 2
+    blocked_by_schema: false
+    depends_on:
+      - model_types
+    plan_line: 63
+    files:
+      - internal/discovery/discover.go
+      - internal/discovery/discover_test.go
+    notes:
+      - discovery owns file scanning; model owns loading
+
+  - source_id: config
+    fp_issue: FP-WPPS-T3
+    title: Implement config loading with safe boolean pointer defaults
+    kind: impl
+    wave: 2
+    blocked_by_schema: false
+    depends_on:
+      - model_types
+    plan_line: 64
+    files:
+      - internal/config/config.go
+      - internal/config/config_test.go
+    notes:
+      - support explicit false for expand_first_wave
+
+  - source_id: watcher
+    fp_issue: FP-WPPS-T4
+    title: Implement watcher polling and exported PollOnce helper
+    kind: impl
+    wave: 3
+    blocked_by_schema: false
+    depends_on:
+      - model_types
+      - discovery
+    plan_line: 65
+    files:
+      - internal/watch/watcher.go
+      - internal/watch/watcher_test.go
+    notes:
+      - avoid duplicating single-shot load logic in CLI
+    fp_issue: FP-WPPS-T8
+    title: Document usage, flags, and recursive log directory config
+    kind: doc
+    wave: 5
+    blocked_by_schema: false
+    depends_on:
+      - cli
+    plan_line: 69
+    files:
+      - README.md
+      - docs/waveplan-ps-config-example.yaml
+    notes:
+      - log_dirs are recursive directory roots, not glob patterns
+
+  - source_id: validate_plan
+    fp_issue: FP-WPPS-T9
+    title: Emit and validate execution-waves JSON from canonical source
+    kind: verify
+    wave: 6
+    blocked_by_schema: false
+    depends_on:
+
+codex
+The only task-specific note beyond the plan is `support explicit false for expand_first_wave`; there isn’t a fuller config schema yet. I’m going to keep T3 scoped: YAML load/decode, path list fields future tasks can consume, and a normalized display default where omitted means true but explicit false survives.
+exec
+/bin/zsh -lc 'mkdir -p internal/config' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+codex
+I’m adding the failing tests first now. They’ll pin the two risky behaviors: empty config gets the intended default, and `expand_first_wave: false` remains false after normalization.
+apply patch
+patch: completed
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/config/config_test.go
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..073553acfeaffeb37d945ac3f62777aeff5f8353
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,86 @@
++package config
++
++import (
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..073553acfeaffeb37d945ac3f62777aeff5f8353
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,86 @@
++package config
++
++import (
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+apply patch
+patch: completed
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/config/config_test.go
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+exec
+/bin/zsh -lc 'GOCACHE=/private/tmp/waveplan-ps-gocache go test ./internal/config' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+ exited 1 in 140ms:
+# github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/config [github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/config.test]
+internal/config/config_test.go:11:14: undefined: Decode
+internal/config/config_test.go:22:14: undefined: Decode
+internal/config/config_test.go:33:14: undefined: Decode
+internal/config/config_test.go:60:14: undefined: Load
+FAIL	github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/config [build failed]
+FAIL
+
+codex
+The RED run failed for the expected reason: `Decode` and `Load` do not exist yet. I’m adding the minimal config package now, using an internal pointer only while decoding so false is distinguishable from omitted.
+apply patch
+patch: completed
+/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/config/config.go
+diff --git a/waveplan-ps/internal/config/config.go b/waveplan-ps/internal/config/config.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..096463fe66752db109193720b187e4bceea83bbf
+--- /dev/null
++++ b/waveplan-ps/internal/config/config.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"fmt"
++	"io"
++	"os"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Config is the normalized waveplan-ps YAML configuration.
++type Config struct {
++	PlanDirs    []string      `yaml:"plan_dirs"`
++	StateDirs   []string      `yaml:"state_dirs"`
++	JournalDirs []string      `yaml:"journal_dirs"`
++	NoteDirs    []string      `yaml:"note_dirs"`
++	LogDirs     []string      `yaml:"log_dirs"`
++	Display     DisplayConfig `yaml:"display"`
++}
++
++// DisplayConfig controls initial observer rendering behavior.
++type DisplayConfig struct {
++	ExpandFirstWave bool `yaml:"expand_first_wave"`
++}
++
++type rawConfig struct {
++	PlanDirs    []string         `yaml:"plan_dirs"`
++	StateDirs   []string         `yaml:"state_dirs"`
++	JournalDirs []string         `yaml:"journal_dirs"`
++	NoteDirs    []string         `yaml:"note_dirs"`
++	LogDirs     []string         `yaml:"log_dirs"`
++	Display     rawDisplayConfig `yaml:"display"`
++}
++
++type rawDisplayConfig struct {
++	ExpandFirstWave *bool `yaml:"expand_first_wave"`
++}
++
++// Default returns the config values used when a YAML file omits a field.
++func Default() Config {
++	return Config{
++		Display: DisplayConfig{
++			ExpandFirstWave: true,
++		},
++	}
++}
++
++// Load reads and normalizes a YAML configuration file from path.
++func Load(path string) (*Config, error) {
++	file, err := os.Open(path)
++	if err != nil {
++		return nil, fmt.Errorf("open config %q: %w", path, err)
++	}
++	defer file.Close()
++
++	cfg, err := Decode(file)
++	if err != nil {
++		return nil, fmt.Errorf("decode config %q: %w", path, err)
++	}
++	return cfg, nil
++}
++
++// Decode reads and normalizes YAML configuration from r.
++func Decode(r io.Reader) (*Config, error) {
++	var raw rawConfig
++	decoder := yaml.NewDecoder(r)
++	decoder.KnownFields(true)
++	if err := decoder.Decode(&raw); err != nil {
++		return nil, err
++	}
++
++	cfg := Default()
++	cfg.PlanDirs = raw.PlanDirs
++	cfg.StateDirs = raw.StateDirs
++	cfg.JournalDirs = raw.JournalDirs
++	cfg.NoteDirs = raw.NoteDirs
++	cfg.LogDirs = raw.LogDirs
++	if raw.Display.ExpandFirstWave != nil {
++		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
++	}
++	return &cfg, nil
++}
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+diff --git a/waveplan-ps/internal/config/config.go b/waveplan-ps/internal/config/config.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..096463fe66752db109193720b187e4bceea83bbf
+--- /dev/null
++++ b/waveplan-ps/internal/config/config.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"fmt"
++	"io"
++	"os"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Config is the normalized waveplan-ps YAML configuration.
++type Config struct {
++	PlanDirs    []string      `yaml:"plan_dirs"`
++	StateDirs   []string      `yaml:"state_dirs"`
++	JournalDirs []string      `yaml:"journal_dirs"`
++	NoteDirs    []string      `yaml:"note_dirs"`
++	LogDirs     []string      `yaml:"log_dirs"`
++	Display     DisplayConfig `yaml:"display"`
++}
++
++// DisplayConfig controls initial observer rendering behavior.
++type DisplayConfig struct {
++	ExpandFirstWave bool `yaml:"expand_first_wave"`
++}
++
++type rawConfig struct {
++	PlanDirs    []string         `yaml:"plan_dirs"`
++	StateDirs   []string         `yaml:"state_dirs"`
++	JournalDirs []string         `yaml:"journal_dirs"`
++	NoteDirs    []string         `yaml:"note_dirs"`
++	LogDirs     []string         `yaml:"log_dirs"`
++	Display     rawDisplayConfig `yaml:"display"`
++}
++
++type rawDisplayConfig struct {
++	ExpandFirstWave *bool `yaml:"expand_first_wave"`
++}
++
++// Default returns the config values used when a YAML file omits a field.
++func Default() Config {
++	return Config{
++		Display: DisplayConfig{
++			ExpandFirstWave: true,
++		},
++	}
++}
++
++// Load reads and normalizes a YAML configuration file from path.
++func Load(path string) (*Config, error) {
++	file, err := os.Open(path)
++	if err != nil {
++		return nil, fmt.Errorf("open config %q: %w", path, err)
++	}
++	defer file.Close()
++
++	cfg, err := Decode(file)
++	if err != nil {
++		return nil, fmt.Errorf("decode config %q: %w", path, err)
++	}
++	return cfg, nil
++}
++
++// Decode reads and normalizes YAML configuration from r.
++func Decode(r io.Reader) (*Config, error) {
++	var raw rawConfig
++	decoder := yaml.NewDecoder(r)
++	decoder.KnownFields(true)
++	if err := decoder.Decode(&raw); err != nil {
++		return nil, err
++	}
++
++	cfg := Default()
++	cfg.PlanDirs = raw.PlanDirs
++	cfg.StateDirs = raw.StateDirs
++	cfg.JournalDirs = raw.JournalDirs
++	cfg.NoteDirs = raw.NoteDirs
++	cfg.LogDirs = raw.LogDirs
++	if raw.Display.ExpandFirstWave != nil {
++		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
++	}
++	return &cfg, nil
++}
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+  ✓ Review T3 plan context and current package patterns
+  ✓ Add failing config tests for boolean pointer defaults
+  → Implement config loader minimally
+  • Run relevant Go tests and inspect diff
+diff --git a/waveplan-ps/internal/config/config.go b/waveplan-ps/internal/config/config.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..096463fe66752db109193720b187e4bceea83bbf
+--- /dev/null
++++ b/waveplan-ps/internal/config/config.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"fmt"
++	"io"
++	"os"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Config is the normalized waveplan-ps YAML configuration.
++type Config struct {
++	PlanDirs    []string      `yaml:"plan_dirs"`
++	StateDirs   []string      `yaml:"state_dirs"`
++	JournalDirs []string      `yaml:"journal_dirs"`
++	NoteDirs    []string      `yaml:"note_dirs"`
++	LogDirs     []string      `yaml:"log_dirs"`
++	Display     DisplayConfig `yaml:"display"`
++}
++
++// DisplayConfig controls initial observer rendering behavior.
++type DisplayConfig struct {
++	ExpandFirstWave bool `yaml:"expand_first_wave"`
++}
++
++type rawConfig struct {
++	PlanDirs    []string         `yaml:"plan_dirs"`
++	StateDirs   []string         `yaml:"state_dirs"`
++	JournalDirs []string         `yaml:"journal_dirs"`
++	NoteDirs    []string         `yaml:"note_dirs"`
++	LogDirs     []string         `yaml:"log_dirs"`
++	Display     rawDisplayConfig `yaml:"display"`
++}
++
++type rawDisplayConfig struct {
++	ExpandFirstWave *bool `yaml:"expand_first_wave"`
++}
++
++// Default returns the config values used when a YAML file omits a field.
++func Default() Config {
++	return Config{
++		Display: DisplayConfig{
++			ExpandFirstWave: true,
++		},
++	}
++}
++
++// Load reads and normalizes a YAML configuration file from path.
++func Load(path string) (*Config, error) {
++	file, err := os.Open(path)
++	if err != nil {
++		return nil, fmt.Errorf("open config %q: %w", path, err)
++	}
++	defer file.Close()
++
++	cfg, err := Decode(file)
++	if err != nil {
++		return nil, fmt.Errorf("decode config %q: %w", path, err)
++	}
++	return cfg, nil
++}
++
++// Decode reads and normalizes YAML configuration from r.
++func Decode(r io.Reader) (*Config, error) {
++	var raw rawConfig
++	decoder := yaml.NewDecoder(r)
++	decoder.KnownFields(true)
++	if err := decoder.Decode(&raw); err != nil {
++		return nil, err
++	}
++
++	cfg := Default()
++	cfg.PlanDirs = raw.PlanDirs
++	cfg.StateDirs = raw.StateDirs
++	cfg.JournalDirs = raw.JournalDirs
++	cfg.NoteDirs = raw.NoteDirs
++	cfg.LogDirs = raw.LogDirs
++	if raw.Display.ExpandFirstWave != nil {
++		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
++	}
++	return &cfg, nil
++}
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+exec
+/bin/zsh -lc 'gofmt -w internal/config/config.go internal/config/config_test.go && GOCACHE=/private/tmp/waveplan-ps-gocache go test ./internal/config' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+diff --git a/waveplan-ps/internal/config/config.go b/waveplan-ps/internal/config/config.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..096463fe66752db109193720b187e4bceea83bbf
+--- /dev/null
++++ b/waveplan-ps/internal/config/config.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"fmt"
++	"io"
++	"os"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Config is the normalized waveplan-ps YAML configuration.
++type Config struct {
++	PlanDirs    []string      `yaml:"plan_dirs"`
++	StateDirs   []string      `yaml:"state_dirs"`
++	JournalDirs []string      `yaml:"journal_dirs"`
++	NoteDirs    []string      `yaml:"note_dirs"`
++	LogDirs     []string      `yaml:"log_dirs"`
++	Display     DisplayConfig `yaml:"display"`
++}
++
++// DisplayConfig controls initial observer rendering behavior.
++type DisplayConfig struct {
++	ExpandFirstWave bool `yaml:"expand_first_wave"`
++}
++
++type rawConfig struct {
++	PlanDirs    []string         `yaml:"plan_dirs"`
++	StateDirs   []string         `yaml:"state_dirs"`
++	JournalDirs []string         `yaml:"journal_dirs"`
++	NoteDirs    []string         `yaml:"note_dirs"`
++	LogDirs     []string         `yaml:"log_dirs"`
++	Display     rawDisplayConfig `yaml:"display"`
++}
++
++type rawDisplayConfig struct {
++	ExpandFirstWave *bool `yaml:"expand_first_wave"`
++}
++
++// Default returns the config values used when a YAML file omits a field.
++func Default() Config {
++	return Config{
++		Display: DisplayConfig{
++			ExpandFirstWave: true,
++		},
++	}
++}
++
++// Load reads and normalizes a YAML configuration file from path.
++func Load(path string) (*Config, error) {
++	file, err := os.Open(path)
++	if err != nil {
++		return nil, fmt.Errorf("open config %q: %w", path, err)
++	}
++	defer file.Close()
++
++	cfg, err := Decode(file)
++	if err != nil {
++		return nil, fmt.Errorf("decode config %q: %w", path, err)
++	}
++	return cfg, nil
++}
++
++// Decode reads and normalizes YAML configuration from r.
++func Decode(r io.Reader) (*Config, error) {
++	var raw rawConfig
++	decoder := yaml.NewDecoder(r)
++	decoder.KnownFields(true)
++	if err := decoder.Decode(&raw); err != nil {
++		return nil, err
++	}
++
++	cfg := Default()
++	cfg.PlanDirs = raw.PlanDirs
++	cfg.StateDirs = raw.StateDirs
++	cfg.JournalDirs = raw.JournalDirs
++	cfg.NoteDirs = raw.NoteDirs
++	cfg.LogDirs = raw.LogDirs
++	if raw.Display.ExpandFirstWave != nil {
++		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
++	}
++	return &cfg, nil
++}
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+ succeeded in 484ms:
+ok  	github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/config	0.006s
+
+codex
+The config package is green on its focused test. I’m going to run the full package suite with the sandbox-safe Go cache, then check drift bindings and the final diff.
+  ✓ Review T3 plan context and current package patterns
+  ✓ Add failing config tests for boolean pointer defaults
+  ✓ Implement config loader minimally
+  → Run relevant Go tests and inspect diff
+diff --git a/waveplan-ps/internal/config/config.go b/waveplan-ps/internal/config/config.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..096463fe66752db109193720b187e4bceea83bbf
+--- /dev/null
++++ b/waveplan-ps/internal/config/config.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"fmt"
++	"io"
++	"os"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Config is the normalized waveplan-ps YAML configuration.
++type Config struct {
++	PlanDirs    []string      `yaml:"plan_dirs"`
++	StateDirs   []string      `yaml:"state_dirs"`
++	JournalDirs []string      `yaml:"journal_dirs"`
++	NoteDirs    []string      `yaml:"note_dirs"`
++	LogDirs     []string      `yaml:"log_dirs"`
++	Display     DisplayConfig `yaml:"display"`
++}
++
++// DisplayConfig controls initial observer rendering behavior.
++type DisplayConfig struct {
++	ExpandFirstWave bool `yaml:"expand_first_wave"`
++}
++
++type rawConfig struct {
++	PlanDirs    []string         `yaml:"plan_dirs"`
++	StateDirs   []string         `yaml:"state_dirs"`
++	JournalDirs []string         `yaml:"journal_dirs"`
++	NoteDirs    []string         `yaml:"note_dirs"`
++	LogDirs     []string         `yaml:"log_dirs"`
++	Display     rawDisplayConfig `yaml:"display"`
++}
++
++type rawDisplayConfig struct {
++	ExpandFirstWave *bool `yaml:"expand_first_wave"`
++}
++
++// Default returns the config values used when a YAML file omits a field.
++func Default() Config {
++	return Config{
++		Display: DisplayConfig{
++			ExpandFirstWave: true,
++		},
++	}
++}
++
++// Load reads and normalizes a YAML configuration file from path.
++func Load(path string) (*Config, error) {
++	file, err := os.Open(path)
++	if err != nil {
++		return nil, fmt.Errorf("open config %q: %w", path, err)
++	}
++	defer file.Close()
++
++	cfg, err := Decode(file)
++	if err != nil {
++		return nil, fmt.Errorf("decode config %q: %w", path, err)
++	}
++	return cfg, nil
++}
++
++// Decode reads and normalizes YAML configuration from r.
++func Decode(r io.Reader) (*Config, error) {
++	var raw rawConfig
++	decoder := yaml.NewDecoder(r)
++	decoder.KnownFields(true)
++	if err := decoder.Decode(&raw); err != nil {
++		return nil, err
++	}
++
++	cfg := Default()
++	cfg.PlanDirs = raw.PlanDirs
++	cfg.StateDirs = raw.StateDirs
++	cfg.JournalDirs = raw.JournalDirs
++	cfg.NoteDirs = raw.NoteDirs
++	cfg.LogDirs = raw.LogDirs
++	if raw.Display.ExpandFirstWave != nil {
++		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
++	}
++	return &cfg, nil
++}
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+exec
+/bin/zsh -lc 'git diff -- internal/config/config.go internal/config/config_test.go go.mod go.sum' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+exec
+/bin/zsh -lc 'git status --short internal/config/config.go internal/config/config_test.go' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+exec
+/bin/zsh -lc 'drift refs internal/config/config.go' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+ succeeded in 0ms:
+?? internal/config/config.go
+?? internal/config/config_test.go
+
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'GOCACHE=/private/tmp/waveplan-ps-gocache go test ./...' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+ok  	github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/config	(cached)
+ok  	github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/discovery	(cached)
+ok  	github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/model	(cached)
+
+diff --git a/waveplan-ps/internal/config/config.go b/waveplan-ps/internal/config/config.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..096463fe66752db109193720b187e4bceea83bbf
+--- /dev/null
++++ b/waveplan-ps/internal/config/config.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"fmt"
++	"io"
++	"os"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Config is the normalized waveplan-ps YAML configuration.
++type Config struct {
++	PlanDirs    []string      `yaml:"plan_dirs"`
++	StateDirs   []string      `yaml:"state_dirs"`
++	JournalDirs []string      `yaml:"journal_dirs"`
++	NoteDirs    []string      `yaml:"note_dirs"`
++	LogDirs     []string      `yaml:"log_dirs"`
++	Display     DisplayConfig `yaml:"display"`
++}
++
++// DisplayConfig controls initial observer rendering behavior.
++type DisplayConfig struct {
++	ExpandFirstWave bool `yaml:"expand_first_wave"`
++}
++
++type rawConfig struct {
++	PlanDirs    []string         `yaml:"plan_dirs"`
++	StateDirs   []string         `yaml:"state_dirs"`
++	JournalDirs []string         `yaml:"journal_dirs"`
++	NoteDirs    []string         `yaml:"note_dirs"`
++	LogDirs     []string         `yaml:"log_dirs"`
++	Display     rawDisplayConfig `yaml:"display"`
++}
++
++type rawDisplayConfig struct {
++	ExpandFirstWave *bool `yaml:"expand_first_wave"`
++}
++
++// Default returns the config values used when a YAML file omits a field.
++func Default() Config {
++	return Config{
++		Display: DisplayConfig{
++			ExpandFirstWave: true,
++		},
++	}
++}
++
++// Load reads and normalizes a YAML configuration file from path.
++func Load(path string) (*Config, error) {
++	file, err := os.Open(path)
++	if err != nil {
++		return nil, fmt.Errorf("open config %q: %w", path, err)
++	}
++	defer file.Close()
++
++	cfg, err := Decode(file)
++	if err != nil {
++		return nil, fmt.Errorf("decode config %q: %w", path, err)
++	}
++	return cfg, nil
++}
++
++// Decode reads and normalizes YAML configuration from r.
++func Decode(r io.Reader) (*Config, error) {
++	var raw rawConfig
++	decoder := yaml.NewDecoder(r)
++	decoder.KnownFields(true)
++	if err := decoder.Decode(&raw); err != nil {
++		return nil, err
++	}
++
++	cfg := Default()
++	cfg.PlanDirs = raw.PlanDirs
++	cfg.StateDirs = raw.StateDirs
++	cfg.JournalDirs = raw.JournalDirs
++	cfg.NoteDirs = raw.NoteDirs
++	cfg.LogDirs = raw.LogDirs
++	if raw.Display.ExpandFirstWave != nil {
++		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
++	}
++	return &cfg, nil
++}
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+exec
+/bin/zsh -lc "sed -n '1,220p' internal/config/config.go" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+exec
+/bin/zsh -lc "sed -n '1,260p' internal/config/config_test.go" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+package config
+
+import (
+	"fmt"
+	"io"
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Config is the normalized waveplan-ps YAML configuration.
+type Config struct {
+	PlanDirs    []string      `yaml:"plan_dirs"`
+	StateDirs   []string      `yaml:"state_dirs"`
+	JournalDirs []string      `yaml:"journal_dirs"`
+	NoteDirs    []string      `yaml:"note_dirs"`
+	LogDirs     []string      `yaml:"log_dirs"`
+	Display     DisplayConfig `yaml:"display"`
+}
+
+// DisplayConfig controls initial observer rendering behavior.
+type DisplayConfig struct {
+	ExpandFirstWave bool `yaml:"expand_first_wave"`
+}
+
+type rawConfig struct {
+	PlanDirs    []string         `yaml:"plan_dirs"`
+	StateDirs   []string         `yaml:"state_dirs"`
+	JournalDirs []string         `yaml:"journal_dirs"`
+	NoteDirs    []string         `yaml:"note_dirs"`
+	LogDirs     []string         `yaml:"log_dirs"`
+	Display     rawDisplayConfig `yaml:"display"`
+}
+
+type rawDisplayConfig struct {
+	ExpandFirstWave *bool `yaml:"expand_first_wave"`
+}
+
+// Default returns the config values used when a YAML file omits a field.
+func Default() Config {
+	return Config{
+		Display: DisplayConfig{
+			ExpandFirstWave: true,
+		},
+	}
+}
+
+// Load reads and normalizes a YAML configuration file from path.
+func Load(path string) (*Config, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open config %q: %w", path, err)
+	}
+	defer file.Close()
+
+	cfg, err := Decode(file)
+	if err != nil {
+		return nil, fmt.Errorf("decode config %q: %w", path, err)
+	}
+	return cfg, nil
+}
+
+// Decode reads and normalizes YAML configuration from r.
+func Decode(r io.Reader) (*Config, error) {
+	var raw rawConfig
+	decoder := yaml.NewDecoder(r)
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&raw); err != nil {
+		return nil, err
+	}
+
+	cfg := Default()
+	cfg.PlanDirs = raw.PlanDirs
+	cfg.StateDirs = raw.StateDirs
+	cfg.JournalDirs = raw.JournalDirs
+	cfg.NoteDirs = raw.NoteDirs
+	cfg.LogDirs = raw.LogDirs
+	if raw.Display.ExpandFirstWave != nil {
+		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
+	}
+	return &cfg, nil
+}
+
+ succeeded in 0ms:
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
+	cfg, err := Decode(strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+
+	if !cfg.Display.ExpandFirstWave {
+		t.Fatal("Display.ExpandFirstWave = false, want default true")
+	}
+}
+
+func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
+	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+
+	if cfg.Display.ExpandFirstWave {
+		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
+	}
+}
+
+func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
+	cfg, err := Decode(strings.NewReader(`
+plan_dirs:
+  - plans
+state_dirs:
+  - states
+journal_dirs:
+  - journals
+note_dirs:
+  - notes
+log_dirs:
+  - logs
+`))
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+
+	assertStrings(t, cfg.PlanDirs, []string{"plans"})
+	assertStrings(t, cfg.StateDirs, []string{"states"})
+	assertStrings(t, cfg.JournalDirs, []string{"journals"})
+	assertStrings(t, cfg.NoteDirs, []string{"notes"})
+	assertStrings(t, cfg.LogDirs, []string{"logs"})
+}
+
+func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
+	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Display.ExpandFirstWave {
+		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
+	}
+}
+
+func assertStrings(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func writeTestFile(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write %q: %v", path, err)
+	}
+}
+
+exec
+/bin/zsh -lc 'GOCACHE=/private/tmp/waveplan-ps-gocache go test -count=1 ./...' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+diff --git a/waveplan-ps/internal/config/config.go b/waveplan-ps/internal/config/config.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..096463fe66752db109193720b187e4bceea83bbf
+--- /dev/null
++++ b/waveplan-ps/internal/config/config.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"fmt"
++	"io"
++	"os"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Config is the normalized waveplan-ps YAML configuration.
++type Config struct {
++	PlanDirs    []string      `yaml:"plan_dirs"`
++	StateDirs   []string      `yaml:"state_dirs"`
++	JournalDirs []string      `yaml:"journal_dirs"`
++	NoteDirs    []string      `yaml:"note_dirs"`
++	LogDirs     []string      `yaml:"log_dirs"`
++	Display     DisplayConfig `yaml:"display"`
++}
++
++// DisplayConfig controls initial observer rendering behavior.
++type DisplayConfig struct {
++	ExpandFirstWave bool `yaml:"expand_first_wave"`
++}
++
++type rawConfig struct {
++	PlanDirs    []string         `yaml:"plan_dirs"`
++	StateDirs   []string         `yaml:"state_dirs"`
++	JournalDirs []string         `yaml:"journal_dirs"`
++	NoteDirs    []string         `yaml:"note_dirs"`
++	LogDirs     []string         `yaml:"log_dirs"`
++	Display     rawDisplayConfig `yaml:"display"`
++}
++
++type rawDisplayConfig struct {
++	ExpandFirstWave *bool `yaml:"expand_first_wave"`
++}
++
++// Default returns the config values used when a YAML file omits a field.
++func Default() Config {
++	return Config{
++		Display: DisplayConfig{
++			ExpandFirstWave: true,
++		},
++	}
++}
++
++// Load reads and normalizes a YAML configuration file from path.
++func Load(path string) (*Config, error) {
++	file, err := os.Open(path)
++	if err != nil {
++		return nil, fmt.Errorf("open config %q: %w", path, err)
++	}
++	defer file.Close()
++
++	cfg, err := Decode(file)
++	if err != nil {
++		return nil, fmt.Errorf("decode config %q: %w", path, err)
++	}
++	return cfg, nil
++}
++
++// Decode reads and normalizes YAML configuration from r.
++func Decode(r io.Reader) (*Config, error) {
++	var raw rawConfig
++	decoder := yaml.NewDecoder(r)
++	decoder.KnownFields(true)
++	if err := decoder.Decode(&raw); err != nil {
++		return nil, err
++	}
++
++	cfg := Default()
++	cfg.PlanDirs = raw.PlanDirs
++	cfg.StateDirs = raw.StateDirs
++	cfg.JournalDirs = raw.JournalDirs
++	cfg.NoteDirs = raw.NoteDirs
++	cfg.LogDirs = raw.LogDirs
++	if raw.Display.ExpandFirstWave != nil {
++		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
++	}
++	return &cfg, nil
++}
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+ succeeded in 165ms:
+ok  	github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/config	0.008s
+ok  	github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/discovery	0.013s
+ok  	github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/model	0.010s
+
+  ✓ Review T3 plan context and current package patterns
+  ✓ Add failing config tests for boolean pointer defaults
+  ✓ Implement config loader minimally
+  ✓ Run relevant Go tests and inspect diff
+diff --git a/waveplan-ps/internal/config/config.go b/waveplan-ps/internal/config/config.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..096463fe66752db109193720b187e4bceea83bbf
+--- /dev/null
++++ b/waveplan-ps/internal/config/config.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"fmt"
++	"io"
++	"os"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Config is the normalized waveplan-ps YAML configuration.
++type Config struct {
++	PlanDirs    []string      `yaml:"plan_dirs"`
++	StateDirs   []string      `yaml:"state_dirs"`
++	JournalDirs []string      `yaml:"journal_dirs"`
++	NoteDirs    []string      `yaml:"note_dirs"`
++	LogDirs     []string      `yaml:"log_dirs"`
++	Display     DisplayConfig `yaml:"display"`
++}
++
++// DisplayConfig controls initial observer rendering behavior.
++type DisplayConfig struct {
++	ExpandFirstWave bool `yaml:"expand_first_wave"`
++}
++
++type rawConfig struct {
++	PlanDirs    []string         `yaml:"plan_dirs"`
++	StateDirs   []string         `yaml:"state_dirs"`
++	JournalDirs []string         `yaml:"journal_dirs"`
++	NoteDirs    []string         `yaml:"note_dirs"`
++	LogDirs     []string         `yaml:"log_dirs"`
++	Display     rawDisplayConfig `yaml:"display"`
++}
++
++type rawDisplayConfig struct {
++	ExpandFirstWave *bool `yaml:"expand_first_wave"`
++}
++
++// Default returns the config values used when a YAML file omits a field.
++func Default() Config {
++	return Config{
++		Display: DisplayConfig{
++			ExpandFirstWave: true,
++		},
++	}
++}
++
++// Load reads and normalizes a YAML configuration file from path.
++func Load(path string) (*Config, error) {
++	file, err := os.Open(path)
++	if err != nil {
++		return nil, fmt.Errorf("open config %q: %w", path, err)
++	}
++	defer file.Close()
++
++	cfg, err := Decode(file)
++	if err != nil {
++		return nil, fmt.Errorf("decode config %q: %w", path, err)
++	}
++	return cfg, nil
++}
++
++// Decode reads and normalizes YAML configuration from r.
++func Decode(r io.Reader) (*Config, error) {
++	var raw rawConfig
++	decoder := yaml.NewDecoder(r)
++	decoder.KnownFields(true)
++	if err := decoder.Decode(&raw); err != nil {
++		return nil, err
++	}
++
++	cfg := Default()
++	cfg.PlanDirs = raw.PlanDirs
++	cfg.StateDirs = raw.StateDirs
++	cfg.JournalDirs = raw.JournalDirs
++	cfg.NoteDirs = raw.NoteDirs
++	cfg.LogDirs = raw.LogDirs
++	if raw.Display.ExpandFirstWave != nil {
++		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
++	}
++	return &cfg, nil
++}
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+mcp: waveplan/waveplan_get started
+mcp: waveplan/waveplan_get (failed)
+user cancelled MCP tool call
+diff --git a/waveplan-ps/internal/config/config.go b/waveplan-ps/internal/config/config.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..096463fe66752db109193720b187e4bceea83bbf
+--- /dev/null
++++ b/waveplan-ps/internal/config/config.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"fmt"
++	"io"
++	"os"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Config is the normalized waveplan-ps YAML configuration.
++type Config struct {
++	PlanDirs    []string      `yaml:"plan_dirs"`
++	StateDirs   []string      `yaml:"state_dirs"`
++	JournalDirs []string      `yaml:"journal_dirs"`
++	NoteDirs    []string      `yaml:"note_dirs"`
++	LogDirs     []string      `yaml:"log_dirs"`
++	Display     DisplayConfig `yaml:"display"`
++}
++
++// DisplayConfig controls initial observer rendering behavior.
++type DisplayConfig struct {
++	ExpandFirstWave bool `yaml:"expand_first_wave"`
++}
++
++type rawConfig struct {
++	PlanDirs    []string         `yaml:"plan_dirs"`
++	StateDirs   []string         `yaml:"state_dirs"`
++	JournalDirs []string         `yaml:"journal_dirs"`
++	NoteDirs    []string         `yaml:"note_dirs"`
++	LogDirs     []string         `yaml:"log_dirs"`
++	Display     rawDisplayConfig `yaml:"display"`
++}
++
++type rawDisplayConfig struct {
++	ExpandFirstWave *bool `yaml:"expand_first_wave"`
++}
++
++// Default returns the config values used when a YAML file omits a field.
++func Default() Config {
++	return Config{
++		Display: DisplayConfig{
++			ExpandFirstWave: true,
++		},
++	}
++}
++
++// Load reads and normalizes a YAML configuration file from path.
++func Load(path string) (*Config, error) {
++	file, err := os.Open(path)
++	if err != nil {
++		return nil, fmt.Errorf("open config %q: %w", path, err)
++	}
++	defer file.Close()
++
++	cfg, err := Decode(file)
++	if err != nil {
++		return nil, fmt.Errorf("decode config %q: %w", path, err)
++	}
++	return cfg, nil
++}
++
++// Decode reads and normalizes YAML configuration from r.
++func Decode(r io.Reader) (*Config, error) {
++	var raw rawConfig
++	decoder := yaml.NewDecoder(r)
++	decoder.KnownFields(true)
++	if err := decoder.Decode(&raw); err != nil {
++		return nil, err
++	}
++
++	cfg := Default()
++	cfg.PlanDirs = raw.PlanDirs
++	cfg.StateDirs = raw.StateDirs
++	cfg.JournalDirs = raw.JournalDirs
++	cfg.NoteDirs = raw.NoteDirs
++	cfg.LogDirs = raw.LogDirs
++	if raw.Display.ExpandFirstWave != nil {
++		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
++	}
++	return &cfg, nil
++}
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+exec
+/bin/zsh -lc "nl -ba internal/config/config.go | sed -n '1,180p'" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+exec
+/bin/zsh -lc "nl -ba internal/config/config_test.go | sed -n '1,220p'" in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+     1	package config
+     2	
+     3	import (
+     4		"fmt"
+     5		"io"
+     6		"os"
+     7	
+     8		"gopkg.in/yaml.v3"
+     9	)
+    10	
+    11	// Config is the normalized waveplan-ps YAML configuration.
+    12	type Config struct {
+    13		PlanDirs    []string      `yaml:"plan_dirs"`
+    14		StateDirs   []string      `yaml:"state_dirs"`
+    15		JournalDirs []string      `yaml:"journal_dirs"`
+    16		NoteDirs    []string      `yaml:"note_dirs"`
+    17		LogDirs     []string      `yaml:"log_dirs"`
+    18		Display     DisplayConfig `yaml:"display"`
+    19	}
+    20	
+    21	// DisplayConfig controls initial observer rendering behavior.
+    22	type DisplayConfig struct {
+    23		ExpandFirstWave bool `yaml:"expand_first_wave"`
+    24	}
+    25	
+    26	type rawConfig struct {
+    27		PlanDirs    []string         `yaml:"plan_dirs"`
+    28		StateDirs   []string         `yaml:"state_dirs"`
+    29		JournalDirs []string         `yaml:"journal_dirs"`
+    30		NoteDirs    []string         `yaml:"note_dirs"`
+    31		LogDirs     []string         `yaml:"log_dirs"`
+    32		Display     rawDisplayConfig `yaml:"display"`
+    33	}
+    34	
+    35	type rawDisplayConfig struct {
+    36		ExpandFirstWave *bool `yaml:"expand_first_wave"`
+    37	}
+    38	
+    39	// Default returns the config values used when a YAML file omits a field.
+    40	func Default() Config {
+    41		return Config{
+    42			Display: DisplayConfig{
+    43				ExpandFirstWave: true,
+    44			},
+    45		}
+    46	}
+    47	
+    48	// Load reads and normalizes a YAML configuration file from path.
+    49	func Load(path string) (*Config, error) {
+    50		file, err := os.Open(path)
+    51		if err != nil {
+    52			return nil, fmt.Errorf("open config %q: %w", path, err)
+    53		}
+    54		defer file.Close()
+    55	
+    56		cfg, err := Decode(file)
+    57		if err != nil {
+    58			return nil, fmt.Errorf("decode config %q: %w", path, err)
+    59		}
+    60		return cfg, nil
+    61	}
+    62	
+    63	// Decode reads and normalizes YAML configuration from r.
+    64	func Decode(r io.Reader) (*Config, error) {
+    65		var raw rawConfig
+    66		decoder := yaml.NewDecoder(r)
+    67		decoder.KnownFields(true)
+    68		if err := decoder.Decode(&raw); err != nil {
+    69			return nil, err
+    70		}
+    71	
+    72		cfg := Default()
+    73		cfg.PlanDirs = raw.PlanDirs
+    74		cfg.StateDirs = raw.StateDirs
+    75		cfg.JournalDirs = raw.JournalDirs
+    76		cfg.NoteDirs = raw.NoteDirs
+    77		cfg.LogDirs = raw.LogDirs
+    78		if raw.Display.ExpandFirstWave != nil {
+    79			cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
+    80		}
+    81		return &cfg, nil
+    82	}
+
+ succeeded in 0ms:
+     1	package config
+     2	
+     3	import (
+     4		"os"
+     5		"path/filepath"
+     6		"strings"
+     7		"testing"
+     8	)
+     9	
+    10	func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
+    11		cfg, err := Decode(strings.NewReader("{}"))
+    12		if err != nil {
+    13			t.Fatalf("Decode() error = %v", err)
+    14		}
+    15	
+    16		if !cfg.Display.ExpandFirstWave {
+    17			t.Fatal("Display.ExpandFirstWave = false, want default true")
+    18		}
+    19	}
+    20	
+    21	func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
+    22		cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
+    23		if err != nil {
+    24			t.Fatalf("Decode() error = %v", err)
+    25		}
+    26	
+    27		if cfg.Display.ExpandFirstWave {
+    28			t.Fatal("Display.ExpandFirstWave = true, want explicit false")
+    29		}
+    30	}
+    31	
+    32	func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
+    33		cfg, err := Decode(strings.NewReader(`
+    34	plan_dirs:
+    35	  - plans
+    36	state_dirs:
+    37	  - states
+    38	journal_dirs:
+    39	  - journals
+    40	note_dirs:
+    41	  - notes
+    42	log_dirs:
+    43	  - logs
+    44	`))
+    45		if err != nil {
+    46			t.Fatalf("Decode() error = %v", err)
+    47		}
+    48	
+    49		assertStrings(t, cfg.PlanDirs, []string{"plans"})
+    50		assertStrings(t, cfg.StateDirs, []string{"states"})
+    51		assertStrings(t, cfg.JournalDirs, []string{"journals"})
+    52		assertStrings(t, cfg.NoteDirs, []string{"notes"})
+    53		assertStrings(t, cfg.LogDirs, []string{"logs"})
+    54	}
+    55	
+    56	func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
+    57		path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
+    58		writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
+    59	
+    60		cfg, err := Load(path)
+    61		if err != nil {
+    62			t.Fatalf("Load() error = %v", err)
+    63		}
+    64	
+    65		if cfg.Display.ExpandFirstWave {
+    66			t.Fatal("Display.ExpandFirstWave = true, want explicit false")
+    67		}
+    68	}
+    69	
+    70	func assertStrings(t *testing.T, got, want []string) {
+    71		t.Helper()
+    72		if len(got) != len(want) {
+    73			t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
+    74		}
+    75		for i := range want {
+    76			if got[i] != want[i] {
+    77				t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
+    78			}
+    79		}
+    80	}
+    81	
+    82	func writeTestFile(t *testing.T, path, body string) {
+    83		t.Helper()
+    84		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+    85			t.Fatalf("write %q: %v", path, err)
+    86		}
+    87	}
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps
+ succeeded in 0ms:
+ M ../main.go
+ M ../main_test.go
+ M ../waveplan-cli
+?? ../FP_AGENTS.md
+?? ../docs/agent_notes/
+?? ../docs/plans/.waveplan/
+?? ../docs/plans/2026-05-12-waveplan-ps-execution-schedule.json
+?? ../docs/plans/2026-05-12-waveplan-ps-execution-schedule.json.journal.json
+?? ../docs/plans/2026-05-12-waveplan-ps-execution-waves.json
+?? ../docs/plans/2026-05-12-waveplan-ps-execution-waves.json.state.json
+?? ../docs/superpowers/plans/2026-05-12-waveplan-ps-waveplan-manifest.yaml
+?? ../docs/superpowers/plans/2026-05-12-waveplan-ps.md
+?? ../waveplan-ps.png
+?? ./
+
+diff --git a/waveplan-ps/internal/config/config.go b/waveplan-ps/internal/config/config.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..096463fe66752db109193720b187e4bceea83bbf
+--- /dev/null
++++ b/waveplan-ps/internal/config/config.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"fmt"
++	"io"
++	"os"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Config is the normalized waveplan-ps YAML configuration.
++type Config struct {
++	PlanDirs    []string      `yaml:"plan_dirs"`
++	StateDirs   []string      `yaml:"state_dirs"`
++	JournalDirs []string      `yaml:"journal_dirs"`
++	NoteDirs    []string      `yaml:"note_dirs"`
++	LogDirs     []string      `yaml:"log_dirs"`
++	Display     DisplayConfig `yaml:"display"`
++}
++
++// DisplayConfig controls initial observer rendering behavior.
++type DisplayConfig struct {
++	ExpandFirstWave bool `yaml:"expand_first_wave"`
++}
++
++type rawConfig struct {
++	PlanDirs    []string         `yaml:"plan_dirs"`
++	StateDirs   []string         `yaml:"state_dirs"`
++	JournalDirs []string         `yaml:"journal_dirs"`
++	NoteDirs    []string         `yaml:"note_dirs"`
++	LogDirs     []string         `yaml:"log_dirs"`
++	Display     rawDisplayConfig `yaml:"display"`
++}
++
++type rawDisplayConfig struct {
++	ExpandFirstWave *bool `yaml:"expand_first_wave"`
++}
++
++// Default returns the config values used when a YAML file omits a field.
++func Default() Config {
++	return Config{
++		Display: DisplayConfig{
++			ExpandFirstWave: true,
++		},
++	}
++}
++
++// Load reads and normalizes a YAML configuration file from path.
++func Load(path string) (*Config, error) {
++	file, err := os.Open(path)
++	if err != nil {
++		return nil, fmt.Errorf("open config %q: %w", path, err)
++	}
++	defer file.Close()
++
++	cfg, err := Decode(file)
++	if err != nil {
++		return nil, fmt.Errorf("decode config %q: %w", path, err)
++	}
++	return cfg, nil
++}
++
++// Decode reads and normalizes YAML configuration from r.
++func Decode(r io.Reader) (*Config, error) {
++	var raw rawConfig
++	decoder := yaml.NewDecoder(r)
++	decoder.KnownFields(true)
++	if err := decoder.Decode(&raw); err != nil {
++		return nil, err
++	}
++
++	cfg := Default()
++	cfg.PlanDirs = raw.PlanDirs
++	cfg.StateDirs = raw.StateDirs
++	cfg.JournalDirs = raw.JournalDirs
++	cfg.NoteDirs = raw.NoteDirs
++	cfg.LogDirs = raw.LogDirs
++	if raw.Display.ExpandFirstWave != nil {
++		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
++	}
++	return &cfg, nil
++}
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+codex
+Implemented T3.1 in the repo.
+
+Changes:
+- [internal/config/config.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/config/config.go:11): added YAML config loading with `Load`, `Decode`, defaults, and discovery directory fields.
+- [internal/config/config.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/config/config.go:35): uses an internal `*bool` while decoding so omitted `display.expand_first_wave` defaults to `true`, while explicit `false` is preserved.
+- [internal/config/config_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/config/config_test.go:10): added tests for default display behavior, explicit false, directory fields, and file loading.
+
+Verification:
+- RED first: `GOCACHE=/private/tmp/waveplan-ps-gocache go test ./internal/config` failed with undefined `Decode`/`Load`.
+- Focused green: `GOCACHE=/private/tmp/waveplan-ps-gocache go test ./internal/config` passed.
+- Full fresh suite: `GOCACHE=/private/tmp/waveplan-ps-gocache go test -count=1 ./...` passed:
+  - `internal/config`
+  - `internal/discovery`
+  - `internal/model`
+
+Also ran `drift refs internal/config/config.go`; it returned no bindings/output. No waveplan write actions were executed.
+diff --git a/waveplan-ps/internal/config/config.go b/waveplan-ps/internal/config/config.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..096463fe66752db109193720b187e4bceea83bbf
+--- /dev/null
++++ b/waveplan-ps/internal/config/config.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"fmt"
++	"io"
++	"os"
++
++	"gopkg.in/yaml.v3"
++)
++
++// Config is the normalized waveplan-ps YAML configuration.
++type Config struct {
++	PlanDirs    []string      `yaml:"plan_dirs"`
++	StateDirs   []string      `yaml:"state_dirs"`
++	JournalDirs []string      `yaml:"journal_dirs"`
++	NoteDirs    []string      `yaml:"note_dirs"`
++	LogDirs     []string      `yaml:"log_dirs"`
++	Display     DisplayConfig `yaml:"display"`
++}
++
++// DisplayConfig controls initial observer rendering behavior.
++type DisplayConfig struct {
++	ExpandFirstWave bool `yaml:"expand_first_wave"`
++}
++
++type rawConfig struct {
++	PlanDirs    []string         `yaml:"plan_dirs"`
++	StateDirs   []string         `yaml:"state_dirs"`
++	JournalDirs []string         `yaml:"journal_dirs"`
++	NoteDirs    []string         `yaml:"note_dirs"`
++	LogDirs     []string         `yaml:"log_dirs"`
++	Display     rawDisplayConfig `yaml:"display"`
++}
++
++type rawDisplayConfig struct {
++	ExpandFirstWave *bool `yaml:"expand_first_wave"`
++}
++
++// Default returns the config values used when a YAML file omits a field.
++func Default() Config {
++	return Config{
++		Display: DisplayConfig{
++			ExpandFirstWave: true,
++		},
++	}
++}
++
++// Load reads and normalizes a YAML configuration file from path.
++func Load(path string) (*Config, error) {
++	file, err := os.Open(path)
++	if err != nil {
++		return nil, fmt.Errorf("open config %q: %w", path, err)
++	}
++	defer file.Close()
++
++	cfg, err := Decode(file)
++	if err != nil {
++		return nil, fmt.Errorf("decode config %q: %w", path, err)
++	}
++	return cfg, nil
++}
++
++// Decode reads and normalizes YAML configuration from r.
++func Decode(r io.Reader) (*Config, error) {
++	var raw rawConfig
++	decoder := yaml.NewDecoder(r)
++	decoder.KnownFields(true)
++	if err := decoder.Decode(&raw); err != nil {
++		return nil, err
++	}
++
++	cfg := Default()
++	cfg.PlanDirs = raw.PlanDirs
++	cfg.StateDirs = raw.StateDirs
++	cfg.JournalDirs = raw.JournalDirs
++	cfg.NoteDirs = raw.NoteDirs
++	cfg.LogDirs = raw.LogDirs
++	if raw.Display.ExpandFirstWave != nil {
++		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
++	}
++	return &cfg, nil
++}
+diff --git a/waveplan-ps/internal/config/config_test.go b/waveplan-ps/internal/config/config_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afb92a23c8a4c5269a1027a5cf1aabb6bcc4dd7
+--- /dev/null
++++ b/waveplan-ps/internal/config/config_test.go
+@@ -0,0 +1,87 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDecodeAppliesDisplayDefaultsWhenUnset(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("{}"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if !cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = false, want default true")
++	}
++}
++
++func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
++	cfg, err := Decode(strings.NewReader("display:\n  expand_first_wave: false\n"))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
++	cfg, err := Decode(strings.NewReader(`
++plan_dirs:
++  - plans
++state_dirs:
++  - states
++journal_dirs:
++  - journals
++note_dirs:
++  - notes
++log_dirs:
++  - logs
++`))
++	if err != nil {
++		t.Fatalf("Decode() error = %v", err)
++	}
++
++	assertStrings(t, cfg.PlanDirs, []string{"plans"})
++	assertStrings(t, cfg.StateDirs, []string{"states"})
++	assertStrings(t, cfg.JournalDirs, []string{"journals"})
++	assertStrings(t, cfg.NoteDirs, []string{"notes"})
++	assertStrings(t, cfg.LogDirs, []string{"logs"})
++}
++
++func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "waveplan-ps.yaml")
++	writeTestFile(t, path, "display:\n  expand_first_wave: false\n")
++
++	cfg, err := Load(path)
++	if err != nil {
++		t.Fatalf("Load() error = %v", err)
++	}
++
++	if cfg.Display.ExpandFirstWave {
++		t.Fatal("Display.ExpandFirstWave = true, want explicit false")
++	}
++}
++
++func assertStrings(t *testing.T, got, want []string) {
++	t.Helper()
++	if len(got) != len(want) {
++		t.Fatalf("len(%#v) = %d, want %d", got, len(got), len(want))
++	}
++	for i := range want {
++		if got[i] != want[i] {
++			t.Fatalf("value[%d] = %q, want %q", i, got[i], want[i])
++		}
++	}
++}
++
++func writeTestFile(t *testing.T, path, body string) {
++	t.Helper()
++	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
++		t.Fatalf("write %q: %v", path, err)
++	}
++}
+
+tokens used
+66,071

@@ -1,0 +1,169 @@
+{
+  "plan": "2026-05-12-waveplan-ps-execution-waves.json",
+  "taken": {
+    "T9.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 15:36",
+      "review_entered_at": "2026-05-12 15:41",
+      "review_ended_at": "",
+      "reviewer": "sigma",
+      "finished_at": ""
+    }
+  },
+  "completed": {
+    "T1.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 12:25",
+      "review_entered_at": "2026-05-12 12:38",
+      "review_ended_at": "2026-05-12 12:41",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "git_sha": "${GIT_SHA:-DEFERRED}",
+      "finished_at": "2026-05-12 12:41"
+    },
+    "T2.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 12:41",
+      "review_entered_at": "2026-05-12 14:32",
+      "review_ended_at": "2026-05-12 14:34",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "git_sha": "${GIT_SHA:-DEFERRED}",
+      "finished_at": "2026-05-12 14:34"
+    },
+    "T3.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 14:34",
+      "review_entered_at": "2026-05-12 14:37",
+      "review_ended_at": "2026-05-12 14:39",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "git_sha": "${GIT_SHA:-DEFERRED}",
+      "finished_at": "2026-05-12 14:40"
+    },
+    "T4.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 14:40",
+      "review_entered_at": "2026-05-12 14:44",
+      "review_ended_at": "2026-05-12 14:49",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "git_sha": "${GIT_SHA:-DEFERRED}",
+      "finished_at": "2026-05-12 14:49"
+    },
+    "T5.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 14:49",
+      "review_entered_at": "2026-05-12 14:55",
+      "review_ended_at": "2026-05-12 15:00",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "git_sha": "${GIT_SHA:-DEFERRED}",
+      "finished_at": "2026-05-12 15:00"
+    },
+    "T6.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 15:00",
+      "review_entered_at": "2026-05-12 15:07",
+      "review_ended_at": "2026-05-12 15:11",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "git_sha": "${GIT_SHA:-DEFERRED}",
+      "finished_at": "2026-05-12 15:11"
+    },
+    "T7.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 15:11",
+      "review_entered_at": "2026-05-12 15:15",
+      "review_ended_at": "2026-05-12 15:20",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "git_sha": "${GIT_SHA:-DEFERRED}",
+      "finished_at": "2026-05-12 15:20"
+    },
+    "T8.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 15:28",
+      "review_entered_at": "2026-05-12 15:34",
+      "review_ended_at": "2026-05-12 15:36",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "git_sha": "${GIT_SHA:-DEFERRED}",
+      "finished_at": "2026-05-12 15:36"
+    }
+  },
+  "tail": {
+    "T1.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 12:25",
+      "review_entered_at": "2026-05-12 12:38",
+      "review_ended_at": "2026-05-12 12:41",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "finished_at": ""
+    },
+    "T2.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 12:41",
+      "review_entered_at": "2026-05-12 14:32",
+      "review_ended_at": "2026-05-12 14:34",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "finished_at": ""
+    },
+    "T3.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 14:34",
+      "review_entered_at": "2026-05-12 14:37",
+      "review_ended_at": "2026-05-12 14:39",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "finished_at": ""
+    },
+    "T4.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 14:40",
+      "review_entered_at": "2026-05-12 14:44",
+      "review_ended_at": "2026-05-12 14:49",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "finished_at": ""
+    },
+    "T5.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 14:49",
+      "review_entered_at": "2026-05-12 14:55",
+      "review_ended_at": "2026-05-12 15:00",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "finished_at": ""
+    },
+    "T6.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 15:00",
+      "review_entered_at": "2026-05-12 15:07",
+      "review_ended_at": "2026-05-12 15:11",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "finished_at": ""
+    },
+    "T7.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 15:11",
+      "review_entered_at": "2026-05-12 15:15",
+      "review_ended_at": "2026-05-12 15:20",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "finished_at": ""
+    },
+    "T8.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-12 15:28",
+      "review_entered_at": "2026-05-12 15:34",
+      "review_ended_at": "2026-05-12 15:36",
+      "reviewer": "sigma",
+      "review_note": "${WP_COMMENT:-}",
+      "finished_at": ""
+    }
+  }
+}

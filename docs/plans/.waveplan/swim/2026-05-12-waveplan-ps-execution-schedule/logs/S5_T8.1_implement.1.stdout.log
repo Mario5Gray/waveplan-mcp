@@ -1,0 +1,18 @@
+Implemented T8.1 doc work directly in the repo.
+
+Changes:
+- Added [README.md](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/README.md)
+  - Usage for `--once`, live TUI, config, and `--plan`
+  - Full flag table
+  - Recursive directory semantics
+  - SWIM log filename rules and task-id correlation notes
+- Added [docs/waveplan-ps-config-example.yaml](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/docs/waveplan-ps-config-example.yaml)
+  - Example config for plan/state/journal/note/log roots
+  - Explicit note that `*_dirs` are recursive roots, not globs
+
+Verification run:
+- `drift refs README.md` and `drift refs docs/waveplan-ps-config-example.yaml`: no refs returned
+- `GOCACHE=$PWD/.gomodcache/go-build go test -count=1 ./...`: all packages passed, including integration tests
+- `GOCACHE=$PWD/.gomodcache/go-build go run ./cmd/waveplan-ps --once --config docs/waveplan-ps-config-example.yaml --plan 2026-05-12-waveplan-ps-execution-waves.json`: rendered the selected plan snapshot successfully
+
+Waveplan usage stayed read-only. No waveplan write actions were executed.

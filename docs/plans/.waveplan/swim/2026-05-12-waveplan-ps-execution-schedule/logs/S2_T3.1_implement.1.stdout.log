@@ -1,0 +1,16 @@
+Implemented T3.1 in the repo.
+
+Changes:
+- [internal/config/config.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/config/config.go:11): added YAML config loading with `Load`, `Decode`, defaults, and discovery directory fields.
+- [internal/config/config.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/config/config.go:35): uses an internal `*bool` while decoding so omitted `display.expand_first_wave` defaults to `true`, while explicit `false` is preserved.
+- [internal/config/config_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/config/config_test.go:10): added tests for default display behavior, explicit false, directory fields, and file loading.
+
+Verification:
+- RED first: `GOCACHE=/private/tmp/waveplan-ps-gocache go test ./internal/config` failed with undefined `Decode`/`Load`.
+- Focused green: `GOCACHE=/private/tmp/waveplan-ps-gocache go test ./internal/config` passed.
+- Full fresh suite: `GOCACHE=/private/tmp/waveplan-ps-gocache go test -count=1 ./...` passed:
+  - `internal/config`
+  - `internal/discovery`
+  - `internal/model`
+
+Also ran `drift refs internal/config/config.go`; it returned no bindings/output. No waveplan write actions were executed.

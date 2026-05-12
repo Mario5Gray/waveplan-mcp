@@ -1,0 +1,16 @@
+Implemented T7.1.
+
+Changed:
+- [cmd/waveplan-ps/main.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/cmd/waveplan-ps/main.go:45): fixed compiled CLI argument parsing by using `os.Args[1:]` unless tests explicitly call `SetArgs`.
+- [tests/integration/waveplan_ps_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/tests/integration/waveplan_ps_test.go:13): added compiled-binary `--once` integration test with plan/state/journal/log fixtures and snapshot output assertions.
+
+TDD evidence:
+- Initial run failed as expected: `go test ./tests/integration -run TestCompiledBinaryOnceRendersSnapshotOutput -count=1`
+  - Failure: compiled binary produced no `Loaded:` snapshot output.
+- After fix: same command passed.
+
+Final verification:
+- `GOCACHE=/private/tmp/waveplan-ps-gocache go test ./...`
+- Result: all packages passed, including `tests/integration`.
+
+Waveplan note: I did not run any waveplan write actions. A read-only `waveplan_get` attempt was cancelled by the environment.

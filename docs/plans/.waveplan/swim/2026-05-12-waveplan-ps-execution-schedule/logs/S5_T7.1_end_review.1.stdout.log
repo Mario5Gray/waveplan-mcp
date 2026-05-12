@@ -1,0 +1,8 @@
+{
+  "review_ended_at": "2026-05-12 15:20",
+  "review_note": "${WP_COMMENT:-}",
+  "reviewer": "sigma",
+  "success": true,
+  "task_id": "T7.1",
+  "title": "Add integration test for --once snapshot output"
+}

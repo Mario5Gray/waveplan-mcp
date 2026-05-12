@@ -1,0 +1,83 @@
+I have enough to make findings. Compiling the review now.
+
+---
+
+## Review: T1.1 — Add Go dependencies and domain model loaders
+
+**Reviewer: sigma | Implementer: phi**
+
+---
+
+### CRITICAL
+
+**C1 — `go.sum` is incomplete; tview missing entirely**
+
+`go.mod:6` declares `github.com/rivo/tview v0.42.0` but `go.sum` has **zero** entries for it. Also absent: all transitive dependencies of both `tview` (tcell/v2, uniseg, go-colorful, etc.) and `cobra` (pflag, mousetrap on Windows). The four-line go.sum covers only cobra and yaml.v3 top-level hashes.
+
+- `go mod verify` will fail
+- Any future file that imports tview or cobra's sub-packages will fail to build
+- Indicates `go mod tidy` was never run (or run against a different module state)
+
+**Required fix:** run `go mod tidy` from `waveplan-ps/` and commit the resulting `go.sum`.
+
+---
+
+### HIGH
+
+**H1 — `go 1.26.1` in `go.mod` is unverifiable / likely wrong**
+
+`go.mod:3` declares `go 1.26.1`. My knowledge cuts off August 2025; Go 1.26 likely does not exist yet. If CI runs an older toolchain, every `go` command exits with an error about mismatched directive. Even if Go 1.26 is released by 2026-05-12, patch version `1.26.1` in a `go` directive is non-standard — the `go` line normally takes `MAJOR.MINOR` only (e.g., `go 1.26`); patch components there are accepted only with an explicit `toolchain` line.
+
+**Required fix:** verify actual toolchain in use; change to `go 1.23` (or whatever the CI baseline is) unless there is a concrete reason for 1.26. If 1.26 is intentional, add an explicit `toolchain go1.26.1` directive below the `go` line.
+
+---
+
+### MEDIUM
+
+**M1 — `StatusOf` missing three lifecycle-branch tests**
+
+`model_test.go` tests only `StatusTaken` (taken, no review fields) and `StatusAvailable` (unknown ID). Three branches in `state.go:91-98` are uncovered:
+
+| Branch | Condition |
+|--------|-----------|
+| `StatusReviewTaken` | entry exists, `ReviewEnteredAt != ""`, `ReviewEndedAt == ""` |
+| `StatusReviewEnded` | entry exists, `ReviewEndedAt != ""` |
+| `StatusCompleted` | ID present in `Completed` map |
+
+These are the states downstream consumers (wave executor, SWIM runner) will depend on for dispatch decisions. Missing coverage here is a liability.
+
+**Required fix:** add three sub-cases to `TestLoadStateDecodesLifecycleMaps` exercising those branches.
+
+---
+
+### LOW
+
+**L1 — `ParseLogPath` error path untested**
+
+`log.go:89-105` returns an error for non-matching filenames; no test covers it. Not a correctness defect, but it's a public API that needs a reject case.
+
+**L2 — nil-init guards on empty JSON not tested**
+
+`DecodePlan`, `DecodeState`, `DecodeJournal` each nil-init their maps (e.g., `plan.go:87-98`). No test passes a minimal `{}` payload to confirm the returned struct is panic-safe with non-nil maps.
+
+---
+
+### Contract adherence
+
+- "root module only; do not create nested go.mod" — **satisfied**: single `go.mod` at `waveplan-ps/` root, no nested module. ✓
+- Loaders (`LoadPlan`, `LoadState`, `LoadJournal`, `LoadNotes`) all implemented with `Decode*` split for testability. ✓
+- Domain types match the execution-waves and state JSON schemas as seen in the test fixtures. ✓
+
+---
+
+### Summary
+
+| # | Severity | Fix required |
+|---|----------|-------------|
+| C1 | CRITICAL | Run `go mod tidy`; commit complete go.sum |
+| H1 | HIGH | Fix `go 1.26.1` directive; confirm against CI toolchain |
+| M1 | MEDIUM | Add StatusOf tests for review_taken, review_ended, completed |
+| L1 | LOW | Add ParseLogPath reject-case test |
+| L2 | LOW | Add empty-JSON round-trip test for Decode* functions |
+
+Block on C1 and H1. M1 should be fixed in this task; L1/L2 acceptable as follow-up but preferred now.

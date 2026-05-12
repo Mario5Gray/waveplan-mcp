@@ -1,0 +1,46 @@
+`fp` requires user approval. Here are the review findings; I'll provide the fp commands to run after.
+
+---
+
+## T2.1 Review: Deterministic Discovery + Log Validation
+
+**No blockers.** Implementation is correct. Three issues found.
+
+---
+
+### Findings (severity order)
+
+**[suggestion] `internal/discovery/discover.go:28` — `DiscoverAll` silent-drop undocumented**
+
+`DiscoverLogs` returns an error on malformed log-like filenames; `DiscoverAll` silently drops them (`return nil` at line 49). The behavior divergence is intentional and tested (`TestDiscoverAllIgnoresMalformedLogLikeFile`), but the godoc for `DiscoverAll` says nothing about this. A caller who gets no logs back and wonders why has no hint. The doc should say something like: *malformed log-like filenames are silently skipped.*
+
+**[suggestion] `internal/discovery/discover_test.go:113` — `TestDiscoverAllCombinesMultipleRootsDeterministically` only tests one root ordering**
+
+The test name claims "deterministically" but only invokes `DiscoverAll([]string{second, first})`. It doesn't verify that `DiscoverAll([]string{first, second})` produces the same result. The implementation sorts after collection so it IS order-independent, but the test doesn't prove it. A second call with reversed roots and `reflect.DeepEqual` comparison would seal this.
+
+**[nit] `internal/model/log.go:21` — `end_review` and `finish` actions in `logFilePattern` untested**
+
+The regex supports five action types (`implement`, `end_review`, `finish`, `review[_rN]?`, `fix[_rN]?`). `model_test.go` covers `implement`, `review_r2`, `fix_r1`. `end_review` and `finish` have no `ParseLogPath` round-trip tests. Low risk (regex is simple alternation) but the coverage gap is inconsistent.
+
+---
+
+### Not a bug (noted for record)
+
+- `isNotePath` uses `strings.EqualFold` vs. case-sensitive `HasSuffix` in all other matchers — intentional for cross-platform `.MD`/`.md` tolerance, fine as-is.
+- Separation of concerns (discovery scans, model parses) correctly observed per task note. ✓
+- Sorting is post-collection so multi-root output is deterministic. ✓
+- Attempt `0` is correctly rejected by regex `[1-9][0-9]*`. ✓
+
+---
+
+### fp comment commands (run after approval)
+
+```bash
+FP_AGENT_NAME='sigma' fp comment FP-WPPS-T2 '[suggestion] **internal/discovery/discover.go:28**: DiscoverAll silently drops malformed log-like filenames (return nil on ParseLogPath error) while DiscoverLogs returns an error for the same case. Behavior is tested and intentional, but the godoc does not mention the silent-drop. Add a note: "malformed log-like filenames are silently skipped" to prevent confusion for callers.'
+
+FP_AGENT_NAME='sigma' fp comment FP-WPPS-T2 '[suggestion] **internal/discovery/discover_test.go:113**: TestDiscoverAllCombinesMultipleRootsDeterministically only calls DiscoverAll with one root ordering. Add a second call with roots reversed and verify the results are DeepEqual to prove order-independence.'
+
+FP_AGENT_NAME='sigma' fp comment FP-WPPS-T2 '[nit] **internal/model/log.go:21**: logFilePattern supports end_review and finish action types but no ParseLogPath tests cover them. Add two table-driven cases in model_test.go.'
+
+FP_AGENT_NAME='sigma' fp comment FP-WPPS-T2 'Review complete. No blockers. Core correctness holds: deterministic sorting, ParseLogPath regex, DiscoverAll/DiscoverLogs separation. Three issues above (2 suggestions, 1 nit). Recommend approve-with-comments.'
+```

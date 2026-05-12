@@ -1,0 +1,8 @@
+{
+  "review_ended_at": "2026-05-12 15:11",
+  "review_note": "${WP_COMMENT:-}",
+  "reviewer": "sigma",
+  "success": true,
+  "task_id": "T6.1",
+  "title": "Implement CLI flags, plan filtering, snapshot mode, and page-refreshing TUI"
+}

@@ -1,0 +1,1161 @@
+{
+  "schema_version": 2,
+  "execution": [
+    {
+      "seq": 1,
+      "step_id": "S1_T1.1_implement",
+      "task_id": "T1.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 2,
+      "step_id": "S1_T1.1_review",
+      "task_id": "T1.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "claude",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 3,
+      "step_id": "S1_T1.1_end_review",
+      "task_id": "T1.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T1.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T1.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 4,
+      "step_id": "S1_T1.1_finish",
+      "task_id": "T1.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T1.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T1.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 5,
+      "step_id": "S2_T2.1_implement",
+      "task_id": "T2.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 6,
+      "step_id": "S2_T2.1_review",
+      "task_id": "T2.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "claude",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 7,
+      "step_id": "S2_T2.1_fix_r1",
+      "task_id": "T2.1",
+      "action": "fix",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-task-to-agent.sh",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--mode",
+          "fix"
+        ]
+      },
+      "wp_invoke": "wp-task-to-agent.sh --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --mode fix",
+      "status": "review_taken"
+    },
+    {
+      "seq": 8,
+      "step_id": "S2_T2.1_review_r2",
+      "task_id": "T2.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "claude",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 9,
+      "step_id": "S2_T2.1_end_review",
+      "task_id": "T2.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T2.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T2.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 10,
+      "step_id": "S2_T2.1_finish",
+      "task_id": "T2.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T2.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T2.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 11,
+      "step_id": "S2_T3.1_implement",
+      "task_id": "T3.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 12,
+      "step_id": "S2_T3.1_review",
+      "task_id": "T3.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "claude",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 13,
+      "step_id": "S2_T3.1_end_review",
+      "task_id": "T3.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T3.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T3.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 14,
+      "step_id": "S2_T3.1_finish",
+      "task_id": "T3.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T3.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T3.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 15,
+      "step_id": "S3_T4.1_implement",
+      "task_id": "T4.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 16,
+      "step_id": "S3_T4.1_review",
+      "task_id": "T4.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "claude",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 17,
+      "step_id": "S3_T4.1_end_review",
+      "task_id": "T4.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T4.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T4.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 18,
+      "step_id": "S3_T4.1_finish",
+      "task_id": "T4.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T4.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T4.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 19,
+      "step_id": "S3_T5.1_implement",
+      "task_id": "T5.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 20,
+      "step_id": "S3_T5.1_review",
+      "task_id": "T5.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "claude",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 21,
+      "step_id": "S3_T5.1_end_review",
+      "task_id": "T5.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T5.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T5.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 22,
+      "step_id": "S3_T5.1_finish",
+      "task_id": "T5.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T5.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T5.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 23,
+      "step_id": "S4_T6.1_implement",
+      "task_id": "T6.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 24,
+      "step_id": "S4_T6.1_review",
+      "task_id": "T6.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "claude",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 25,
+      "step_id": "S4_T6.1_end_review",
+      "task_id": "T6.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T6.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T6.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 26,
+      "step_id": "S4_T6.1_finish",
+      "task_id": "T6.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T6.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T6.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 27,
+      "step_id": "S5_T7.1_implement",
+      "task_id": "T7.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 28,
+      "step_id": "S5_T7.1_review",
+      "task_id": "T7.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "claude",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 29,
+      "step_id": "S5_T7.1_end_review",
+      "task_id": "T7.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T7.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T7.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 30,
+      "step_id": "S5_T7.1_finish",
+      "task_id": "T7.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T7.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T7.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 31,
+      "step_id": "S5_T8.1_implement",
+      "task_id": "T8.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 32,
+      "step_id": "S5_T8.1_review",
+      "task_id": "T8.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "claude",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 33,
+      "step_id": "S5_T8.1_end_review",
+      "task_id": "T8.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T8.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T8.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 34,
+      "step_id": "S5_T8.1_finish",
+      "task_id": "T8.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T8.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T8.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 35,
+      "step_id": "S6_T9.1_implement",
+      "task_id": "T9.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 36,
+      "step_id": "S6_T9.1_review",
+      "task_id": "T9.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "claude",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 37,
+      "step_id": "S6_T9.1_end_review",
+      "task_id": "T9.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T9.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T9.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 38,
+      "step_id": "S6_T9.1_finish",
+      "task_id": "T9.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T9.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T9.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 39,
+      "step_id": "S7_T10.1_implement",
+      "task_id": "T10.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 40,
+      "step_id": "S7_T10.1_review",
+      "task_id": "T10.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "claude",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 41,
+      "step_id": "S7_T10.1_end_review",
+      "task_id": "T10.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T10.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T10.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 42,
+      "step_id": "S7_T10.1_finish",
+      "task_id": "T10.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json",
+          "--task-id",
+          "T10.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/2026-05-12-waveplan-ps-execution-waves.json --task-id T10.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    }
+  ]
+}

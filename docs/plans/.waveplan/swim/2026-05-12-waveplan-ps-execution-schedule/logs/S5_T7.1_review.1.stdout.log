@@ -1,0 +1,84 @@
+`fp` commands are being blocked - I'll deliver the review findings directly. The user can post fp comments after reviewing.
+
+---
+
+## Review: T7.1 — Add integration test for `--once` snapshot output
+
+**Reviewer:** sigma | **Claimed by:** phi | **FP ref:** FP-WPPS-T7
+
+---
+
+### Findings (severity order)
+
+**[suggestion] Missing exec timeout — test hangs if binary hangs**
+`tests/integration/waveplan_ps_test.go:32`
+
+`exec.Command` is used without a context. If `--once` regresses to blocking (e.g., enters the live watcher instead of exiting), the test hangs indefinitely. Fix:
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+run := exec.CommandContext(ctx, binaryPath, "--once", ...)
+```
+
+**[suggestion] Merged stdout/stderr hides output-routing bugs**
+`tests/integration/waveplan_ps_test.go:40-43`
+
+Both streams are captured into the same buffer (`run.Stderr = &stdout`). If `runOnce` accidentally writes the snapshot to stderr instead of stdout, every assertion still passes. Separate them:
+
+```go
+var stdout, stderr bytes.Buffer
+run.Stdout = &stdout
+run.Stderr = &stderr
+// assert on stdout.String() only; fail on stderr.String() != ""
+```
+
+**[nit] `--log-dir` points to fixture root, not the actual log directory**
+`tests/integration/waveplan_ps_test.go:29,38`
+
+Logs are written to `fixtureRoot/.waveplan/logs/` but `--log-dir fixtureRoot` is passed. This works because `DiscoverLogs` uses recursive `filepath.WalkDir` (confirmed in `discovery/discover.go:85`). But it's non-obvious; passing `logDir` directly would make the coupling explicit.
+
+**[nit] Fresh `GOCACHE` per test run forces full recompile**
+`tests/integration/waveplan_ps_test.go:19`
+
+```go
+build.Env = append(os.Environ(), "GOCACHE="+filepath.Join(t.TempDir(), "gocache"))
+```
+
+`t.TempDir()` is cleaned up after each run, so the cache is never reused. Drop the GOCACHE override to allow incremental builds across runs.
+
+---
+
+### Contract adherence — PASS
+
+| Check | Result |
+|---|---|
+| `StateFile.Tail` parses `"tail"` JSON field | ✓ `state.go:26` |
+| Tail rendered as `[completed] <agent>` | ✓ matches `ui_test.go:39` assertion |
+| `StatusOf` not called for tail entries | ✓ tail rendered via separate UI path |
+| `DiscoverLogs` recursive walk finds subdirectory logs | ✓ `discover.go:118` uses `WalkDir` |
+| `isJournalPath` matches `*.journal.json` | ✓ `discover.go:147` |
+| `DiscoverLogs` errors on bad log filename | ✓ `discover.go:88-91` |
+| Log count assertions match fixture | ✓ `S1_T1.1*` → T1.1 (1 log), `S2_T2.1*` → T2.1 (1 log) |
+| Journal assertion `"S2_T2.1_implement T2.1 implement taken -> taken"` | ✓ matches `demoJournalJSON()` E0002 |
+| T7.1 depends on T6.1 (`--once` implemented) | ✓ `main.go:146-148` |
+
+---
+
+### No regressions detected in
+
+- `TestBuildWatchOptionsPlanFilterNarrowsPlansAndStates`
+- `TestOnceCommandPrintsSnapshotForSelectedPlan`
+- `TestQueueLiveSnapshotReplacesActivePageInsideQueuedDraw`
+- `TestPollOnceLoadsSnapshotFromExplicitPathsAndLogDirs`
+- `TestWatcherRunPollsUntilContextCanceled`
+- All `ui` package tests
+
+---
+
+### Required fixes before approve
+
+1. Add `exec.CommandContext` with a 30s timeout (prevents test suite hangs on regression)
+2. Separate stdout/stderr buffers and assert snapshot only on stdout
+
+The rest are nits — can be deferred to a follow-up or addressed inline. Core test logic, fixture data, and contract coverage are sound.

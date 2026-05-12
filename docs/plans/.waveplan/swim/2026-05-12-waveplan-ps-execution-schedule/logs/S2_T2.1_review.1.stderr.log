@@ -1,0 +1,17 @@
+Traceback (most recent call last):
+  File "/Users/darkbit1001/.local/bin/waveplan-cli", line 922, in <module>
+    main()
+    ~~~~^^
+  File "/Users/darkbit1001/.local/bin/waveplan-cli", line 918, in main
+    client.close()
+    ~~~~~~~~~~~~^^
+  File "/Users/darkbit1001/.local/bin/waveplan-cli", line 624, in close
+    self._proc.wait(timeout=3)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 1278, in wait
+    return self._wait(timeout=timeout)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 2077, in _wait
+    time.sleep(delay)
+    ~~~~~~~~~~^^^^^^^
+KeyboardInterrupt

@@ -1,0 +1,75 @@
+I have a full picture now. Here are the findings.
+
+---
+
+## Review: T3.1 — Config loading with safe boolean pointer defaults
+
+**Files reviewed:** `internal/config/config.go`, `internal/config/config_test.go`
+
+---
+
+### Findings (severity order)
+
+**[suggestion] `config.go:64` — `Decode` returns raw `io.EOF` on empty reader**
+
+`yaml.NewDecoder(r).Decode(&raw)` returns `io.EOF` when the reader is empty (e.g., a zero-byte file). That error propagates out of `Load` as an opaque EOF, not a useful message. A user with an accidentally empty config file gets a confusing error instead of all defaults. The fix is minimal:
+
+```go
+if err := decoder.Decode(&raw); err != nil {
+    if err == io.EOF {
+        return cfg, nil  // empty file → all defaults
+    }
+    return nil, err
+}
+```
+
+**[suggestion] `config_test.go` — no test for explicit `true`, no error-path tests**
+
+Three cases are covered (omit, explicit false, directories, file-based). Missing:
+- `expand_first_wave: true` explicit — symmetric to explicit false, documents the override both ways
+- `Load` with non-existent path — verifies the error is wrapped with the path (it is, per code, but untested)
+- `Decode` on empty reader — would catch the EOF issue above
+
+**[nit] `config.go:26–37` — `rawConfig` duplicates `Config` layout**
+
+Acceptable for the two-layer decode pattern, but if `Config` grows fields the duplication must be kept in sync manually. No struct embedding or code-gen is used. Fine for current scope; worth a note if the struct grows.
+
+**[nit] `config.go:67` — `KnownFields(true)` is strict but silent to callers**
+
+Unknown YAML keys will error. Correct defensive behavior, but any future YAML extension added before the struct update will break existing configs. Acceptable design choice — just document it if this becomes a user-facing format.
+
+---
+
+### Correctness verdict
+
+**PASS.** The boolean pointer pattern (`*bool` in raw, `bool` in normalized) is the idiomatic Go solution for distinguishing omit from explicit-false. The merge logic at lines 78–80 is correct:
+
+```go
+if raw.Display.ExpandFirstWave != nil {
+    cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
+}
+```
+
+`Default()` returns `true`, nil pointer leaves it, non-nil pointer overrides it. All three YAML states handled correctly.
+
+### Contract adherence
+
+Task note: *"support explicit false for expand_first_wave"* — satisfied. `TestDecodePreservesExplicitFalseExpandFirstWave` and `TestLoadReadsYAMLConfigFromPath` both verify this path.
+
+### Dependency check (T1.1)
+
+Config package does not import discovery — dir slices are plain `[]string`. Wiring config → discovery is a later concern. Scope boundary is correct.
+
+---
+
+### Required fixes
+
+Only the **empty-reader EOF** issue is worth blocking on if this config can realistically be an empty file (zero-byte YAML). If the contract guarantees at least `{}`, it's a suggestion. Recommend treating it as a required fix given `Load` opens arbitrary user files.
+
+---
+
+Ready to post this as an fp comment on `FP-WPPS-T3` as agent sigma. Approve the `fp` command when prompted:
+
+```bash
+FP_AGENT_NAME='sigma' fp comment FP-WPPS-T3 '[suggestion] config.go:64 — Decode returns raw io.EOF on empty reader; wrap: if err == io.EOF { return cfg, nil }. [suggestion] config_test.go — add explicit-true case, Load error path, and empty-reader test. [nit] rawConfig duplicates Config layout; manual sync needed as struct grows. Correctness: PASS. Boolean pointer pattern correct, all three YAML states handled. Contract satisfied: explicit false preserved. Required fix: EOF handling in Decode if empty config files are realistic for users.'
+```

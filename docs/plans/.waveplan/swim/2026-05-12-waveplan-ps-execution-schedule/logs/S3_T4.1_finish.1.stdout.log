@@ -1,0 +1,7 @@
+{
+  "finished_at": "2026-05-12 14:49",
+  "git_sha": "${GIT_SHA:-DEFERRED}",
+  "success": true,
+  "task_id": "T4.1",
+  "title": "Implement watcher polling and exported PollOnce helper"
+}

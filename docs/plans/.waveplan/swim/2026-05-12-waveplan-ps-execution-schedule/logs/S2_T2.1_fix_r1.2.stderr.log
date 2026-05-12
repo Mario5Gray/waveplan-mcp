@@ -1,0 +1,3 @@
+usage: waveplan-cli [-h] [--mcp-bin MCP_BIN] [--plan PLAN]
+                    {peek,pop,start_review,end_review,fin,get,list_plans,deptree,swim} ...
+waveplan-cli: error: argument command: invalid choice: 'start_fix' (choose from peek, pop, start_review, end_review, fin, get, list_plans, deptree, swim)

@@ -1,0 +1,17 @@
+Implemented T6.1 in place.
+
+**Changed**
+- [main.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/cmd/waveplan-ps/main.go:69): added CLI entrypoint with `--once`, `--plan`, discovery dirs, log dirs, interval, display limits, config loading, plan/state filtering, snapshot rendering, and live TUI refresh.
+- [main.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/cmd/waveplan-ps/main.go:231): live updates now replace the active page through `QueueUpdateDraw`.
+- [main_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/cmd/waveplan-ps/main_test.go:19): added tests for `--plan` filtering plans and matching state sidecars, `--once` output, and queued page replacement.
+
+Note: I used the standard `flag` package rather than importing Cobra because Cobra’s indirect modules are not present in `go.sum`, the module cache is not writable, and network fetches are unavailable in this sandbox.
+
+**Verification**
+- TDD red run: `GOCACHE=$PWD/.gocache go test ./cmd/waveplan-ps` failed on missing CLI symbols before implementation.
+- Focused green run: `GOCACHE=$PWD/.gocache go test ./cmd/waveplan-ps` passed.
+- Fresh full suite: `GOCACHE=$PWD/.gocache go test -count=1 ./...` passed for all packages.
+- Build check: `GOCACHE=$PWD/.gocache go build ./cmd/waveplan-ps` exited 0.
+- Drift refs checked for both new CLI files; no refs returned.
+
+No waveplan write actions were executed.
