@@ -252,6 +252,13 @@ func (s *WaveplanServer) createTools() []server.ServerTool {
 			Handler: s.handleStartReview,
 		},
 		{
+			Tool: mcp.NewTool("waveplan_start_fix",
+				mcp.WithDescription("Return a reviewed task to taken status for a fix cycle"),
+				mcp.WithString("task_id", mcp.Required(), mcp.Description("Task ID to fix")),
+			),
+			Handler: s.handleStartFix,
+		},
+		{
 			Tool: mcp.NewTool("waveplan_end_review",
 				mcp.WithDescription("End a review for a task"),
 				mcp.WithString("task_id", mcp.Required(), mcp.Description("Task ID to end review for")),
@@ -527,6 +534,77 @@ func (s *WaveplanServer) handleStartReview(ctx context.Context, request mcp.Call
 	traceOut["task_id"] = taskID
 	traceOut["reviewer"] = reviewer
 	traceOut["review_entered_at"] = ts
+	data, _ := json.Marshal(result)
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func (s *WaveplanServer) handleStartFix(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	taskID, err := requiredStringParam(request.Params.Arguments, "task_id")
+	trace := startLangSmithTrace("waveplan start_fix", map[string]any{
+		"plan_path": s.planPath,
+		"task_id":   taskID,
+	})
+	traceStatus := "error"
+	traceErr := ""
+	traceOut := map[string]any{}
+	defer func() {
+		traceOut["status"] = traceStatus
+		if traceErr != "" {
+			traceOut["error"] = traceErr
+		}
+		trace.finish(traceOut)
+	}()
+
+	if err != nil {
+		traceErr = err.Error()
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := s.reloadState(); err != nil {
+		traceErr = fmt.Sprintf("failed to reload state: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to reload state: %v", err)), nil
+	}
+
+	if _, ok := s.plan.Units[taskID]; !ok {
+		traceErr = fmt.Sprintf("task '%s' not found in plan", taskID)
+		return mcp.NewToolResultError(fmt.Sprintf("task '%s' not found in plan", taskID)), nil
+	}
+	taken, ok := s.state.Taken[taskID]
+	if !ok {
+		traceErr = fmt.Sprintf("task '%s' is not currently taken", taskID)
+		return mcp.NewToolResultError(fmt.Sprintf("task '%s' is not currently taken", taskID)), nil
+	}
+	if taken.ReviewEnteredAt == "" {
+		traceErr = fmt.Sprintf("no active review for %s", taskID)
+		return mcp.NewToolResultError(fmt.Sprintf("no active review for %s", taskID)), nil
+	}
+	if taken.ReviewEndedAt != "" {
+		traceErr = fmt.Sprintf("review for %s already ended", taskID)
+		return mcp.NewToolResultError(fmt.Sprintf("review for %s already ended", taskID)), nil
+	}
+
+	s.state.Taken[taskID] = TaskEntry{
+		TakenBy:   taken.TakenBy,
+		StartedAt: taken.StartedAt,
+		GitSha:    taken.GitSha,
+	}
+	if err := s.saveState(); err != nil {
+		traceErr = fmt.Sprintf("failed to save state: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to save state: %v", err)), nil
+	}
+	unit := s.plan.Units[taskID]
+	result := map[string]any{
+		"success": true,
+		"task_id": taskID,
+		"title":   unit.Title,
+		"status":  "taken",
+	}
+	traceStatus = "ok"
+	traceOut["task_id"] = taskID
+	traceOut["status_after"] = "taken"
 	data, _ := json.Marshal(result)
 	return mcp.NewToolResultText(string(data)), nil
 }

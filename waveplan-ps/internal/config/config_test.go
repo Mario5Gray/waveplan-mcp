@@ -67,6 +67,38 @@ func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
 	}
 }
 
+func TestLoadResolvesRelativeDiscoveryDirectoriesAgainstConfigPath(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, "observer")
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll(%q): %v", cfgDir, err)
+	}
+	path := filepath.Join(cfgDir, "waveplan-ps.yaml")
+	writeTestFile(t, path, `
+plan_dirs:
+  - ../plans
+state_dirs:
+  - ../state
+journal_dirs:
+  - ../journals
+note_dirs:
+  - ../notes
+log_dirs:
+  - ../logs
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	assertStrings(t, cfg.PlanDirs, []string{filepath.Join(root, "plans")})
+	assertStrings(t, cfg.StateDirs, []string{filepath.Join(root, "state")})
+	assertStrings(t, cfg.JournalDirs, []string{filepath.Join(root, "journals")})
+	assertStrings(t, cfg.NoteDirs, []string{filepath.Join(root, "notes")})
+	assertStrings(t, cfg.LogDirs, []string{filepath.Join(root, "logs")})
+}
+
 func assertStrings(t *testing.T, got, want []string) {
 	t.Helper()
 	if len(got) != len(want) {

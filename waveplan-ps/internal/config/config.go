@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -57,6 +58,12 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode config %q: %w", path, err)
 	}
+	baseDir := filepath.Dir(path)
+	cfg.PlanDirs = resolvePaths(baseDir, cfg.PlanDirs)
+	cfg.StateDirs = resolvePaths(baseDir, cfg.StateDirs)
+	cfg.JournalDirs = resolvePaths(baseDir, cfg.JournalDirs)
+	cfg.NoteDirs = resolvePaths(baseDir, cfg.NoteDirs)
+	cfg.LogDirs = resolvePaths(baseDir, cfg.LogDirs)
 	return cfg, nil
 }
 
@@ -79,4 +86,16 @@ func Decode(r io.Reader) (*Config, error) {
 		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave
 	}
 	return &cfg, nil
+}
+
+func resolvePaths(baseDir string, paths []string) []string {
+	resolved := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if path == "" || filepath.IsAbs(path) {
+			resolved = append(resolved, path)
+			continue
+		}
+		resolved = append(resolved, filepath.Clean(filepath.Join(baseDir, path)))
+	}
+	return resolved
 }

@@ -1018,6 +1018,44 @@ func TestFinWithPop(t *testing.T) {
 	}
 }
 
+func TestStartFixClearsReviewState(t *testing.T) {
+	planJSON := []byte(`{
+		"units": {
+			"T1.1": {"task": "T1", "title": "Task 1", "kind": "impl", "wave": 1, "plan_line": 10, "depends_on": [], "doc_refs": [], "fp_refs": [], "notes": []}
+		},
+		"tasks": {"T1": {"plan_line": 10}},
+		"doc_index": {},
+		"fp_index": {}
+	}`)
+	srv := makeTestServer(t, planJSON)
+	srv.state.Taken["T1.1"] = TaskEntry{
+		TakenBy:         "phi",
+		StartedAt:       "2026-05-12 10:00",
+		ReviewEnteredAt: "2026-05-12 10:05",
+		Reviewer:        "sigma",
+	}
+
+	_, err := srv.handleStartFix(nil, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{"task_id": "T1.1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("handleStartFix returned error: %v", err)
+	}
+
+	taken := srv.state.Taken["T1.1"]
+	if taken.TakenBy != "phi" {
+		t.Errorf("taken_by = %q, want phi", taken.TakenBy)
+	}
+	if taken.StartedAt != "2026-05-12 10:00" {
+		t.Errorf("started_at = %q, want preserved start", taken.StartedAt)
+	}
+	if taken.ReviewEnteredAt != "" || taken.ReviewEndedAt != "" || taken.Reviewer != "" || taken.ReviewNote != "" {
+		t.Fatalf("review fields should be cleared for fix cycle, got %+v", taken)
+	}
+}
+
 // TestFinRecordsTail verifies that handleFin records the taken entry into Tail
 // before deleting it from Taken.
 func TestFinRecordsTail(t *testing.T) {

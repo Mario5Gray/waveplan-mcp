@@ -138,6 +138,9 @@ func (c *rootCommand) ExecuteContext(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := validateWatchOptions(watchOptions); err != nil {
+		return err
+	}
 	renderOptions := ui.Options{
 		ExpandFirstWave: cfg.Display.ExpandFirstWave,
 		TailLimit:       opts.tailLimit,
@@ -198,6 +201,17 @@ func buildWatchOptions(cfg config.Config, opts cliOptions) (watch.Options, error
 		NotePaths:    notePaths,
 		LogDirs:      logDirs,
 	}, nil
+}
+
+func validateWatchOptions(options watch.Options) error {
+	if len(options.PlanPaths) == 0 &&
+		len(options.StatePaths) == 0 &&
+		len(options.JournalPaths) == 0 &&
+		len(options.NotePaths) == 0 &&
+		len(options.LogDirs) == 0 {
+		return fmt.Errorf("no discovery roots configured; pass --config or at least one of --plan-dir, --state-dir, --journal-dir, --note-dir, or --log-dir")
+	}
+	return nil
 }
 
 func runOnce(out io.Writer, options watch.Options, renderOptions ui.Options) error {

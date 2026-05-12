@@ -1,4 +1,5 @@
-.PHONY: build install install-bin install-helpers uninstall-helpers test clean build-mcp install-mcp install-config install-specs
+.PHONY: build install install-bin install-helpers uninstall-helpers test clean build-mcp install-mcp install-config install-specs \
+        ps-build ps-install ps-once ps-watch
 
 BINARY_NAME := waveplan-mcp
 MCP_BINARY  := txtstore-mcp
@@ -11,6 +12,11 @@ HELPER_SCRIPTS := waveplan-cli wp-task-to-agent.sh wp-plan-to-agent.sh wp-emit-w
 
 LDFLAGS := -X main.gitSha=$(GIT_SHA)
 
+# waveplan-ps observer (subdir build)
+PS_DIR      := waveplan-ps
+PS_BIN      := $(PS_DIR)/waveplan-ps
+PS_INTERVAL ?= 1s
+
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY_NAME)
 
@@ -18,7 +24,7 @@ build-mcp:
 	go build -o $(MCP_BINARY) ./cmd/txtstore-mcp/
 	go build -o txtstore ./cmd/txtstore/
 
-install: install-bin install-helpers install-swim-bins install-specs install-config
+install: install-bin install-helpers install-swim-bins install-specs install-config ps-install
 
 install-bin: build
 	@mkdir -p $(INSTALL_DIR)
@@ -72,6 +78,29 @@ uninstall-helpers:
 		rm -f $(INSTALL_DIR)/$$script; \
 		echo "Removed $(INSTALL_DIR)/$$script"; \
 	done
+
+# waveplan-ps observer targets
+ps-install: ps-build
+	install -m 755 $(PS_BIN) $(INSTALL_DIR)/waveplan-ps
+	@echo "Installed waveplan-ps to $(INSTALL_DIR)/waveplan-ps"
+
+ps-build:
+	cd $(PS_DIR) && go build -o waveplan-ps ./cmd/waveplan-ps
+
+ps-once: ps-build
+	$(PS_BIN) --once \
+	  --plan-dir docs/plans \
+	  --state-dir docs/plans \
+	  --journal-dir docs/plans \
+	  --log-dir docs/plans/.waveplan
+
+ps-watch: ps-build
+	$(PS_BIN) \
+	  --plan-dir docs/plans \
+	  --state-dir docs/plans \
+	  --journal-dir docs/plans \
+	  --log-dir docs/plans/.waveplan \
+	  --interval $(PS_INTERVAL)
 
 test:
 	go test -v ./...

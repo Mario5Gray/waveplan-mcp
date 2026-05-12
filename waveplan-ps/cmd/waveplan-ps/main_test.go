@@ -69,6 +69,22 @@ func TestOnceCommandPrintsSnapshotForSelectedPlan(t *testing.T) {
 	}
 }
 
+func TestExecuteContextErrorsWhenNoDiscoveryRootsConfigured(t *testing.T) {
+	cmd := NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs(nil)
+
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("ExecuteContext() error = nil, want configuration error")
+	}
+	if !strings.Contains(err.Error(), "no discovery roots configured") {
+		t.Fatalf("error = %v, want no discovery roots configured", err)
+	}
+}
+
 func TestQueueLiveSnapshotReplacesActivePageInsideQueuedDraw(t *testing.T) {
 	app := &fakeApp{}
 	pages := &fakePages{}
