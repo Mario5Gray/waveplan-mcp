@@ -106,4 +106,7 @@ test:
 	go test -v ./...
 
 clean:
-	rm -f $(BINARY_NAME) $(MCP_BINARY) txtstore
+	rm -f $(BINARY_NAME) $(MCP_BINARY) txtstore contextsize
+
+contextsize:
+	go build -o $@ ./cmd/contextsize
