@@ -18,12 +18,18 @@ type Options struct {
 	ExpandFirstWave bool
 	TailLimit       int
 	JournalLimit    int
+	LogTailLines    int
 }
 
 // Root is the top-level tview primitive for one rendered snapshot.
 type Root struct {
 	*tview.Flex
-	text string
+	text     string
+	table    *tview.Table
+	details  *tview.TextView
+	snapshot watch.Snapshot
+	options  Options
+	rowUnits []string // index 0 = header (empty), 1..n = unitID per data row
 }
 
 // Text returns the same deterministic content used by snapshot mode.
@@ -34,36 +40,199 @@ func (r *Root) Text() string {
 	return r.text
 }
 
+// Table returns the selectable plan table so callers can set up focus cycling.
+func (r *Root) Table() *tview.Table {
+	if r == nil {
+		return nil
+	}
+	return r.table
+}
+
+// Details returns the scrollable detail panel so callers can set up focus cycling.
+func (r *Root) Details() *tview.TextView {
+	if r == nil {
+		return nil
+	}
+	return r.details
+}
+
 // BuildPrimitive renders a snapshot into a tview primitive suitable for live use.
 func BuildPrimitive(snapshot watch.Snapshot, options Options) tview.Primitive {
 	text := RenderText(snapshot, options)
-	table := BuildTable(snapshot, options)
+	table := tview.NewTable().SetBorders(false).SetSelectable(true, false)
+	rowUnits := fillTable(table, snapshot, options)
+
 	details := tview.NewTextView().
 		SetDynamicColors(false).
-		SetWrap(false).
+		SetWrap(true).
+		SetScrollable(true).
 		SetText(text)
 
 	flex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(table, 0, 2, true).
+		AddItem(table, table.GetRowCount(), 0, true).
 		AddItem(details, 0, 1, false)
 
-	return &Root{
-		Flex: flex,
-		text: text,
+	root := &Root{
+		Flex:     flex,
+		text:     text,
+		table:    table,
+		details:  details,
+		snapshot: snapshot,
+		options:  options,
+		rowUnits: rowUnits,
 	}
+
+	table.SetSelectionChangedFunc(func(row, _ int) {
+		root.updateDetailsForRow(row)
+	})
+
+	return root
 }
 
-// BuildTable renders plan units with lifecycle status and exact log counts.
+// BuildTable renders plan units with lifecycle status, agent, last action, and log counts.
 func BuildTable(snapshot watch.Snapshot, options Options) *tview.Table {
-	table := tview.NewTable().
-		SetBorders(false).
-		SetSelectable(true, false)
+	table := tview.NewTable().SetBorders(false).SetSelectable(true, false)
+	fillTable(table, snapshot, options)
+	return table
+}
 
-	headers := []string{"wave", "unit", "status", "logs", "title"}
+// Update refreshes the Root content in-place, preserving table row selection and focus.
+func (r *Root) Update(snapshot watch.Snapshot, options Options) {
+	selRow, selCol := r.table.GetSelection()
+
+	r.snapshot = snapshot
+	r.options = options
+	r.text = RenderText(snapshot, options)
+
+	r.table.Clear()
+	r.rowUnits = fillTable(r.table, snapshot, options)
+	r.Flex.ResizeItem(r.table, r.table.GetRowCount(), 0)
+
+	if selRow > 0 {
+		if selRow >= r.table.GetRowCount() {
+			selRow = r.table.GetRowCount() - 1
+		}
+		r.table.Select(selRow, selCol)
+	}
+	r.updateDetailsForRow(selRow)
+}
+
+// updateDetailsForRow sets the detail panel to unit-specific content for the given
+// table row, or falls back to the full text when the header row is selected.
+func (r *Root) updateDetailsForRow(row int) {
+	if row <= 0 || row >= len(r.rowUnits) {
+		r.details.SetText(r.text)
+		return
+	}
+	r.details.SetText(r.renderUnitDetails(r.rowUnits[row]))
+}
+
+// renderUnitDetails produces a focused view of one unit's history and log tail.
+func (r *Root) renderUnitDetails(unitID string) string {
+	var b strings.Builder
+
+	// Locate state for this unit.
+	var state *model.StateFile
+	for _, loaded := range r.snapshot.Plans {
+		if loaded.Plan == nil {
+			continue
+		}
+		if _, ok := loaded.Plan.Units[unitID]; ok {
+			state = stateForPlan(r.snapshot.States, loaded.Path)
+			break
+		}
+	}
+
+	status := model.StatusAvailable
+	agent := ""
+	if state != nil {
+		status = state.StatusOf(unitID)
+		agent = agentForUnit(state, unitID)
+	}
+	lastAction := lastActionByTask(r.snapshot.Journals)[unitID]
+
+	fmt.Fprintf(&b, "%s  [%s]", unitID, status)
+	if agent != "" {
+		fmt.Fprintf(&b, "  agent:%s", agent)
+	}
+	if lastAction != "" {
+		fmt.Fprintf(&b, "  action:%s", lastAction)
+	}
+	b.WriteString("\n")
+
+	// Journal history for this unit.
+	var unitEvents []model.JournalEvent
+	var journalDir string
+	for _, loaded := range r.snapshot.Journals {
+		if loaded.Journal == nil {
+			continue
+		}
+		if journalDir == "" {
+			journalDir = filepath.Dir(loaded.Path)
+		}
+		for _, e := range loaded.Journal.Events {
+			if e.TaskID == unitID {
+				unitEvents = append(unitEvents, e)
+			}
+		}
+	}
+	if len(unitEvents) > 0 {
+		b.WriteString("\nHistory\n")
+		for _, e := range unitEvents {
+			fmt.Fprintf(&b, "  %s  %s  %s→%s\n", e.StepID, e.Outcome, e.StateBefore.TaskStatus, e.StateAfter.TaskStatus)
+			if e.Reason != "" {
+				fmt.Fprintf(&b, "    %s\n", e.Reason)
+			}
+		}
+	}
+
+	// Log tail: prefer snapshot.Logs (discovered), fall back to journal StdoutPath.
+	lines := r.options.LogTailLines
+	if lines <= 0 {
+		lines = 8
+	}
+	logPath := ""
+	unitLogs := LogsForUnit(r.snapshot.Logs, unitID)
+	for i := len(unitLogs) - 1; i >= 0; i-- {
+		if unitLogs[i].Stream == model.LogStreamStdout {
+			logPath = unitLogs[i].Path
+			break
+		}
+	}
+	if logPath == "" && journalDir != "" {
+		for i := len(unitEvents) - 1; i >= 0; i-- {
+			if unitEvents[i].StdoutPath != "" {
+				p := unitEvents[i].StdoutPath
+				if !filepath.IsAbs(p) {
+					p = filepath.Join(journalDir, p)
+				}
+				logPath = p
+				break
+			}
+		}
+	}
+	if logPath != "" {
+		tail := readRenderedLogLines(logPath, lines)
+		if len(tail) > 0 {
+			b.WriteString("\nLog\n")
+			for _, line := range tail {
+				fmt.Fprintf(&b, "  %s\n", line)
+			}
+		}
+	}
+
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func fillTable(table *tview.Table, snapshot watch.Snapshot, options Options) []string {
+	headers := []string{"wave", "unit", "status", "agent", "action", "logs", "title"}
 	for column, header := range headers {
 		table.SetCell(0, column, tview.NewTableCell(header).SetExpansion(1))
 	}
+
+	lastActions := lastActionByTask(snapshot.Journals)
+	rowUnits := []string{""} // slot 0 = header row
 
 	row := 1
 	for _, loaded := range snapshot.Plans {
@@ -81,13 +250,16 @@ func BuildTable(snapshot watch.Snapshot, options Options) *tview.Table {
 				table.SetCell(row, 0, tview.NewTableCell(fmt.Sprintf("%d", wave.Wave)))
 				table.SetCell(row, 1, tview.NewTableCell(unitID))
 				table.SetCell(row, 2, tview.NewTableCell(string(state.StatusOf(unitID))))
-				table.SetCell(row, 3, tview.NewTableCell(fmt.Sprintf("%d", logCount)))
-				table.SetCell(row, 4, tview.NewTableCell(unit.Title).SetExpansion(2))
+				table.SetCell(row, 3, tview.NewTableCell(agentForUnit(state, unitID)))
+				table.SetCell(row, 4, tview.NewTableCell(lastActions[unitID]))
+				table.SetCell(row, 5, tview.NewTableCell(fmt.Sprintf("%d", logCount)))
+				table.SetCell(row, 6, tview.NewTableCell(unit.Title).SetExpansion(2))
+				rowUnits = append(rowUnits, unitID)
 				row++
 			}
 		}
 	}
-	return table
+	return rowUnits
 }
 
 // RenderText renders a deterministic snapshot for --once style output.
@@ -109,6 +281,7 @@ func RenderText(snapshot watch.Snapshot, options Options) string {
 	}
 	renderTail(&builder, snapshot.States, options)
 	renderJournals(&builder, snapshot.Journals, options)
+	renderActiveLog(&builder, snapshot.Journals, snapshot.States, options)
 	return strings.TrimRight(builder.String(), "\n")
 }
 
@@ -288,6 +461,128 @@ func journalEvents(journals []watch.LoadedJournal) []model.JournalEvent {
 	})
 	return events
 }
+
+// agentForUnit returns the active agent name for a unit.
+// For review_taken the reviewer is active; otherwise the implementer.
+func agentForUnit(state *model.StateFile, unitID string) string {
+	if state == nil {
+		return ""
+	}
+	if entry, ok := state.Completed[unitID]; ok {
+		return entry.TakenBy
+	}
+	entry, ok := state.Taken[unitID]
+	if !ok {
+		return ""
+	}
+	if entry.ReviewEnteredAt != "" && entry.ReviewEndedAt == "" && entry.Reviewer != "" {
+		return entry.Reviewer
+	}
+	return entry.TakenBy
+}
+
+// lastActionByTask returns the most recently applied action per task ID from journals.
+func lastActionByTask(journals []watch.LoadedJournal) map[string]string {
+	result := map[string]string{}
+	for _, loaded := range journals {
+		if loaded.Journal == nil {
+			continue
+		}
+		for _, e := range loaded.Journal.Events {
+			if e.TaskID != "" && e.Outcome == "applied" {
+				result[e.TaskID] = e.Action
+			}
+		}
+	}
+	return result
+}
+
+func renderActiveLog(builder *strings.Builder, journals []watch.LoadedJournal, states []watch.LoadedState, options Options) {
+	lines := options.LogTailLines
+	if lines <= 0 {
+		lines = 8
+	}
+
+	// Find the most recent journal event that has a log path: prefer in-flight
+	// (CompletedOn empty), fall back to last event with a stdout path.
+	var active *model.JournalEvent
+	var journalDir string
+	for _, loaded := range journals {
+		if loaded.Journal == nil {
+			continue
+		}
+		events := loaded.Journal.Events
+		// In-flight pass: started but not yet completed.
+		for i := len(events) - 1; i >= 0; i-- {
+			e := events[i]
+			if e.StdoutPath != "" && e.StartedOn != "" && e.CompletedOn == "" {
+				active = &events[i]
+				journalDir = filepath.Dir(loaded.Path)
+				break
+			}
+		}
+		if active != nil {
+			break
+		}
+		// Fallback: last event with a log path.
+		for i := len(events) - 1; i >= 0; i-- {
+			e := events[i]
+			if e.StdoutPath != "" {
+				active = &events[i]
+				journalDir = filepath.Dir(loaded.Path)
+				break
+			}
+		}
+		if active != nil {
+			break
+		}
+	}
+	if active == nil {
+		return
+	}
+
+	// Resolve the agent name from state.
+	agent := ""
+	for _, loaded := range states {
+		if loaded.State == nil {
+			continue
+		}
+		if entry, ok := loaded.State.Taken[active.TaskID]; ok && entry.TakenBy != "" {
+			agent = entry.TakenBy
+			break
+		}
+	}
+
+	status := "running"
+	if active.CompletedOn != "" {
+		status = active.Outcome
+	}
+
+	header := fmt.Sprintf("\nLog  %s  [%s]", active.StepID, status)
+	if agent != "" {
+		header += "  agent:" + agent
+	}
+	builder.WriteString(header + "\n")
+
+	// Resolve log path relative to the journal file's directory.
+	logPath := active.StdoutPath
+	if !filepath.IsAbs(logPath) {
+		logPath = filepath.Join(journalDir, logPath)
+	}
+	tail := readRenderedLogLines(logPath, lines)
+	// Fall back to stderr when stdout is empty.
+	if len(tail) == 0 && active.StderrPath != "" {
+		errPath := active.StderrPath
+		if !filepath.IsAbs(errPath) {
+			errPath = filepath.Join(journalDir, errPath)
+		}
+		tail = readRenderedLogLines(errPath, lines)
+	}
+	for _, line := range tail {
+		fmt.Fprintf(builder, "  %s\n", line)
+	}
+}
+
 
 func taskIDFromStepID(stepID string) string {
 	parts := strings.Split(stepID, "_")

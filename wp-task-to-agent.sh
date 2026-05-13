@@ -536,6 +536,9 @@ new task for review.
 
 hard requirements:
 - use superpowers skill workflow while reviewing.
+- waveplan-cli / waveplan-mcp usage in this task is read-only only.
+- do not execute waveplan write actions: no pop, no fin, no start_review, no end_review, no plan mutations.
+- allowed waveplan reads: peek, get, deptree, list_plans.
 - this turn is review-focused; verify correctness, regressions, tests, and contract adherence.
 - return concrete findings first (ordered by severity), then required fixes.
 TXT

@@ -10,6 +10,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
+
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/config"
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/discovery"
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/ui"
@@ -31,15 +33,8 @@ type cliOptions struct {
 	interval        time.Duration
 	tailLimit       int
 	journalLimit    int
+	logTailLines    int
 	expandFirstWave bool
-}
-
-type appRunner interface {
-	QueueUpdateDraw(func()) appRunner
-}
-
-type pageReplacer interface {
-	Replace(name string, item tview.Primitive)
 }
 
 type rootCommand struct {
@@ -47,24 +42,6 @@ type rootCommand struct {
 	err     io.Writer
 	args    []string
 	argsSet bool
-}
-
-type tviewAppRunner struct {
-	app *tview.Application
-}
-
-func (r tviewAppRunner) QueueUpdateDraw(fn func()) appRunner {
-	r.app.QueueUpdateDraw(fn)
-	return r
-}
-
-type tviewPageReplacer struct {
-	pages *tview.Pages
-}
-
-func (r tviewPageReplacer) Replace(name string, item tview.Primitive) {
-	r.pages.RemovePage(name)
-	r.pages.AddAndSwitchToPage(name, item, true, true)
 }
 
 // NewRootCommand constructs the waveplan-ps CLI.
@@ -97,6 +74,7 @@ func (c *rootCommand) ExecuteContext(ctx context.Context) error {
 		interval:        time.Second,
 		tailLimit:       10,
 		journalLimit:    10,
+		logTailLines:    8,
 		expandFirstWave: true,
 	}
 
@@ -113,6 +91,7 @@ func (c *rootCommand) ExecuteContext(ctx context.Context) error {
 	flags.DurationVar(&opts.interval, "interval", time.Second, "live refresh interval")
 	flags.IntVar(&opts.tailLimit, "tail-limit", 10, "maximum tail rows to render")
 	flags.IntVar(&opts.journalLimit, "journal-limit", 10, "maximum journal events to render")
+	flags.IntVar(&opts.logTailLines, "log-lines", 8, "lines of stdio log to show in active log panel")
 	flags.BoolVar(&opts.expandFirstWave, "expand-first-wave", true, "expand the first wave initially")
 	args := c.args
 	if !c.argsSet {
@@ -145,6 +124,7 @@ func (c *rootCommand) ExecuteContext(ctx context.Context) error {
 		ExpandFirstWave: cfg.Display.ExpandFirstWave,
 		TailLimit:       opts.tailLimit,
 		JournalLimit:    opts.journalLimit,
+		LogTailLines:    opts.logTailLines,
 	}
 	if opts.once {
 		return runOnce(c.out, watchOptions, renderOptions)
@@ -231,11 +211,36 @@ func runLive(ctx context.Context, options watch.Options, renderOptions ui.Option
 	pages := tview.NewPages()
 	app.SetRoot(pages, true)
 
+	var root *ui.Root
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch {
+		case event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && event.Rune() == 'q'):
+			app.Stop()
+			return nil
+		case event.Key() == tcell.KeyTab && root != nil:
+			if app.GetFocus() == root.Table() {
+				app.SetFocus(root.Details())
+			} else {
+				app.SetFocus(root.Table())
+			}
+			return nil
+		}
+		return event
+	})
+
 	errs := make(chan error, 1)
 	go func() {
 		watcher := watch.New(options, interval)
 		errs <- watcher.Run(ctx, func(snapshot watch.Snapshot) error {
-			queueLiveSnapshot(tviewAppRunner{app: app}, tviewPageReplacer{pages: pages}, snapshot, renderOptions)
+			app.QueueUpdateDraw(func() {
+				if root == nil {
+					prim := ui.BuildPrimitive(snapshot, renderOptions)
+					root = prim.(*ui.Root)
+					pages.AddAndSwitchToPage(livePageName, root, true)
+				} else {
+					root.Update(snapshot, renderOptions)
+				}
+			})
 			return nil
 		})
 	}()
@@ -246,12 +251,6 @@ func runLive(ctx context.Context, options watch.Options, renderOptions ui.Option
 	}
 	cancel()
 	return <-errs
-}
-
-func queueLiveSnapshot(app appRunner, pages pageReplacer, snapshot watch.Snapshot, options ui.Options) {
-	app.QueueUpdateDraw(func() {
-		pages.Replace(livePageName, ui.BuildPrimitive(snapshot, options))
-	})
 }
 
 func appendPaths(base, extra []string) []string {

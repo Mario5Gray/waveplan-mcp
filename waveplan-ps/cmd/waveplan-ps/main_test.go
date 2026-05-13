@@ -13,7 +13,6 @@ import (
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/model"
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/ui"
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/watch"
-	"github.com/rivo/tview"
 )
 
 func TestBuildWatchOptionsPlanFilterNarrowsPlansAndStates(t *testing.T) {
@@ -85,73 +84,42 @@ func TestExecuteContextErrorsWhenNoDiscoveryRootsConfigured(t *testing.T) {
 	}
 }
 
-func TestQueueLiveSnapshotReplacesActivePageInsideQueuedDraw(t *testing.T) {
-	app := &fakeApp{}
-	pages := &fakePages{}
-
-	queueLiveSnapshot(app, pages, watch.Snapshot{
+func TestBuildPrimitiveUpdatePreservesTableSelection(t *testing.T) {
+	snap := watch.Snapshot{
 		Plans: []watch.LoadedPlan{{
 			Path: "2026-demo-execution-waves.json",
 			Plan: &model.PlanFile{
 				Plan: model.PlanMetadata{ID: "demo", Title: "Demo"},
 				Units: map[string]model.Unit{
-					"T1.1": {Task: "T1", Title: "Render live page", Wave: 1},
+					"T1.1": {Task: "T1", Title: "First unit", Wave: 1},
+					"T1.2": {Task: "T1", Title: "Second unit", Wave: 1},
+					"T1.3": {Task: "T1", Title: "Third unit", Wave: 1},
+				},
+				Waves: []model.Wave{
+					{Wave: 1, Units: []string{"T1.1", "T1.2", "T1.3"}},
 				},
 			},
 		}},
-	}, ui.Options{ExpandFirstWave: true})
+	}
 
-	if app.queued != 1 {
-		t.Fatalf("queued updates = %d, want 1", app.queued)
-	}
-	if !pages.removed {
-		t.Fatal("active page was not removed before replacement")
-	}
-	if pages.active != livePageName {
-		t.Fatalf("active page = %q, want %q", pages.active, livePageName)
-	}
-	root, ok := pages.item.(*ui.Root)
+	prim := ui.BuildPrimitive(snap, ui.Options{})
+	root, ok := prim.(*ui.Root)
 	if !ok {
-		t.Fatalf("replacement page type = %T, want *ui.Root", pages.item)
+		t.Fatalf("BuildPrimitive returned %T, want *ui.Root", prim)
 	}
-	if !strings.Contains(root.Text(), "T1.1 [available] Render live page") {
-		t.Fatalf("replacement page did not render snapshot:\n%s", root.Text())
+
+	root.Table().Select(2, 0)
+	selRow, _ := root.Table().GetSelection()
+	if selRow != 2 {
+		t.Fatalf("pre-update selection = %d, want 2", selRow)
 	}
-}
 
-type fakeApp struct {
-	queued int
-}
+	root.Update(snap, ui.Options{})
 
-func (a *fakeApp) SetRoot(root tview.Primitive, fullscreen bool) appRunner {
-	return a
-}
-
-func (a *fakeApp) Run() error {
-	return nil
-}
-
-func (a *fakeApp) Stop() {
-}
-
-func (a *fakeApp) QueueUpdateDraw(fn func()) appRunner {
-	a.queued++
-	if fn != nil {
-		fn()
+	selRow, _ = root.Table().GetSelection()
+	if selRow != 2 {
+		t.Fatalf("post-update selection = %d, want 2 (selection was reset)", selRow)
 	}
-	return a
-}
-
-type fakePages struct {
-	active  string
-	item    tview.Primitive
-	removed bool
-}
-
-func (p *fakePages) Replace(name string, item tview.Primitive) {
-	p.removed = true
-	p.active = name
-	p.item = item
 }
 
 func planJSON(id, title string) string {

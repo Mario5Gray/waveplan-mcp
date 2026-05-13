@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +56,43 @@ func TestRenderTextIncludesWaveStatusTailAndExactLogCounts(t *testing.T) {
 	}
 }
 
+func TestRenderTextShowsActiveLogWithAgentAndLines(t *testing.T) {
+	dir := t.TempDir()
+	logFile := filepath.Join(dir, "S3_T5.1_implement.1.stdout.log")
+	if err := os.WriteFile(logFile, []byte("line one\nline two\nline three\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	journalPath := filepath.Join(dir, "schedule.json.journal.json")
+	snapshot := renderTestSnapshot()
+	snapshot.Journals = []watch.LoadedJournal{{
+		Path: journalPath,
+		Journal: &model.Journal{
+			Events: []model.JournalEvent{{
+				StepID:      "S3_T5.1_implement",
+				TaskID:      "T5.1",
+				Action:      "implement",
+				StartedOn:   "2026-05-12T14:49:00Z",
+				StateBefore: model.StatusWrapper{TaskStatus: model.StatusTaken},
+				StateAfter:  model.StatusWrapper{TaskStatus: model.StatusTaken},
+				StdoutPath:  logFile,
+			}},
+		},
+	}}
+
+	rendered := RenderText(snapshot, Options{ExpandFirstWave: true, LogTailLines: 3})
+
+	for _, want := range []string{
+		"Log  S3_T5.1_implement  [running]  agent:phi",
+		"line one",
+		"line three",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("RenderText() missing %q in:\n%s", want, rendered)
+		}
+	}
+}
+
 func TestBuildPrimitiveRendersPlanTable(t *testing.T) {
 	primitive := BuildPrimitive(renderTestSnapshot(), Options{ExpandFirstWave: true})
 	if primitive == nil {
@@ -62,6 +102,139 @@ func TestBuildPrimitiveRendersPlanTable(t *testing.T) {
 	rendered := primitive.(*Root).Text()
 	if !strings.Contains(rendered, "T5.1 [taken] Render UI (logs: 1)") {
 		t.Fatalf("Root text missing T5.1 row:\n%s", rendered)
+	}
+}
+
+func TestRenderLogEventStepStart(t *testing.T) {
+	line := `{"type":"step_start","timestamp":1778492597000,"sessionID":"ses_1e994c983ffeXJ7d2xAotRhyeF","part":{"id":"prt_1","messageID":"msg_1","sessionID":"ses_1e994c983ffeXJ7d2xAotRhyeF","snapshot":"3f801dc51d26cee3ce5d4ea648972eb1d27a7c53","type":"step-start"}}`
+	got := renderLogEvent(line)
+	if len(got) != 1 {
+		t.Fatalf("renderLogEvent step_start: want 1 line, got %d: %v", len(got), got)
+	}
+	for _, want := range []string{"20260511", "AotRhyeF", "3f801dc5", "step-start"} {
+		if !strings.Contains(got[0], want) {
+			t.Errorf("renderLogEvent step_start: missing %q in %q", want, got[0])
+		}
+	}
+}
+
+func TestRenderLogEventText(t *testing.T) {
+	line := `{"type":"text","timestamp":1778492602000,"sessionID":"ses_1e994c983ffeXJ7d2xAotRhyeF","part":{"id":"prt_2","messageID":"msg_1","sessionID":"ses_1e994c983ffeXJ7d2xAotRhyeF","type":"text","text":"Hello\nworld","time":{"start":1778492597000,"end":1778492602000}}}`
+	got := renderLogEvent(line)
+	// header + two text lines
+	if len(got) < 2 {
+		t.Fatalf("renderLogEvent text: want >=2 lines, got %d: %v", len(got), got)
+	}
+	if !strings.Contains(got[0], "5s") {
+		t.Errorf("renderLogEvent text: want duration 5s in header %q", got[0])
+	}
+	joined := strings.Join(got[1:], "\n")
+	if !strings.Contains(joined, "Hello") || !strings.Contains(joined, "world") {
+		t.Errorf("renderLogEvent text: want text content in lines %v", got[1:])
+	}
+}
+
+func TestRenderLogEventTextTruncates(t *testing.T) {
+	long := strings.Repeat("x", 300)
+	line := fmt.Sprintf(`{"type":"text","timestamp":1778492602000,"sessionID":"ses_X","part":{"type":"text","text":%q,"time":{"start":1778492597000,"end":1778492602000}}}`, long)
+	got := renderLogEvent(line)
+	for _, l := range got[1:] {
+		if len(l) > maxTextChars+5 {
+			t.Errorf("renderLogEvent text: line exceeds limit: len=%d", len(l))
+		}
+	}
+}
+
+func TestRenderLogEventStepFinish(t *testing.T) {
+	line := `{"type":"step_finish","timestamp":1778492603000,"sessionID":"ses_1e994c983ffeXJ7d2xAotRhyeF","part":{"reason":"tool-calls","snapshot":"abc","messageID":"msg_1","sessionID":"ses_1e994c983ffeXJ7d2xAotRhyeF","type":"step-finish","tokens":{"total":19158,"input":18841,"output":317,"reasoning":0,"cache":{"write":10,"read":200}},"cost":0}}`
+	got := renderLogEvent(line)
+	if len(got) != 1 {
+		t.Fatalf("renderLogEvent step_finish: want 1 line, got %d", len(got))
+	}
+	for _, want := range []string{"tot:19158", "in:18841", "out:317", "rsn:0", "cw:10", "cr:200"} {
+		if !strings.Contains(got[0], want) {
+			t.Errorf("renderLogEvent step_finish: missing %q in %q", want, got[0])
+		}
+	}
+}
+
+func TestRenderLogEventToolUse(t *testing.T) {
+	line := `{"type":"tool_use","timestamp":1778625449562,"sessionID":"ses_1e1a9b928ffe5AxoIhMCZjRG80","part":{"type":"tool","tool":"read","callID":"call_abc","state":{"status":"completed","title":"plan.json","time":{"start":1778625449544,"end":1778625449574}}}}`
+	got := renderLogEvent(line)
+	if len(got) != 1 {
+		t.Fatalf("renderLogEvent tool_use: want 1 line, got %d: %v", len(got), got)
+	}
+	for _, want := range []string{"tool_use", "read", "completed", "plan.json", "→"} {
+		if !strings.Contains(got[0], want) {
+			t.Errorf("renderLogEvent tool_use: missing %q in %q", want, got[0])
+		}
+	}
+}
+
+func TestReadRenderedLogLinesPlainText(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "plain.log")
+	if err := os.WriteFile(p, []byte("a\nb\nc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := readRenderedLogLines(p, 2)
+	if len(got) != 2 || got[0] != "b" || got[1] != "c" {
+		t.Fatalf("readRenderedLogLines plain: want [b c], got %v", got)
+	}
+}
+
+func TestReadRenderedLogLinesJSONL(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "run.stdout.log")
+	content := `{"type":"step_start","timestamp":1778492597000,"sessionID":"ses_ABC","part":{"snapshot":"aabbccdd","type":"step-start"}}` + "\n" +
+		`{"type":"step_finish","timestamp":1778492603000,"sessionID":"ses_ABC","part":{"tokens":{"total":100,"input":90,"output":10,"reasoning":0,"cache":{"write":0,"read":0}}}}` + "\n"
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := readRenderedLogLines(p, 20)
+	if len(got) < 2 {
+		t.Fatalf("readRenderedLogLines JSONL: want >=2 lines, got %v", got)
+	}
+	if !strings.Contains(got[0], "step-start") {
+		t.Errorf("readRenderedLogLines JSONL: first line missing step-start: %q", got[0])
+	}
+	if !strings.Contains(got[len(got)-1], "tot:100") {
+		t.Errorf("readRenderedLogLines JSONL: last line missing tot:100: %q", got[len(got)-1])
+	}
+}
+
+func TestRenderTextShowsActiveLogWithJSONL(t *testing.T) {
+	dir := t.TempDir()
+	logFile := filepath.Join(dir, "S3_T5.1_implement.1.stdout.log")
+	jsonlContent := `{"type":"step_start","timestamp":1778492597000,"sessionID":"ses_TESTID","part":{"snapshot":"deadbeef1234","type":"step-start"}}` + "\n" +
+		`{"type":"text","timestamp":1778492602000,"sessionID":"ses_TESTID","part":{"type":"text","text":"doing work","time":{"start":1778492597000,"end":1778492602000}}}` + "\n"
+	if err := os.WriteFile(logFile, []byte(jsonlContent), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	journalPath := filepath.Join(dir, "schedule.json.journal.json")
+	snapshot := renderTestSnapshot()
+	snapshot.Journals = []watch.LoadedJournal{{
+		Path: journalPath,
+		Journal: &model.Journal{
+			Events: []model.JournalEvent{{
+				StepID:      "S3_T5.1_implement",
+				TaskID:      "T5.1",
+				Action:      "implement",
+				StartedOn:   "2026-05-12T14:49:00Z",
+				StateBefore: model.StatusWrapper{TaskStatus: model.StatusTaken},
+				StateAfter:  model.StatusWrapper{TaskStatus: model.StatusTaken},
+				StdoutPath:  logFile,
+			}},
+		},
+	}}
+
+	rendered := RenderText(snapshot, Options{ExpandFirstWave: true, LogTailLines: 10})
+	if !strings.Contains(rendered, "step-start") {
+		t.Errorf("RenderText with JSONL log: missing step-start in:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "doing work") {
+		t.Errorf("RenderText with JSONL log: missing text content in:\n%s", rendered)
 	}
 }
 
