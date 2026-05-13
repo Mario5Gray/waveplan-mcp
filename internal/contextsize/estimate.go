@@ -60,6 +60,8 @@ func (e *Estimator) Estimate(c ContextCandidate, budget Budget) (ContextEstimate
 		MissingFiles:    []string{},
 		MissingSections: []SectionRef{},
 		UnknownFiles:    []string{},
+		SplitCandidates: []string{},
+		MergeCandidates: []string{},
 	}
 
 	var totalTokens int
@@ -165,11 +167,12 @@ func (e *Estimator) Estimate(c ContextCandidate, budget Budget) (ContextEstimate
 	// Determine confidence.
 	est.Confidence = determineConfidence(est, fileCount, hasSignal, hasHugeFile)
 
+	// Set estimated tokens before building candidates (they reference it).
+	est.EstimatedTokens = totalTokens
+
 	// Build split/merge candidates.
 	est.SplitCandidates = buildSplitCandidates(est, c)
 	est.MergeCandidates = buildMergeCandidates(est, budget)
-
-	est.EstimatedTokens = totalTokens
 
 	return est, nil
 }
@@ -340,7 +343,7 @@ func downgrade(confidence string) string {
 
 // buildSplitCandidates returns human-readable split hints.
 func buildSplitCandidates(est ContextEstimate, c ContextCandidate) []string {
-	var candidates []string
+	candidates := []string{}
 	if est.Fit != "over" {
 		return candidates
 	}
@@ -363,7 +366,7 @@ func buildSplitCandidates(est ContextEstimate, c ContextCandidate) []string {
 
 // buildMergeCandidates returns human-readable merge hints.
 func buildMergeCandidates(est ContextEstimate, budget Budget) []string {
-	var candidates []string
+	candidates := []string{}
 	if est.Fit != "under" || est.Recommendation != "merge_candidate" {
 		return candidates
 	}
