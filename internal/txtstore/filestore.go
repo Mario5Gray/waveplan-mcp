@@ -284,3 +284,16 @@ func (fs *FileStore) createFile(title, content, unit, section string) error {
 
 	return fs.writeAtomically(sb.String())
 }
+
+// WriteSwimPlan renders a complete SWIM markdown plan document and overwrites
+// the target file atomically.
+func (fs *FileStore) WriteSwimPlan(doc SwimPlanDoc) error {
+	content, err := RenderSwimPlan(doc)
+	if err != nil {
+		return err
+	}
+	if _, err := fs.readOrCreate(); err != nil {
+		return err
+	}
+	return fs.writeAtomically(content)
+}

@@ -1,6 +1,8 @@
 package txtstore
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -76,5 +78,30 @@ func TestRenderSwimPlanSortsAndNormalizes(t *testing.T) {
 	}
 	if !strings.Contains(out, "| T1 | First task | 10 | spec | - |") {
 		t.Fatal("expected empty file list to render as '-'")
+	}
+}
+
+func TestFileStoreWriteSwimPlanOverwritesCanonicalDocument(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "plan.md")
+	if err := os.WriteFile(path, []byte("stale\n"), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	fs := New(path)
+	if err := fs.WriteSwimPlan(validSwimDoc()); err != nil {
+		t.Fatalf("WriteSwimPlan() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	got := string(data)
+	if strings.Contains(got, "stale") {
+		t.Fatal("expected stale content to be replaced")
+	}
+	if !strings.HasPrefix(got, "# Swim Plan Source\n") {
+		t.Fatal("expected top-level swim plan heading")
 	}
 }
