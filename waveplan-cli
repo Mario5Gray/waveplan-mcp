@@ -535,19 +535,27 @@ def _handle_context_estimate(args: argparse.Namespace) -> None:
 
     # Resolve contextsize binary.
     contextsize_bin = _resolve_local_tool("contextsize")
-    if not contextsize_bin:
+    if contextsize_bin:
+        # Pre-built binary — run directly.
+        cmd = [
+            contextsize_bin,
+            "--candidate", candidate_path,
+            "--budget", args.budget,
+        ]
+        if args.base_dir:
+            cmd.extend(["--base-dir", _abs_user_path(args.base_dir)])
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+    else:
         # Fall back to go run.
-        contextsize_bin = str(_REPO_ROOT / "cmd" / "contextsize")
+        cmd = [
+            "go", "run", str(_REPO_ROOT / "cmd" / "contextsize"),
+            "--candidate", candidate_path,
+            "--budget", args.budget,
+        ]
+        if args.base_dir:
+            cmd.extend(["--base-dir", _abs_user_path(args.base_dir)])
+        proc = subprocess.run(cmd, capture_output=True, text=True, cwd=_REPO_ROOT)
 
-    cmd = [
-        "go", "run", contextsize_bin,
-        "--candidate", candidate_path,
-        "--budget", args.budget,
-    ]
-    if args.base_dir:
-        cmd.extend(["--base-dir", _abs_user_path(args.base_dir)])
-
-    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=_REPO_ROOT)
     if proc.returncode != 0:
         _emit_json({
             "ok": False,
