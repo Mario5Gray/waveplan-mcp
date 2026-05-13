@@ -17,6 +17,7 @@ Usage:
 Commands:
   append   Append a new section to a markdown file
   edit     Replace an existing section with new content
+  write-swim-plan  Write a deterministic SWIM markdown plan
   help     Show this help text
 
 Append Usage:
@@ -24,6 +25,9 @@ Append Usage:
 
 Edit Usage:
   txtstore edit <filepath> <title> <content> [--unit U] [--section S]
+
+Write SWIM Plan Usage:
+  txtstore write-swim-plan <filepath> <json-or-json-file>
 
 Flags:
   --unit unit    Optional unit prefix for heading hierarchy
@@ -43,10 +47,24 @@ Examples:
   # Duplicate titles get auto-renamed (-2, -3, ...)
   txtstore append notes.md "Section Title" "first"
   txtstore append notes.md "Section Title" "second"  # becomes "Section Title-2"
+
+  # Write a complete SWIM markdown plan from JSON
+  txtstore write-swim-plan docs/plans/source.md plan.json
 `
 
 func printUsage() {
 	fmt.Fprint(os.Stderr, usageText)
+}
+
+func toolNameForCommand(command string) string {
+	switch command {
+	case "append", "edit":
+		return "txtstore_" + command
+	case "write-swim-plan":
+		return "txtstore_write_swim_plan"
+	default:
+		return ""
+	}
 }
 
 func findMcpBin() string {
@@ -174,6 +192,23 @@ func callMcp(mcpBin, toolName string, args map[string]any) (map[string]any, erro
 	return toolResult, nil
 }
 
+func loadJSONArgument(arg string) (map[string]any, error) {
+	payload := arg
+	if info, err := os.Stat(arg); err == nil && !info.IsDir() {
+		data, err := os.ReadFile(arg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read JSON payload file: %w", err)
+		}
+		payload = string(data)
+	}
+
+	var out map[string]any
+	if err := json.Unmarshal([]byte(payload), &out); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON payload: %w", err)
+	}
+	return out, nil
+}
+
 func main() {
 	// Check for help flags
 	for _, arg := range os.Args[1:] {
@@ -184,7 +219,7 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "Error: command is required (append or edit)")
+		fmt.Fprintln(os.Stderr, "Error: command is required (append, edit, or write-swim-plan)")
 		fmt.Fprintln(os.Stderr)
 		printUsage()
 		os.Exit(1)
@@ -192,14 +227,21 @@ func main() {
 
 	command := os.Args[1]
 
-	if command != "append" && command != "edit" {
+	if command != "append" && command != "edit" && command != "write-swim-plan" {
 		fmt.Fprintf(os.Stderr, "Error: unknown command '%s'\n", command)
 		fmt.Fprintln(os.Stderr)
 		printUsage()
 		os.Exit(1)
 	}
 
-	if len(os.Args) < 5 {
+	if command == "write-swim-plan" {
+		if len(os.Args) < 4 {
+			fmt.Fprintf(os.Stderr, "Error: write-swim-plan requires <filepath> <json-or-json-file>\n")
+			fmt.Fprintln(os.Stderr)
+			printUsage()
+			os.Exit(1)
+		}
+	} else if len(os.Args) < 5 {
 		fmt.Fprintf(os.Stderr, "Error: append/edit requires <filepath> <title> <content>\n")
 		fmt.Fprintln(os.Stderr)
 		printUsage()
@@ -207,24 +249,6 @@ func main() {
 	}
 
 	filepath := os.Args[2]
-	title := os.Args[3]
-	content := os.Args[4]
-
-	var unit, section string
-	for i := 5; i < len(os.Args); i++ {
-		switch os.Args[i] {
-		case "--unit":
-			if i+1 < len(os.Args) {
-				unit = os.Args[i+1]
-				i++
-			}
-		case "--section":
-			if i+1 < len(os.Args) {
-				section = os.Args[i+1]
-				i++
-			}
-		}
-	}
 
 	mcpBin := findMcpBin()
 	if mcpBin == "" {
@@ -233,17 +257,47 @@ func main() {
 		os.Exit(1)
 	}
 
-	toolName := "txtstore_" + command
+	toolName := toolNameForCommand(command)
 	args := map[string]any{
 		"filepath": filepath,
-		"title":    title,
-		"content":  content,
 	}
-	if unit != "" {
-		args["unit"] = unit
-	}
-	if section != "" {
-		args["section"] = section
+
+	if command == "write-swim-plan" {
+		payload, err := loadJSONArgument(os.Args[3])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		for key, value := range payload {
+			args[key] = value
+		}
+	} else {
+		title := os.Args[3]
+		content := os.Args[4]
+		args["title"] = title
+		args["content"] = content
+
+		var unit, section string
+		for i := 5; i < len(os.Args); i++ {
+			switch os.Args[i] {
+			case "--unit":
+				if i+1 < len(os.Args) {
+					unit = os.Args[i+1]
+					i++
+				}
+			case "--section":
+				if i+1 < len(os.Args) {
+					section = os.Args[i+1]
+					i++
+				}
+			}
+		}
+		if unit != "" {
+			args["unit"] = unit
+		}
+		if section != "" {
+			args["section"] = section
+		}
 	}
 
 	result, err := callMcp(mcpBin, toolName, args)
