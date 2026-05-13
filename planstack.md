@@ -79,8 +79,11 @@ Fields after `AGENT_NAME` and `SHORT_PLAN_NAME` are optional and positional — 
 
 - `txtstore_append` — add a new section (auto-renames duplicate titles with `-2`, `-3`, …)
 - `txtstore_edit` — replace an existing section
+- `txtstore_write_swim_plan` — write a deterministic SWIM markdown plan from a structured payload
 
 Both tools accept `unit` and `section` flags for heading hierarchy (e.g. `## Wave1 > OAuth > Notes`).
+
+Human CLI help is available with `txtstore --help`. MCP tools expose descriptions and argument schemas, but not an interactive help command. Use `append`/`edit` for journals and notes; use `write-swim-plan` only for canonical SWIM plan source generation, because it validates and overwrites the target markdown file atomically.
 
 ## Typical Workflow
 
