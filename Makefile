@@ -110,3 +110,6 @@ clean:
 
 contextsize:
 	go build -o $@ ./cmd/contextsize
+
+contextsize-help:
+	./contextsize
