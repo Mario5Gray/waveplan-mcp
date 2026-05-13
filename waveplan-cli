@@ -1,0 +1,976 @@
+#!/usr/bin/env python3
+"""waveplan — thin CLI proxy that calls the waveplan-mcp MCP server over stdio.
+
+Usage is identical to the old Python implementation, but all logic is
+delegated to the Go-based waveplan-mcp binary via its MCP tools/call protocol.
+"""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+MCP_PROTOCOL_VERSION = "2024-11-05"
+_SERVER_BIN = os.environ.get("WAVEPLAN_MCP_BIN") or str(Path.home() / ".local" / "bin" / "waveplan-mcp")
+_UNIT_ID_RE = re.compile(r"^[A-Z][0-9]+\.[0-9]+$")
+_TASK_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-]*$")
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+\-]\d{2}:?\d{2})?)?$")
+_ALLOWED_KINDS = {"impl", "test", "verify", "doc", "refactor", "code"}
+
+# Canonical field ordering — known fields emitted in this order, then any
+# remaining (preserved) fields appended alphabetically.
+_TOP_FIELD_ORDER = (
+    "schema_version", "generated_on", "plan_version", "plan_generation",
+    "plan", "fp_index", "doc_index", "tasks", "units",
+)
+_UNIT_FIELD_ORDER = (
+    "task", "title", "kind", "wave", "plan_line", "depends_on",
+    "doc_refs", "fp_refs", "files", "notes", "command", "command_hint",
+)
+_TASK_FIELD_ORDER = (
+    "title", "plan_line", "doc_refs", "files", "description", "notes",
+)
+
+
+def _ordered(d: dict, known: tuple[str, ...]) -> dict:
+    """Return a new dict with `known` fields first (in given order, present-only),
+    then remaining keys alphabetically. Preserves every input key — never drops."""
+    out: dict = {}
+    for k in known:
+        if k in d:
+            out[k] = d[k]
+    for k in sorted(d.keys()):
+        if k not in out:
+            out[k] = d[k]
+    return out
+
+# Where the repo keeps its execution-wave plan files.
+_SCRIPT_PATH = Path(__file__).resolve()
+_SCRIPT_DIR = _SCRIPT_PATH.parent
+_REPO_PLAN_DIR = _SCRIPT_DIR.parent / "docs" / "superpowers" / "plans"
+_REPO_ROOT = _SCRIPT_DIR
+
+
+def _waveplan_config_dir() -> Path:
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        return Path(xdg) / "waveplan-mcp"
+    return Path.home() / ".config" / "waveplan-mcp"
+
+
+def _default_waveagents_path() -> str:
+    return str(_waveplan_config_dir() / "waveagents.json")
+
+
+def _abs_user_path(path: str | None) -> str | None:
+    if not path:
+        return path
+    p = Path(path)
+    if p.is_absolute():
+        return str(p)
+    return str((Path.cwd() / p).resolve())
+
+
+def _resolve_local_tool(name: str) -> str | None:
+    sibling = _SCRIPT_DIR / name
+    if sibling.exists():
+        return str(sibling)
+    found = shutil.which(name)
+    if found:
+        return found
+    return None
+
+
+def _find_auto_plan() -> Path | None:
+    """Find the *-execution-waves.json file in the repo plan directory."""
+    matches = sorted(_REPO_PLAN_DIR.glob("*-execution-waves.json"))
+    if len(matches) == 1:
+        return matches[0]
+    # If multiple exist, prefer the one with a .state.json sibling (active plan).
+    for m in matches:
+        if (m.with_name(m.name + ".state.json")).exists():
+            return m
+    # Fall back to the first one.
+    if matches:
+        return matches[0]
+    return None
+
+
+def _build_env(plan_arg: str | None = None) -> dict:
+    """Build environment for the waveplan-mcp subprocess.
+
+    Auto-detects WAVEPLAN_PLAN from the repo if not already set in the
+    environment or via --plan.
+    """
+    env = {}
+
+    # WAVEPLAN_PLAN: explicit arg > env var > auto-detect from repo.
+    plan_path = plan_arg or os.environ.get("WAVEPLAN_PLAN")
+    if not plan_path:
+        auto = _find_auto_plan()
+        if auto:
+            plan_path = str(auto)
+
+    if plan_path:
+        env["WAVEPLAN_PLAN"] = plan_path
+        # Derive state file path the same way the Go binary does.
+        state_path = plan_path + ".state.json"
+        env["WAVEPLAN_STATE"] = os.environ.get("WAVEPLAN_STATE") or state_path
+
+    # Pass through WAVEPLAN_MCP_BIN if set (for nested use).
+    if os.environ.get("WAVEPLAN_MCP_BIN"):
+        env["WAVEPLAN_MCP_BIN"] = os.environ["WAVEPLAN_MCP_BIN"]
+
+    return env
+
+
+def _unit_sort_key(unit_id: str) -> tuple[int, int]:
+    # T12.3 -> (12, 3). Fallback preserves deterministic lexicographic behavior.
+    m = re.match(r"^[A-Z]([0-9]+)\.([0-9]+)$", unit_id)
+    if not m:
+        return (10**9, 10**9)
+    return (int(m.group(1)), int(m.group(2)))
+
+
+def _validate_and_canonicalize_plan_json(raw: dict) -> dict:
+    """Safe canonicalizer for swim execution-waves JSON.
+
+    Preserves every field present in the input. Validates required structure,
+    types, formats, and referential integrity (depends_on, unit.task,
+    unit.doc_refs/fp_refs, task.doc_refs). Emits deterministic byte-identical
+    output for byte-identical input.
+    """
+    required_top = ("schema_version", "generated_on", "plan", "units", "tasks", "doc_index", "fp_index")
+    for key in required_top:
+        if key not in raw:
+            raise ValueError(f"missing required top-level field: {key}")
+
+    # ---- Top-level scalar / structure type checks ----
+    sv = raw["schema_version"]
+    if not isinstance(sv, int) or isinstance(sv, bool) or sv < 1:
+        raise ValueError(f"schema_version must be a positive integer, got: {sv!r}")
+
+    gen_on = raw["generated_on"]
+    if not isinstance(gen_on, str) or not _DATE_RE.match(gen_on):
+        raise ValueError(f"generated_on must be YYYY-MM-DD or ISO 8601 string, got: {gen_on!r}")
+
+    if "plan_version" in raw:
+        pv = raw["plan_version"]
+        if not isinstance(pv, int) or isinstance(pv, bool) or pv < 1:
+            raise ValueError(f"plan_version must be a positive integer, got: {pv!r}")
+    if "plan_generation" in raw:
+        pg = raw["plan_generation"]
+        if not isinstance(pg, str) or not pg:
+            raise ValueError(f"plan_generation must be a non-empty string, got: {pg!r}")
+
+    if not isinstance(raw["plan"], dict):
+        raise ValueError("plan must be an object")
+    if not isinstance(raw["units"], dict) or not raw["units"]:
+        raise ValueError("units must be a non-empty object")
+    if not isinstance(raw["tasks"], dict) or not raw["tasks"]:
+        raise ValueError("tasks must be a non-empty object")
+    if not isinstance(raw["doc_index"], dict):
+        raise ValueError("doc_index must be an object")
+    if not isinstance(raw["fp_index"], dict):
+        raise ValueError("fp_index must be an object")
+
+    units: dict = raw["units"]
+    tasks: dict = raw["tasks"]
+    doc_index: dict = raw["doc_index"]
+    fp_index: dict = raw["fp_index"]
+
+    # ---- Task-key shape (loose: alphanumeric + . _ -, must lead with alnum) ----
+    for task_id in tasks:
+        if not isinstance(task_id, str) or not _TASK_ID_RE.match(task_id):
+            raise ValueError(f"invalid task key: {task_id!r}")
+        if not isinstance(tasks[task_id], dict):
+            raise ValueError(f"task {task_id} must be an object")
+
+    # ---- Per-task validation (incl. doc_refs ref integrity) ----
+    for task_id, task in tasks.items():
+        if "doc_refs" in task:
+            dr = task["doc_refs"]
+            if not isinstance(dr, list):
+                raise ValueError(f"task {task_id} doc_refs must be an array")
+            for ref in dr:
+                if ref not in doc_index:
+                    raise ValueError(f"task {task_id} doc_refs entry not in doc_index: {ref!r}")
+
+    # ---- Per-unit validation ----
+    for unit_id, unit in units.items():
+        if not _UNIT_ID_RE.match(unit_id):
+            raise ValueError(f"invalid unit key: {unit_id!r}")
+        if not isinstance(unit, dict):
+            raise ValueError(f"unit {unit_id} must be an object")
+
+        for req in ("task", "title", "kind", "wave", "plan_line", "depends_on"):
+            if req not in unit:
+                raise ValueError(f"unit {unit_id} missing required field: {req}")
+
+        if not isinstance(unit["title"], str) or not unit["title"]:
+            raise ValueError(f"unit {unit_id} title must be a non-empty string")
+
+        task_ref = unit["task"]
+        if not isinstance(task_ref, str) or task_ref not in tasks:
+            raise ValueError(f"unit {unit_id} references missing task: {task_ref!r}")
+
+        kind = unit["kind"]
+        if kind not in _ALLOWED_KINDS:
+            raise ValueError(f"unit {unit_id} has invalid kind: {kind!r}")
+
+        wave = unit["wave"]
+        if not isinstance(wave, int) or isinstance(wave, bool) or wave <= 0:
+            raise ValueError(f"unit {unit_id} has invalid wave: {wave!r}")
+
+        plan_line = unit["plan_line"]
+        if not isinstance(plan_line, int) or isinstance(plan_line, bool) or plan_line <= 0:
+            raise ValueError(f"unit {unit_id} has invalid plan_line: {plan_line!r}")
+
+        deps = unit["depends_on"]
+        if not isinstance(deps, list):
+            raise ValueError(f"unit {unit_id} depends_on must be an array")
+        for dep in deps:
+            if dep not in units:
+                raise ValueError(f"unit {unit_id} depends on unknown unit: {dep!r}")
+
+        # doc_refs referential integrity
+        if "doc_refs" in unit:
+            dr = unit["doc_refs"]
+            if not isinstance(dr, list):
+                raise ValueError(f"unit {unit_id} doc_refs must be an array")
+            for ref in dr:
+                if ref not in doc_index:
+                    raise ValueError(f"unit {unit_id} doc_refs entry not in doc_index: {ref!r}")
+
+        # fp_refs referential integrity
+        if "fp_refs" in unit:
+            fr = unit["fp_refs"]
+            if not isinstance(fr, list):
+                raise ValueError(f"unit {unit_id} fp_refs must be an array")
+            for ref in fr:
+                if ref not in fp_index:
+                    raise ValueError(f"unit {unit_id} fp_refs entry not in fp_index: {ref!r}")
+
+    # ---- Cycle check (Kahn) ----
+    indeg: dict[str, int] = {k: 0 for k in units}
+    outgoing: dict[str, list[str]] = {k: [] for k in units}
+    for uid, unit in units.items():
+        for dep in unit["depends_on"]:
+            outgoing[dep].append(uid)
+            indeg[uid] += 1
+
+    queue = [uid for uid, deg in indeg.items() if deg == 0]
+    queue.sort(key=_unit_sort_key)
+    seen = 0
+    while queue:
+        node = queue.pop(0)
+        seen += 1
+        for child in sorted(outgoing[node], key=_unit_sort_key):
+            indeg[child] -= 1
+            if indeg[child] == 0:
+                queue.append(child)
+                queue.sort(key=_unit_sort_key)
+    if seen != len(units):
+        raise ValueError("unit dependency graph contains a cycle")
+
+    # ---- Canonicalize: preserve every field, deterministic ordering ----
+    def _task_sort_key(tid: str) -> tuple[int, int, str]:
+        # Numeric-prefixed task IDs (T1, T12) sort numerically; others lexicographically.
+        m = re.match(r"^[A-Z]([0-9]+)$", tid)
+        if m:
+            return (0, int(m.group(1)), tid)
+        return (1, 0, tid)
+
+    canonical_units: dict[str, dict] = {}
+    for unit_id in sorted(units.keys(), key=_unit_sort_key):
+        unit = dict(units[unit_id])
+        unit["depends_on"] = sorted(unit["depends_on"], key=_unit_sort_key)
+        canonical_units[unit_id] = _ordered(unit, _UNIT_FIELD_ORDER)
+
+    canonical_tasks: dict[str, dict] = {}
+    for task_id in sorted(tasks.keys(), key=_task_sort_key):
+        canonical_tasks[task_id] = _ordered(dict(tasks[task_id]), _TASK_FIELD_ORDER)
+
+    canonical_doc_index = {k: doc_index[k] for k in sorted(doc_index.keys())}
+    canonical_fp_index = {k: fp_index[k] for k in sorted(fp_index.keys())}
+
+    # Build canonical top-level: known fields first in order, then remaining
+    # top-level keys alphabetically (preserves any future / experimental fields).
+    rebuilt = dict(raw)
+    rebuilt["fp_index"] = canonical_fp_index
+    rebuilt["doc_index"] = canonical_doc_index
+    rebuilt["tasks"] = canonical_tasks
+    rebuilt["units"] = canonical_units
+    return _ordered(rebuilt, _TOP_FIELD_ORDER)
+
+
+def _swim_compile_plan_json(in_path: str, out_path: str | None) -> None:
+    src = Path(in_path)
+    if not src.exists():
+        raise ValueError(f"input file not found: {in_path}")
+    try:
+        payload = json.loads(src.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"invalid JSON in input file: {e}") from e
+    if not isinstance(payload, dict):
+        raise ValueError("top-level JSON must be an object")
+
+    canonical = _validate_and_canonicalize_plan_json(payload)
+    rendered = json.dumps(canonical, indent=2) + "\n"
+    if out_path:
+        Path(out_path).write_text(rendered, encoding="utf-8")
+        print(json.dumps({"ok": True, "input": str(src), "output": str(Path(out_path)), "mode": "write"}, indent=2))
+        return
+    print(rendered, end="")
+
+
+def _swim_not_wired(subcommand: str) -> None:
+    print(json.dumps({
+        "ok": False,
+        "error": "not_wired_yet",
+        "subcommand": subcommand,
+    }, indent=2))
+    sys.exit(2)
+
+
+def _emit_json(obj: dict, code: int = 0) -> None:
+    print(json.dumps(obj, indent=2))
+    sys.exit(code)
+
+
+def _default_swim_journal(schedule_path: str) -> str:
+    return schedule_path + ".journal.json"
+
+
+def _derive_swim_state(schedule_path: str) -> str | None:
+    env_state = os.environ.get("WAVEPLAN_STATE")
+    if env_state:
+        return env_state
+    try:
+        payload = json.loads(Path(schedule_path).read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    execution = payload.get("execution")
+    if not isinstance(execution, list):
+        return None
+    for row in execution:
+        if not isinstance(row, dict):
+            continue
+        invoke = row.get("invoke", {})
+        argv = invoke.get("argv") if isinstance(invoke, dict) else None
+        if not isinstance(argv, list):
+            continue
+        for i, token in enumerate(argv):
+            if token == "--plan" and i + 1 < len(argv):
+                return str(argv[i + 1]) + ".state.json"
+    return None
+
+
+def _run_swim_go(tool: str, tool_args: list[str]) -> subprocess.CompletedProcess:
+    bin_name = f"swim-{tool}"
+    cmd_main = _REPO_ROOT / "cmd" / bin_name / "main.go"
+    if cmd_main.exists():
+        return subprocess.run(
+            ["go", "run", f"./cmd/{bin_name}", *tool_args],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+    resolved = _resolve_local_tool(bin_name)
+    if resolved:
+        return subprocess.run(
+            [resolved, *tool_args],
+            capture_output=True,
+            text=True,
+        )
+    return subprocess.CompletedProcess([bin_name, *tool_args], 3, "", f"{bin_name} not found")
+
+
+def _handle_swim_subprocess(tool: str, tool_args: list[str], subcommand: str) -> None:
+    proc = _run_swim_go(tool, tool_args)
+    stdout = proc.stdout.strip()
+    stderr = proc.stderr.strip()
+    if proc.returncode == 0:
+        if stdout:
+            print(stdout)
+        return
+    if stdout:
+        print(stdout)
+        sys.exit(proc.returncode)
+    _emit_json({
+        "ok": False,
+        "error": stderr or f"swim-{tool} failed",
+        "subcommand": subcommand,
+    }, proc.returncode if proc.returncode in (2, 3, 4) else 3)
+
+
+def _tail_apply_logs(payload_text: str, schedule_path: str, tail_lines: int) -> None:
+    try:
+        payload = json.loads(payload_text)
+    except Exception:
+        return
+    if not isinstance(payload, dict):
+        return
+    for label, key in (("stdout", "stdout_path"), ("stderr", "stderr_path")):
+        path = payload.get(key)
+        if not isinstance(path, str) or not path:
+            continue
+        log_path = Path(path)
+        if not log_path.is_absolute():
+            log_path = Path(schedule_path).resolve().parent / log_path
+        if not log_path.exists():
+            print(f"==> {label}: {log_path} (missing)", file=sys.stderr)
+            continue
+        try:
+            lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except Exception as e:
+            print(f"==> {label}: {log_path} (read failed: {e})", file=sys.stderr)
+            continue
+        print(f"==> {label}: {log_path}", file=sys.stderr)
+        tail = lines[-tail_lines:] if tail_lines > 0 else lines
+        for line in tail:
+            print(line, file=sys.stderr)
+
+
+def _handle_swim_compile_schedule(args: argparse.Namespace) -> None:
+    plan_path = _abs_user_path(args.plan)
+    agents_path = _abs_user_path(args.agents or _default_waveagents_path())
+    out_path = _abs_user_path(args.out)
+    emitter = _resolve_local_tool("wp-emit-wave-execution.sh") or str(_REPO_ROOT / "wp-emit-wave-execution.sh")
+    cmd = [
+        emitter,
+        "--plan", plan_path,
+        "--agents", agents_path,
+        "--task-scope", args.task_scope,
+    ]
+    if out_path:
+        cmd.extend(["--out", out_path])
+    env = {**os.environ, "WAVEPLAN_CLI_BIN": str(_SCRIPT_PATH)}
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    if proc.returncode != 0:
+        _emit_json({
+            "ok": False,
+            "error": proc.stderr.strip() or proc.stdout.strip() or "compile-schedule failed",
+            "subcommand": "compile-schedule",
+        }, proc.returncode if proc.returncode in (2, 3, 4) else 3)
+    state_path = plan_path + ".state.json"
+    state_bootstrapped = False
+    if getattr(args, "bootstrap_state", False) and not Path(state_path).exists():
+        Path(state_path).write_text(json.dumps({
+            "plan": Path(plan_path).name,
+            "taken": {},
+            "completed": {},
+        }, indent=2) + "\n", encoding="utf-8")
+        state_bootstrapped = True
+    if out_path:
+        _emit_json({
+            "ok": True,
+            "output": out_path,
+            "subcommand": "compile-schedule",
+            "state_bootstrapped": state_bootstrapped,
+            "state_path": state_path,
+            "agents": agents_path,
+        })
+    print(proc.stdout, end="")
+
+
+def _handle_swim_refine(args: argparse.Namespace) -> None:
+    tool_args = [
+        "--plan", _abs_user_path(args.plan),
+        "--targets", ",".join(args.targets),
+    ]
+    if args.profile:
+        tool_args.extend(["--profile", args.profile])
+    if args.out:
+        tool_args.extend(["--out", _abs_user_path(args.out)])
+    if getattr(args, "invoker", None):
+        tool_args.extend(["--invoker", args.invoker])
+    _handle_swim_subprocess("refine-compile", tool_args, "refine")
+
+
+def _handle_swim_refine_run(args: argparse.Namespace) -> None:
+    tool_args = ["--refine", _abs_user_path(args.refine)]
+    if getattr(args, "refine_journal", None):
+        tool_args.extend(["--refine-journal", _abs_user_path(args.refine_journal)])
+    if getattr(args, "coarse_journal", None):
+        tool_args.extend(["--coarse-journal", _abs_user_path(args.coarse_journal)])
+    if getattr(args, "state", None):
+        tool_args.extend(["--state", _abs_user_path(args.state)])
+    if getattr(args, "dry_run", False):
+        tool_args.append("--dry-run")
+    if getattr(args, "work_dir", None):
+        tool_args.extend(["--work-dir", _abs_user_path(args.work_dir)])
+    _handle_swim_subprocess("refine-run", tool_args, "refine-run")
+
+
+def _handle_swim_validate(args: argparse.Namespace) -> None:
+    if args.kind == "plan":
+        try:
+            payload = json.loads(Path(args.input_path).read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("top-level JSON must be an object")
+            _validate_and_canonicalize_plan_json(payload)
+        except Exception as e:
+            _emit_json({"ok": False, "error": str(e), "subcommand": "validate"}, 3)
+        _emit_json({"ok": True, "kind": args.kind, "input": args.input_path})
+    proc = _run_swim_go("validate", ["--kind", args.kind, "--in", args.input_path])
+    if proc.returncode != 0:
+        _emit_json({
+            "ok": False,
+            "error": proc.stderr.strip() or proc.stdout.strip() or "validate failed",
+            "subcommand": "validate",
+        }, proc.returncode if proc.returncode in (2, 3, 4) else 3)
+    _emit_json({"ok": True, "kind": args.kind, "input": args.input_path})
+
+
+def _handle_context_estimate(args: argparse.Namespace) -> None:
+    candidate_path = _abs_user_path(args.candidate)
+    if not candidate_path:
+        _emit_json({"ok": False, "error": "--candidate is required", "subcommand": "context estimate"}, 2)
+
+    # Resolve contextsize binary.
+    contextsize_bin = _resolve_local_tool("contextsize")
+    if not contextsize_bin:
+        # Fall back to go run.
+        contextsize_bin = str(_REPO_ROOT / "cmd" / "contextsize")
+
+    cmd = [
+        "go", "run", contextsize_bin,
+        "--candidate", candidate_path,
+        "--budget", args.budget,
+    ]
+    if args.base_dir:
+        cmd.extend(["--base-dir", _abs_user_path(args.base_dir)])
+
+    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=_REPO_ROOT)
+    if proc.returncode != 0:
+        _emit_json({
+            "ok": False,
+            "error": proc.stderr.strip() or "context estimate failed",
+            "subcommand": "context estimate",
+        }, proc.returncode if proc.returncode in (2, 3) else 3)
+
+    print(proc.stdout, end="")
+
+
+class MCPPhone:
+    """Minimal MCP JSON-RPC 2.0 client over stdio."""
+
+    def __init__(self, server_bin: str, env: dict | None = None):
+        self.server_bin = server_bin
+        self._env = {**os.environ, **(env or {})}
+        self._proc: subprocess.Popen | None = None
+        self._next_id = 1
+
+    def _open(self) -> None:
+        if self._proc is not None:
+            return
+        self._proc = subprocess.Popen(
+            [self.server_bin],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=self._env,
+        )
+
+    def _send(self, method: str, params: dict | None = None, *, notify: bool = False) -> dict | None:
+        """Send a JSON-RPC request or notification.
+
+        For requests (notify=False) returns the result payload dict.
+        For notifications (notify=True) returns None and does not read a response.
+        """
+        self._open()
+        msg: dict = {
+            "jsonrpc": "2.0",
+            "method": method,
+        }
+        if params is not None:
+            msg["params"] = params
+        if not notify:
+            msg["id"] = self._next_id
+            self._next_id += 1
+
+        request = json.dumps(msg) + "\n"
+        self._proc.stdin.write(request.encode())  # type: ignore[union-attr]
+        self._proc.stdin.flush()  # type: ignore[union-attr]
+
+        if notify:
+            return None
+
+        line = self._proc.stdout.readline().decode()  # type: ignore[union-attr]
+        if not line.strip():
+            # Server may have crashed; check stderr.
+            stderr = self._proc.stderr.read().decode()  # type: ignore[union-attr]
+            raise RuntimeError(f"Server died unexpectedly: {stderr.strip()}")
+
+        resp = json.loads(line)
+
+        if "error" in resp:
+            err = resp["error"]
+            raise RuntimeError(f"MCP error [{err.get('code')}]: {err.get('message', resp)}")
+        return resp.get("result", {})
+
+    def call_tool(self, name: str, arguments: dict | None = None) -> dict:
+        """Call an MCP tool and return its result."""
+        raw = self._send("tools/call", {"name": name, "arguments": arguments or {}})
+        # MCP returns content as a list of text blocks; flatten to string.
+        content = raw.get("content", [])
+        if isinstance(content, list):
+            text_parts = []
+            for item in content:
+                if isinstance(item, dict):
+                    text_parts.append(item.get("text", ""))
+                elif isinstance(item, str):
+                    text_parts.append(item)
+            result_str = "\n".join(text_parts).strip()
+        else:
+            result_str = str(content)
+
+        # The waveplan-mcp tools return JSON strings; parse them.
+        try:
+            return json.loads(result_str)
+        except (json.JSONDecodeError, TypeError):
+            return {"raw": result_str}
+
+    def close(self) -> None:
+        if self._proc is not None:
+            # Send shutdown request
+            try:
+                self._send("shutdown")
+            except Exception:
+                pass
+            # Send exit notification (no response expected)
+            try:
+                self._proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/exit"}).encode() + b"\n")  # type: ignore[union-attr]
+                self._proc.stdin.flush()  # type: ignore[union-attr]
+            except Exception:
+                pass
+            try:
+                self._proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+                self._proc.wait()
+            self._proc = None
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="waveplan — MCP proxy for waveplan-mcp")
+    parser.add_argument("--mcp-bin", help="Path to waveplan-mcp binary (default: auto-detect)")
+    parser.add_argument("--plan", help="Path to the *-execution-waves.json file")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("peek", help="Show next available task")
+    pop_p = sub.add_parser("pop", help="Claim next available task: pop <agent>")
+    pop_p.add_argument("agent", help="Agent name claiming the task")
+    rev_start_p = sub.add_parser("start_review", help="Start review: start_review <task_id> <reviewer>")
+    rev_start_p.add_argument("task_id", help="Task ID to review")
+    rev_start_p.add_argument("reviewer", help="Agent name reviewing the task")
+    fix_start_p = sub.add_parser("start_fix", help="Start fix cycle: start_fix <task_id>")
+    fix_start_p.add_argument("task_id", help="Task ID to return to fix mode")
+    rev_end_p = sub.add_parser("end_review", help="End review: end_review <task_id> [review_note]")
+    rev_end_p.add_argument("task_id", help="Task ID to end review for")
+    rev_end_p.add_argument("review_note", nargs="?", default="", help="Optional review note")
+    fin_p = sub.add_parser("fin", help="Mark complete: fin <task_id> [git_sha]")
+    fin_p.add_argument("task_id", help="Task ID to complete")
+    fin_p.add_argument("git_sha", nargs="?", default="", help="Optional git SHA of the commit")
+    get_p = sub.add_parser("get", help="Report tasks: get [all|taken|open|complete|deptree|task-<id>|<agent>]")
+    get_p.add_argument("mode", nargs="?", default="all",
+                        help="Filter: all (default), taken, open, complete, deptree, task-<id>, or agent name")
+    get_p.add_argument("--json", action="store_true", help="Output in JSON format")
+    list_p = sub.add_parser("list_plans", help="List available execution wave plans")
+    list_p.add_argument("--plan-dir", dest="plan_dir", nargs="?", default=None,
+                        help="Directory to search for plans")
+    sub.add_parser("deptree", help="Show tasks in dependency order with parallel groups")
+    swim_p = sub.add_parser("swim", help="SWIM deterministic tooling")
+    swim_sub = swim_p.add_subparsers(dest="swim_command", required=True)
+    swim_compile = swim_sub.add_parser(
+        "compile-plan-json",
+        help="Deterministically validate + canonicalize a swim execution-waves JSON plan",
+    )
+    swim_compile.add_argument("--in", dest="input_path", required=True, help="Input *-execution-waves.json path")
+    swim_compile.add_argument("--out", dest="output_path", required=False, help="Output path (prints to stdout if omitted)")
+    swim_compile_schedule = swim_sub.add_parser(
+        "compile-schedule",
+        help="Compile a SWIM execution schedule from a plan and waveagents file",
+    )
+    swim_compile_schedule.add_argument("--plan", required=True, help="Input plan JSON path")
+    swim_compile_schedule.add_argument(
+        "--agents",
+        required=False,
+        help="Input waveagents JSON path (default: ~/.config/waveplan-mcp/waveagents.json)",
+    )
+    swim_compile_schedule.add_argument("--out", required=False, help="Optional output schedule JSON path")
+    swim_compile_schedule.add_argument(
+        "--task-scope",
+        choices=("all", "open"),
+        default="all",
+        help="Task scope to compile into the schedule",
+    )
+    swim_compile_schedule.add_argument(
+        "--bootstrap-state",
+        action="store_true",
+        help="Create <plan>.state.json if it does not already exist",
+    )
+    swim_next = swim_sub.add_parser(
+        "next",
+        help="Resolve the next SWIM step without applying it",
+    )
+    swim_next.add_argument("--schedule", required=True, help="Input schedule JSON path")
+    swim_next.add_argument("--journal", required=False, help="Optional journal JSON path")
+    swim_next.add_argument("--state", required=False, help="Optional state JSON path")
+    swim_step = swim_sub.add_parser(
+        "step",
+        help="Inspect, apply, or acknowledge a single SWIM step",
+    )
+    swim_step.add_argument("--schedule", required=False, help="Input schedule JSON path")
+    swim_step.add_argument("--journal", required=False, help="Optional journal JSON path")
+    swim_step.add_argument("--state", required=False, help="Optional state JSON path")
+    seq_or_step = swim_step.add_mutually_exclusive_group()
+    seq_or_step.add_argument("--seq", type=int, required=False, help="Target sequence number")
+    seq_or_step.add_argument("--step-id", required=False, help="Target step_id")
+    step_mode = swim_step.add_mutually_exclusive_group()
+    step_mode.add_argument("--apply", action="store_true", help="Apply the selected step")
+    swim_step.add_argument("--tail-logs", action="store_true",
+                           help="After --apply, print tailed stdout/stderr logs to stderr")
+    swim_step.add_argument("--tail-lines", type=int, default=40,
+                           help="Number of lines to print per tailed log (default: 40)")
+    step_mode.add_argument("--ack-unknown", metavar="STEP_ID", help="Acknowledge an unknown step by step_id")
+    swim_step.add_argument("--as", dest="ack_as", choices=("failed", "waived"), required=False,
+                           help="Outcome to record for --ack-unknown")
+    swim_run = swim_sub.add_parser(
+        "run",
+        help="Run SWIM steps until a stop condition is met",
+    )
+    swim_run.add_argument("--schedule", required=True, help="Input schedule JSON path")
+    swim_run.add_argument("--journal", required=False, help="Optional journal JSON path")
+    swim_run.add_argument("--state", required=False, help="Optional state JSON path")
+    swim_run.add_argument("--until", required=True, help="Stop condition: action, seq:N, or step:<id>")
+    swim_run.add_argument("--dry-run", action="store_true", help="Resolve without mutating state")
+    swim_run.add_argument("--max-steps", type=int, required=False, help="Maximum number of steps to process")
+    swim_journal = swim_sub.add_parser(
+        "journal",
+        help="Inspect a SWIM journal",
+    )
+    swim_journal.add_argument("--schedule", required=True, help="Input schedule JSON path")
+    swim_journal.add_argument("--journal", required=False, help="Optional journal JSON path")
+    swim_journal.add_argument("--tail", type=int, required=False, help="Show the last N journal events")
+    swim_validate = swim_sub.add_parser(
+        "validate",
+        help="Validate a SWIM artifact by kind",
+    )
+    swim_validate.add_argument("--kind", choices=("schedule", "journal", "plan"), required=True, help="Artifact kind")
+    swim_validate.add_argument("--in", dest="input_path", required=True, help="Input artifact path")
+    swim_refine_p = swim_sub.add_parser(
+        "refine",
+        help="Compile a coarse plan into a refinement sidecar (deterministic)",
+    )
+    swim_refine_p.add_argument("--plan", required=True, help="Input coarse *-execution-waves.json path")
+    swim_refine_p.add_argument("--targets", required=True, nargs="+", metavar="UNIT_ID",
+                               help="Unit IDs to refine (space-separated)")
+    swim_refine_p.add_argument("--profile", default="8k", help="Refinement profile (v1: 8k only)")
+    swim_refine_p.add_argument("--out", required=False, help="Output path (prints to stdout if omitted)")
+    swim_refine_p.add_argument("--invoker", required=False,
+                               help="Invoker script path used in emitted invoke.argv")
+    swim_refine_run_p = swim_sub.add_parser(
+        "refine-run",
+        help="Execute a refinement sidecar's fine steps with parent rollup",
+    )
+    swim_refine_run_p.add_argument("--refine", required=True, help="Path to refinement sidecar JSON")
+    swim_refine_run_p.add_argument("--refine-journal", dest="refine_journal", required=False,
+                                   help="Fine journal path (default: <refine>.journal.json)")
+    swim_refine_run_p.add_argument("--coarse-journal", dest="coarse_journal", required=False,
+                                   help="Coarse journal path for rollup events")
+    swim_refine_run_p.add_argument("--state", required=False,
+                                   help="Live waveplan state file (required unless --dry-run)")
+    swim_refine_run_p.add_argument("--dry-run", dest="dry_run", action="store_true",
+                                   help="Resolve path without lock, invoke, or journal mutation")
+    swim_refine_run_p.add_argument("--work-dir", dest="work_dir", required=False,
+                                   help="Working directory passed to invoke")
+
+    context_p = sub.add_parser("context", help="Context estimation tools")
+    context_sub = context_p.add_subparsers(dest="context_command", required=True)
+
+    context_estimate = context_sub.add_parser(
+        "estimate",
+        help="Estimate context footprint of an issue candidate",
+    )
+    context_estimate.add_argument("--candidate", required=True, help="Path to ContextCandidate JSON file")
+    context_estimate.add_argument("--budget", default="64000:192000", help="Budget range min:max in tokens (default: 64000:192000)")
+    context_estimate.add_argument("--base-dir", dest="base_dir", required=False, help="Root for resolving referenced file paths")
+
+    args = parser.parse_args()
+
+    if args.command == "swim" and args.swim_command == "compile-plan-json":
+        try:
+            _swim_compile_plan_json(args.input_path, args.output_path)
+        except ValueError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+    if args.command == "swim":
+        if args.swim_command == "compile-schedule":
+            _handle_swim_compile_schedule(args)
+        elif args.swim_command == "next":
+            schedule_path = _abs_user_path(args.schedule)
+            journal_path = _abs_user_path(args.journal) or _default_swim_journal(schedule_path)
+            state_path = _abs_user_path(args.state) or _derive_swim_state(schedule_path)
+            if not state_path:
+                _emit_json({"ok": False, "error": "could not derive state path", "subcommand": "next"}, 3)
+            _handle_swim_subprocess("next-resolve", [
+                "--schedule", schedule_path,
+                "--journal", journal_path,
+                "--state", state_path,
+            ], "next")
+        elif args.swim_command == "step":
+            if args.ack_unknown:
+                if not args.journal:
+                    _emit_json({"ok": False, "error": "--journal is required for --ack-unknown", "subcommand": "step"}, 2)
+                if not getattr(args, "ack_as", None):
+                    _emit_json({"ok": False, "error": "--as is required for --ack-unknown", "subcommand": "step"}, 2)
+                _handle_swim_subprocess("step", [
+                    "--journal", _abs_user_path(args.journal),
+                    "--ack-unknown", args.ack_unknown,
+                    "--as", args.ack_as,
+                ], "step")
+                return
+            schedule = _abs_user_path(args.schedule)
+            if not schedule:
+                _emit_json({"ok": False, "error": "--schedule is required", "subcommand": "step"}, 2)
+            journal_path = _abs_user_path(args.journal) or _default_swim_journal(schedule)
+            state_path = _abs_user_path(args.state) or _derive_swim_state(schedule)
+            if not state_path:
+                _emit_json({"ok": False, "error": "could not derive state path", "subcommand": "step"}, 3)
+            tool_args = ["--schedule", schedule, "--journal", journal_path, "--state", state_path]
+            if args.seq is not None:
+                tool_args.extend(["--seq", str(args.seq)])
+            if args.step_id:
+                tool_args.extend(["--step-id", args.step_id])
+            if args.apply:
+                tool_args.append("--apply")
+            proc = _run_swim_go("step", tool_args)
+            stdout = proc.stdout.strip()
+            stderr = proc.stderr.strip()
+            if stdout:
+                print(stdout)
+            if args.apply and getattr(args, "tail_logs", False) and stdout:
+                _tail_apply_logs(stdout, schedule, max(0, int(getattr(args, "tail_lines", 40))))
+            if proc.returncode == 0:
+                return
+            if stdout:
+                sys.exit(proc.returncode)
+            _emit_json({
+                "ok": False,
+                "error": stderr or "swim-step failed",
+                "subcommand": "step",
+            }, proc.returncode if proc.returncode in (2, 3, 4) else 3)
+        elif args.swim_command == "run":
+            schedule_path = _abs_user_path(args.schedule)
+            journal_path = _abs_user_path(args.journal) or _default_swim_journal(schedule_path)
+            state_path = _abs_user_path(args.state) or _derive_swim_state(schedule_path)
+            if not state_path:
+                _emit_json({"ok": False, "error": "could not derive state path", "subcommand": "run"}, 3)
+            tool_args = [
+                "--schedule", schedule_path,
+                "--journal", journal_path,
+                "--state", state_path,
+                "--until", args.until,
+            ]
+            if args.dry_run:
+                tool_args.append("--dry-run")
+            if args.max_steps is not None:
+                tool_args.extend(["--max-steps", str(args.max_steps)])
+            _handle_swim_subprocess("run", tool_args, "run")
+        elif args.swim_command == "journal":
+            schedule_path = _abs_user_path(args.schedule)
+            journal_path = _abs_user_path(args.journal) or _default_swim_journal(schedule_path)
+            tool_args = ["--schedule", schedule_path, "--journal", journal_path]
+            if args.tail is not None:
+                tool_args.extend(["--tail", str(args.tail)])
+            _handle_swim_subprocess("journal", tool_args, "journal")
+        elif args.swim_command == "validate":
+            _handle_swim_validate(args)
+        elif args.swim_command == "refine":
+            _handle_swim_refine(args)
+        elif args.swim_command == "refine-run":
+            _handle_swim_refine_run(args)
+        else:
+            _swim_not_wired(args.swim_command)
+        return
+
+    if args.command == "context":
+        if args.context_command == "estimate":
+            _handle_context_estimate(args)
+        else:
+            _swim_not_wired(args.context_command)
+        return
+
+    server_bin = args.mcp_bin or _SERVER_BIN
+    if not os.path.isfile(server_bin):
+        print(f"ERROR: waveplan-mcp binary not found at '{server_bin}'. "
+              f"Set WAVEPLAN_MCP_BIN or --mcp-bin.", file=sys.stderr)
+        sys.exit(1)
+
+    env = _build_env(args.plan)
+    client = MCPPhone(server_bin, env)
+    try:
+        # Initialize the MCP session
+        client._send("initialize", {
+            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "capabilities": {},
+        })
+        client._send("notifications/initialized", None, notify=True)
+
+        # Route CLI command -> MCP tool call
+        cmd = args.command
+        if cmd == "peek":
+            result = client.call_tool("waveplan_peek")
+        elif cmd == "pop":
+            result = client.call_tool("waveplan_pop", {"agent": args.agent})
+        elif cmd == "start_review":
+            result = client.call_tool("waveplan_start_review", {
+                "task_id": args.task_id,
+                "reviewer": args.reviewer,
+            })
+        elif cmd == "start_fix":
+            result = client.call_tool("waveplan_start_fix", {
+                "task_id": args.task_id,
+            })
+        elif cmd == "end_review":
+            result = client.call_tool("waveplan_end_review", {
+                "task_id": args.task_id,
+                "review_note": args.review_note or None,
+            })
+        elif cmd == "fin":
+            result = client.call_tool("waveplan_fin", {
+                "task_id": args.task_id,
+                "git_sha": args.git_sha or None,
+            })
+        elif cmd == "get":
+            result = client.call_tool("waveplan_get", {"mode": args.mode})
+        elif cmd == "list_plans":
+            result = client.call_tool("waveplan_list_plans", {
+                "plan_dir": args.plan_dir or None,
+            })
+        elif cmd == "deptree":
+            result = client.call_tool("waveplan_deptree", {})
+        else:
+            print(f"ERROR: unknown command '{cmd}'", file=sys.stderr)
+            sys.exit(1)
+
+        # Pretty-print the JSON result
+        print(json.dumps(result, indent=2))
+
+    except RuntimeError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        client.close()
+
+
+if __name__ == "__main__":
+    main()
