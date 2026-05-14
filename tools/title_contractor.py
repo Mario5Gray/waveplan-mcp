@@ -78,7 +78,7 @@ class TechBigramContractor:
 
     @classmethod
     def contract_string(cls, text: str, extra_map: Optional[Dict[str, str]] = None,
-                        protected: Set[str] = None, dry_run: bool = False) -> Tuple[str, List[Dict]]:
+                        protected: Optional[Set[str]] = None, dry_run: bool = False) -> Tuple[str, List[Dict]]:
         lookup = {**cls.BIGRAM_MAP, **(extra_map or {})}
         protected = protected or PROTECTED_TOKENS
         tokens = nltk.word_tokenize(text.lower())
@@ -150,7 +150,7 @@ class TechWordContractor:
 
     @classmethod
     def contract_string(cls, text: str, extra_map: Optional[Dict[str, str]] = None,
-                        protected: Set[str] = None, dry_run: bool = False) -> Tuple[str, List[Dict]]:
+                        protected: Optional[Set[str]] = None, dry_run: bool = False) -> Tuple[str, List[Dict]]:
         lookup = {**cls.EXPLICIT_MAP, **(extra_map or {})}
         protected = protected or PROTECTED_TOKENS
         audit: List[Dict] = []

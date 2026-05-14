@@ -1,6 +1,7 @@
 import asyncio, json, os
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.types import TextContent
 
 async def main():
     env = os.environ.copy()
@@ -10,5 +11,9 @@ async def main():
         async with ClientSession(read, write) as session:
             await session.initialize()
             result = await session.call_tool("waveplan_version", {})
-            print(result.content[0].text)
+            content = result.content[0]
+            if isinstance(content, TextContent):
+                print(content.text)
+            else:
+                print(content)
 asyncio.run(main())

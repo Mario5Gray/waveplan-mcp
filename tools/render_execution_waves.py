@@ -110,11 +110,11 @@ def render_waveplan_dag(units, edges, waves, output_path, title="Waveplan Execut
         extra_words = config.get('word_map', {})
         extra_bigrams = config.get('bigram_map', {})
         if not hasattr(render_waveplan_dag, '_contractor'):
-            render_waveplan_dag._contractor = MiddleOutTitleContractor(
+            render_waveplan_dag._contractor = MiddleOutTitleContractor(  # type: ignore[attr-defined]
                 contract_words=True,
                 contract_bigrams=True
             )
-        contracted, _ = render_waveplan_dag._contractor.contract(
+        contracted, _ = render_waveplan_dag._contractor.contract(  # type: ignore[attr-defined]
             clean_title,
             extra_word_map=extra_words,
             extra_bigram_map=extra_bigrams
@@ -140,7 +140,9 @@ def render_waveplan_dag(units, edges, waves, output_path, title="Waveplan Execut
         for wave_num in sorted(waves.keys()):
             wave_units = [u for u in waves[wave_num] if u in units]
             if len(wave_units) >= 2:
-                with dot.subgraph(name=f'cluster_wave_{wave_num}') as sub:
+                subgraph_result = dot.subgraph(name=f'cluster_wave_{wave_num}')
+                assert subgraph_result is not None
+                with subgraph_result as sub:
                     sub.attr(
                         label=f'Wave {wave_num}',
                         style='dashed',
