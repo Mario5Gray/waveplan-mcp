@@ -15,6 +15,7 @@ type SafeExecOptions struct {
 	SchedulePath   string
 	JournalPath    string
 	StatePath      string
+	ArtifactRoot   string
 	LockPath       string
 	WorkDir        string
 	ExpectCursor   *int
@@ -36,7 +37,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 
 	lockPath := opts.LockPath
 	if lockPath == "" {
-		lockPath = DeriveLockPath(opts.SchedulePath)
+		lockPath = DeriveLockPath(opts.SchedulePath, opts.ArtifactRoot)
 	}
 	lock, err := AcquireLock(lockPath)
 	if err != nil {
@@ -74,7 +75,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 
 	decision := ResolveNext(schedule, journal, snapA)
 	recoverDispatch := false
-	if decision.Action == ActionReady && isDispatchAction(decision.Row.Action) && anyDispatchReceiptExists(opts.SchedulePath, decision.Row.StepID) {
+	if decision.Action == ActionReady && isDispatchAction(decision.Row.Action) && anyDispatchReceiptExists(opts.SchedulePath, opts.ArtifactRoot, decision.Row.StepID) {
 		if err := AdvanceStateSnapshot(opts.StatePath, opts.SchedulePath, decision.Row.TaskID, Predict(decision.Row), time.Now().UTC()); err != nil {
 			return nil, err
 		}
@@ -106,7 +107,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 		if decision.Action == ActionDrift {
 			actual := snapA.StatusOf(decision.Row.TaskID)
 			if actual == Predict(decision.Row) {
-				if isDispatchAction(decision.Row.Action) && !anyDispatchReceiptExists(opts.SchedulePath, decision.Row.StepID) {
+				if isDispatchAction(decision.Row.Action) && !anyDispatchReceiptExists(opts.SchedulePath, opts.ArtifactRoot, decision.Row.StepID) {
 					recoverDispatch = true
 					break
 				}
@@ -146,12 +147,13 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 
 	eventIndex := len(journal.Events)
 	event := makeInFlightEvent(journal, decision.Row)
-	event.StdoutPath, event.StderrPath = deriveLogPaths(opts.SchedulePath, decision.Row.StepID, event.Attempt)
+	event.StdoutPath, event.StderrPath = deriveLogPaths(opts.SchedulePath, opts.ArtifactRoot, decision.Row.StepID, event.Attempt)
+	stdoutAbsPath, stderrAbsPath := deriveLogAbsPaths(opts.SchedulePath, opts.ArtifactRoot, decision.Row.StepID, event.Attempt)
 	receiptPath := ""
 	extraEnv := map[string]string{}
 	if isDispatchAction(decision.Row.Action) {
-		receiptPath = deriveDispatchReceiptPath(opts.SchedulePath, decision.Row.StepID, event.Attempt)
-		extraEnv["SWIM_DISPATCH_RECEIPT_PATH"] = dispatchReceiptAbsPath(opts.SchedulePath, decision.Row.StepID, event.Attempt)
+		receiptPath = deriveDispatchReceiptPath(opts.SchedulePath, opts.ArtifactRoot, decision.Row.StepID, event.Attempt)
+		extraEnv["SWIM_DISPATCH_RECEIPT_PATH"] = dispatchReceiptAbsPath(opts.SchedulePath, opts.ArtifactRoot, decision.Row.StepID, event.Attempt)
 		extraEnv["SWIM_STEP_ID"] = decision.Row.StepID
 		extraEnv["SWIM_TASK_ID"] = decision.Row.TaskID
 		extraEnv["SWIM_ACTION"] = decision.Row.Action
@@ -180,7 +182,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 		return nil, err
 	}
 
-	runErr := invokeArgv(decision.Row.Invoke.Argv, opts.WorkDir, filepath.Dir(opts.SchedulePath), event.StdoutPath, event.StderrPath, extraEnv, opts.InvokeFn)
+	runErr := invokeArgv(decision.Row.Invoke.Argv, opts.WorkDir, stdoutAbsPath, stderrAbsPath, extraEnv, opts.InvokeFn)
 	exitCode := 0
 	outcome := "applied"
 	reason := ""
@@ -193,7 +195,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 				return nil, err
 			}
 			actual := snapC.StatusOf(decision.Row.TaskID)
-			if actual == Predict(decision.Row) && !dispatchReceiptExists(opts.SchedulePath, decision.Row.StepID, event.Attempt) {
+			if actual == Predict(decision.Row) && !dispatchReceiptExists(opts.SchedulePath, opts.ArtifactRoot, decision.Row.StepID, event.Attempt) {
 				outcome = "blocked"
 				reason = fmt.Sprintf(
 					"incomplete_dispatch: action=%s produces=%s actual=%s receipt_missing=%s invoke_error=%s",
@@ -232,7 +234,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 				actual,
 			)
 			stateAfter = actual
-		} else if isDispatchAction(decision.Row.Action) && !dispatchReceiptExists(opts.SchedulePath, decision.Row.StepID, event.Attempt) {
+		} else if isDispatchAction(decision.Row.Action) && !dispatchReceiptExists(opts.SchedulePath, opts.ArtifactRoot, decision.Row.StepID, event.Attempt) {
 			outcome = "blocked"
 			reason = fmt.Sprintf(
 				"incomplete_dispatch: action=%s produces=%s actual=%s receipt_missing=%s",

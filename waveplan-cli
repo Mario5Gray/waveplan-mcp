@@ -738,6 +738,11 @@ def main() -> None:
     swim_step.add_argument("--schedule", required=False, help="Input schedule JSON path")
     swim_step.add_argument("--journal", required=False, help="Optional journal JSON path")
     swim_step.add_argument("--state", required=False, help="Optional state JSON path")
+    swim_step.add_argument(
+        "--artifact-root",
+        required=False,
+        help="Root directory for SWIM runtime artifacts (logs, receipts, lock). Default: <dirname(schedule)>/.waveplan/swim/<schedule-name>. Env: WAVEPLAN_SWIM_ARTIFACT_ROOT",
+    )
     seq_or_step = swim_step.add_mutually_exclusive_group()
     seq_or_step.add_argument("--seq", type=int, required=False, help="Target sequence number")
     seq_or_step.add_argument("--step-id", required=False, help="Target step_id")
@@ -757,6 +762,11 @@ def main() -> None:
     swim_run.add_argument("--schedule", required=True, help="Input schedule JSON path")
     swim_run.add_argument("--journal", required=False, help="Optional journal JSON path")
     swim_run.add_argument("--state", required=False, help="Optional state JSON path")
+    swim_run.add_argument(
+        "--artifact-root",
+        required=False,
+        help="Root directory for SWIM runtime artifacts (logs, receipts, lock). Default: <dirname(schedule)>/.waveplan/swim/<schedule-name>. Env: WAVEPLAN_SWIM_ARTIFACT_ROOT",
+    )
     swim_run.add_argument("--until", required=True, help="Stop condition: action, seq:N, step:<id>, task:Tn, or bare Tn")
     swim_run.add_argument("--dry-run", action="store_true", help="Resolve without mutating state")
     swim_run.add_argument("--max-steps", type=int, required=False, help="Maximum number of steps to process")
@@ -854,6 +864,9 @@ def main() -> None:
             if not state_path:
                 _emit_json({"ok": False, "error": "could not derive state path", "subcommand": "step"}, 3)
             tool_args = ["--schedule", schedule, "--journal", journal_path, "--state", state_path]
+            artifact_root = _abs_user_path(args.artifact_root) or _abs_user_path(os.getenv("WAVEPLAN_SWIM_ARTIFACT_ROOT"))
+            if artifact_root:
+                tool_args.extend(["--artifact-root", artifact_root])
             if args.seq is not None:
                 tool_args.extend(["--seq", str(args.seq)])
             if args.step_id:
@@ -888,6 +901,9 @@ def main() -> None:
                 "--state", state_path,
                 "--until", args.until,
             ]
+            artifact_root = _abs_user_path(args.artifact_root) or _abs_user_path(os.getenv("WAVEPLAN_SWIM_ARTIFACT_ROOT"))
+            if artifact_root:
+                tool_args.extend(["--artifact-root", artifact_root])
             if args.dry_run:
                 tool_args.append("--dry-run")
             if args.max_steps is not None:

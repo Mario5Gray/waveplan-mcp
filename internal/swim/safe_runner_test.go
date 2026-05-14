@@ -194,7 +194,7 @@ func TestExecuteNextStepSafe_AdoptsExactProducedStateOnCursorDrift(t *testing.T)
 			Invoke:   InvokeSpec{Argv: []string{"bash", "-lc", "true"}},
 		},
 	})
-	receiptPath := dispatchReceiptAbsPath(schedulePath, "S1_T1.1_implement", 1)
+	receiptPath := dispatchReceiptAbsPath(schedulePath, "", "S1_T1.1_implement", 1)
 	if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll receipt dir: %v", err)
 	}
@@ -298,6 +298,72 @@ func TestExecuteNextStepSafe_PersistsDispatchStateAfterSuccessfulInvoke(t *testi
 	}
 }
 
+func TestExecuteNextStepSafe_UsesExplicitArtifactRootForLockReceiptAndLogs(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "persist-dispatch-schedule.json")
+	journalPath := filepath.Join(dir, "journal.json")
+	statePath := filepath.Join(dir, "state.json")
+	artifactRoot := filepath.Join(dir, "artifacts")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{
+			Seq:      1,
+			StepID:   "S1_T1.1_implement",
+			TaskID:   "T1.1",
+			Action:   "implement",
+			Requires: StatusWrapper{TaskStatus: string(StatusAvailable)},
+			Produces: StatusWrapper{TaskStatus: string(StatusTaken)},
+			Invoke:   InvokeSpec{Argv: []string{"bash", "-lc", "true"}},
+		},
+	})
+	writeStateSnapshot(t, statePath, StatusAvailable)
+
+	res, err := ExecuteNextStepSafe(SafeExecOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		StatePath:    statePath,
+		ArtifactRoot: artifactRoot,
+		InvokeFn: func(_ []string, _ string) error {
+			receiptPath := os.Getenv("SWIM_DISPATCH_RECEIPT_PATH")
+			wantReceiptPath := filepath.Join(artifactRoot, "receipts", "S1_T1.1_implement.1.dispatch.json")
+			if receiptPath != wantReceiptPath {
+				t.Fatalf("receipt path = %q, want %q", receiptPath, wantReceiptPath)
+			}
+			if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
+				t.Fatalf("MkdirAll receipt dir: %v", err)
+			}
+			if err := os.WriteFile(receiptPath, []byte(`{"ok":true}`+"\n"), 0o644); err != nil {
+				t.Fatalf("WriteFile receipt: %v", err)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteNextStepSafe: %v", err)
+	}
+	if res.Outcome != "applied" {
+		t.Fatalf("outcome = %q, want applied", res.Outcome)
+	}
+
+	if _, err := os.Stat(filepath.Join(artifactRoot, "swim.lock")); err != nil {
+		t.Fatalf("lock stat: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(artifactRoot, "receipts", "S1_T1.1_implement.1.dispatch.json")); err != nil {
+		t.Fatalf("receipt stat: %v", err)
+	}
+
+	j := readJournal(t, journalPath)
+	if len(j.Events) != 1 {
+		t.Fatalf("events len = %d, want 1", len(j.Events))
+	}
+	if got := j.Events[0].StdoutPath; got != filepath.Join(artifactRoot, "logs", "S1_T1.1_implement.1.stdout.log") {
+		t.Fatalf("stdout_path = %q", got)
+	}
+	if got := j.Events[0].StderrPath; got != filepath.Join(artifactRoot, "logs", "S1_T1.1_implement.1.stderr.log") {
+		t.Fatalf("stderr_path = %q", got)
+	}
+}
+
 func TestExecuteNextStepSafe_AdoptsPriorDispatchReceiptWhenStateFileIsStale(t *testing.T) {
 	dir := t.TempDir()
 	schedulePath := filepath.Join(dir, "adopt-prior-receipt-schedule.json")
@@ -317,7 +383,7 @@ func TestExecuteNextStepSafe_AdoptsPriorDispatchReceiptWhenStateFileIsStale(t *t
 	})
 	writeStateSnapshot(t, statePath, StatusAvailable)
 
-	receiptPath := dispatchReceiptAbsPath(schedulePath, "S1_T1.1_implement", 1)
+	receiptPath := dispatchReceiptAbsPath(schedulePath, "", "S1_T1.1_implement", 1)
 	if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll receipt dir: %v", err)
 	}

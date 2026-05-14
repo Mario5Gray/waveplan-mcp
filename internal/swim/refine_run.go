@@ -413,7 +413,7 @@ func invokeWithCapture(argv []string, workDir, stdoutPath, stderrPath string, fn
 		}
 		return 0, nil
 	}
-	if err := invokeArgv(argv, workDir, "", stdoutPath, stderrPath, nil, nil); err != nil {
+	if err := invokeArgv(argv, workDir, stdoutPath, stderrPath, nil, nil); err != nil {
 		return exitCodeFromErr(err), err
 	}
 	return 0, nil

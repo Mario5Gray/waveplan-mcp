@@ -223,6 +223,67 @@ func TestExecuteNextStep_WritesStdoutAndStderrLogs(t *testing.T) {
 	}
 }
 
+func TestExecuteNextStep_WritesLogsUnderExplicitArtifactRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX argv fixture")
+	}
+
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "sample-plan.json")
+	journalPath := filepath.Join(dir, "journal.json")
+	artifactRoot := filepath.Join(dir, "artifacts")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{
+			Seq:      1,
+			StepID:   "S1_T1.1_implement",
+			TaskID:   "T1.1",
+			Action:   "implement",
+			Requires: StatusWrapper{TaskStatus: string(StatusAvailable)},
+			Produces: StatusWrapper{TaskStatus: string(StatusTaken)},
+			Invoke:   InvokeSpec{Argv: []string{"/bin/sh", "-c", "printf 'hello\\n'; printf 'warn\\n' >&2"}},
+		},
+	})
+
+	if _, err := ExecuteNextStep(ExecNextOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		ArtifactRoot: artifactRoot,
+	}); err != nil {
+		t.Fatalf("ExecuteNextStep: %v", err)
+	}
+
+	j := readJournal(t, journalPath)
+	if len(j.Events) != 1 {
+		t.Fatalf("events len = %d, want 1", len(j.Events))
+	}
+	event := j.Events[0]
+	wantStdoutPath := filepath.Join(artifactRoot, "logs", "S1_T1.1_implement.1.stdout.log")
+	wantStderrPath := filepath.Join(artifactRoot, "logs", "S1_T1.1_implement.1.stderr.log")
+	if event.StdoutPath != wantStdoutPath {
+		t.Fatalf("stdout_path = %q, want %q", event.StdoutPath, wantStdoutPath)
+	}
+	if event.StderrPath != wantStderrPath {
+		t.Fatalf("stderr_path = %q, want %q", event.StderrPath, wantStderrPath)
+	}
+
+	stdoutBody, err := os.ReadFile(event.StdoutPath)
+	if err != nil {
+		t.Fatalf("read stdout log: %v", err)
+	}
+	if string(stdoutBody) != "hello\n" {
+		t.Fatalf("stdout log = %q, want %q", string(stdoutBody), "hello\n")
+	}
+
+	stderrBody, err := os.ReadFile(event.StderrPath)
+	if err != nil {
+		t.Fatalf("read stderr log: %v", err)
+	}
+	if string(stderrBody) != "warn\n" {
+		t.Fatalf("stderr log = %q, want %q", string(stderrBody), "warn\n")
+	}
+}
+
 func TestExecuteNextStep_FailureWritesLogPathsAndExitCode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX argv fixture")

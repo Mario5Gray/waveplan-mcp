@@ -173,7 +173,7 @@ func TestApply_AdoptsExactProducedStateOnRetry(t *testing.T) {
 			Invoke:   InvokeSpec{Argv: []string{"bash", "-lc", "true"}},
 		},
 	})
-	receiptPath := dispatchReceiptAbsPath(schedulePath, "S1_T1.1_implement", 1)
+	receiptPath := dispatchReceiptAbsPath(schedulePath, "", "S1_T1.1_implement", 1)
 	if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll receipt dir: %v", err)
 	}
@@ -348,7 +348,7 @@ func TestApply_AdoptsDispatchStepWhenReceiptPresent(t *testing.T) {
 			Invoke:   InvokeSpec{Argv: []string{"bash", "-lc", "true"}},
 		},
 	})
-	receiptPath := dispatchReceiptAbsPath(schedulePath, "S1_T1.1_implement", 1)
+	receiptPath := dispatchReceiptAbsPath(schedulePath, "", "S1_T1.1_implement", 1)
 	if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll receipt dir: %v", err)
 	}

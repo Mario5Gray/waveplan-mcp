@@ -12,6 +12,7 @@ func main() {
 	schedulePath := flag.String("schedule", "", "path to schedule JSON")
 	journalPath := flag.String("journal", "", "path to journal JSON")
 	statePath := flag.String("state", "", "path to state JSON")
+	artifactRoot := flag.String("artifact-root", "", "root directory for SWIM runtime artifacts (logs, receipts, lock). Default: <dirname(schedule)>/.waveplan/swim/<schedule-name>. Env: WAVEPLAN_SWIM_ARTIFACT_ROOT")
 	until := flag.String("until", "", "stop condition")
 	dryRun := flag.Bool("dry-run", false, "dry run")
 	maxSteps := flag.Int("max-steps", 0, "max steps")
@@ -21,10 +22,15 @@ func main() {
 		writeError(2, "missing required --schedule/--journal/--state")
 	}
 
+	if *artifactRoot == "" {
+		*artifactRoot = os.Getenv("WAVEPLAN_SWIM_ARTIFACT_ROOT")
+	}
+
 	report, err := swim.Run(swim.RunOptions{
 		SchedulePath: *schedulePath,
 		JournalPath:  *journalPath,
 		StatePath:    *statePath,
+		ArtifactRoot: *artifactRoot,
 		Until:        *until,
 		DryRun:       *dryRun,
 		MaxSteps:     *maxSteps,

@@ -10,6 +10,7 @@ type RunOptions struct {
 	SchedulePath   string
 	JournalPath    string
 	StatePath      string
+	ArtifactRoot   string
 	LockPath       string
 	WorkDir        string
 	Until          string
@@ -80,6 +81,7 @@ func runWet(opts RunOptions, cond untilCond, report *RunReport) (*RunReport, err
 			SchedulePath:   opts.SchedulePath,
 			JournalPath:    opts.JournalPath,
 			StatePath:      opts.StatePath,
+			ArtifactRoot:   opts.ArtifactRoot,
 			LockPath:       opts.LockPath,
 			WorkDir:        opts.WorkDir,
 			InvokeFn:       opts.InvokeFn,

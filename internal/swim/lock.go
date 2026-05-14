@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 )
 
@@ -55,21 +54,6 @@ func (l *Lock) Release() error {
 		return fmt.Errorf("close lock file: %w", clErr)
 	}
 	return nil
-}
-
-// DeriveLockPath derives default lock path from schedule basename.
-// Example: docs/plans/x.json -> .waveplan/swim/x/swim.lock
-func DeriveLockPath(schedulePath string) string {
-	base := filepath.Base(schedulePath)
-	ext := filepath.Ext(base)
-	name := strings.TrimSuffix(base, ext)
-	if name == "" {
-		name = base
-	}
-	if name == "" {
-		name = "default"
-	}
-	return filepath.Join(".waveplan", "swim", name, "swim.lock")
 }
 
 // WriteLockHolder records operator-facing holder metadata into the lock file.

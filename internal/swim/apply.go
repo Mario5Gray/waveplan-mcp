@@ -11,6 +11,7 @@ type ApplyOptions struct {
 	SchedulePath   string
 	JournalPath    string
 	StatePath      string
+	ArtifactRoot   string
 	LockPath       string
 	WorkDir        string
 	ExpectCursor   *int
@@ -46,6 +47,7 @@ func Apply(opts ApplyOptions) (*ApplyReport, error) {
 		SchedulePath:   opts.SchedulePath,
 		JournalPath:    opts.JournalPath,
 		StatePath:      opts.StatePath,
+		ArtifactRoot:   opts.ArtifactRoot,
 		LockPath:       opts.LockPath,
 		WorkDir:        opts.WorkDir,
 		ExpectCursor:   opts.ExpectCursor,
@@ -54,7 +56,7 @@ func Apply(opts ApplyOptions) (*ApplyReport, error) {
 	})
 	if err != nil {
 		if errors.Is(err, ErrLockBusy) {
-			return lockBusyReport(opts.LockPath, opts.SchedulePath), nil
+			return lockBusyReport(opts.LockPath, opts.SchedulePath, opts.ArtifactRoot), nil
 		}
 		return nil, err
 	}
@@ -99,7 +101,7 @@ func Apply(opts ApplyOptions) (*ApplyReport, error) {
 		report.Status = "blocked"
 		report.Boundary = "blocked"
 		report.Reason = fmt.Sprintf("invoke_exit: step_id=%s exit_code=%d", event.StepID, report.ExitCode)
-		applyReceiptInquiry(report, opts.SchedulePath, event)
+		applyReceiptInquiry(report, opts.SchedulePath, opts.ArtifactRoot, event)
 		return report, nil
 	case "blocked":
 		report.Reason = normalizeBlockedReason(event.Reason)
@@ -107,25 +109,25 @@ func Apply(opts ApplyOptions) (*ApplyReport, error) {
 			report.Status = "incomplete_dispatch"
 			report.Boundary = "incomplete_dispatch"
 			report.Hint = "Re-run the same swim step to continue dispatch without re-claiming the task."
-			applyReceiptInquiry(report, opts.SchedulePath, event)
+			applyReceiptInquiry(report, opts.SchedulePath, opts.ArtifactRoot, event)
 			return report, nil
 		}
 		report.Status = "blocked"
 		report.Boundary = "blocked"
-		applyReceiptInquiry(report, opts.SchedulePath, event)
+		applyReceiptInquiry(report, opts.SchedulePath, opts.ArtifactRoot, event)
 		return report, nil
 	default:
 		report.Status = "blocked"
 		report.Boundary = "blocked"
 		report.Reason = event.Reason
-		applyReceiptInquiry(report, opts.SchedulePath, event)
+		applyReceiptInquiry(report, opts.SchedulePath, opts.ArtifactRoot, event)
 		return report, nil
 	}
 }
 
-func lockBusyReport(lockPath, schedulePath string) *ApplyReport {
+func lockBusyReport(lockPath, schedulePath, artifactRoot string) *ApplyReport {
 	if lockPath == "" {
-		lockPath = DeriveLockPath(schedulePath)
+		lockPath = DeriveLockPath(schedulePath, artifactRoot)
 	}
 	report := &ApplyReport{Status: "lock_busy"}
 	report.Boundary = "blocked"
@@ -150,11 +152,11 @@ func derefInt(v *int) int {
 	return *v
 }
 
-func applyReceiptInquiry(report *ApplyReport, schedulePath string, event *JournalEvent) {
+func applyReceiptInquiry(report *ApplyReport, schedulePath, artifactRoot string, event *JournalEvent) {
 	if report == nil || event == nil || !isDispatchAction(event.Action) {
 		return
 	}
-	receipt, err := loadDispatchReceipt(schedulePath, event.StepID, event.Attempt)
+	receipt, err := loadDispatchReceipt(schedulePath, artifactRoot, event.StepID, event.Attempt)
 	if err != nil || receipt == nil || !receipt.InquiryRequired {
 		return
 	}

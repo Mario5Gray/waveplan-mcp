@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -16,6 +15,7 @@ import (
 type ExecNextOptions struct {
 	SchedulePath string
 	JournalPath  string
+	ArtifactRoot string
 	WorkDir      string
 	ExpectCursor *int
 	InvokeFn     func(argv []string, workDir string) error
@@ -88,10 +88,11 @@ func ExecuteNextStep(opts ExecNextOptions) (*ExecNextResult, error) {
 			attempt++
 		}
 	}
-	stdoutPath, stderrPath := deriveLogPaths(opts.SchedulePath, row.StepID, attempt)
+	stdoutPath, stderrPath := deriveLogPaths(opts.SchedulePath, opts.ArtifactRoot, row.StepID, attempt)
+	stdoutAbsPath, stderrAbsPath := deriveLogAbsPaths(opts.SchedulePath, opts.ArtifactRoot, row.StepID, attempt)
 
 	started := time.Now().UTC().Format(time.RFC3339)
-	runErr := invokeArgv(row.Invoke.Argv, opts.WorkDir, filepath.Dir(opts.SchedulePath), stdoutPath, stderrPath, nil, opts.InvokeFn)
+	runErr := invokeArgv(row.Invoke.Argv, opts.WorkDir, stdoutAbsPath, stderrAbsPath, nil, opts.InvokeFn)
 	completed := time.Now().UTC().Format(time.RFC3339)
 
 	exitCode := 0
@@ -231,8 +232,8 @@ func exitCodeFromErr(err error) int {
 	return 1
 }
 
-func invokeArgv(argv []string, workDir, artifactRoot, stdoutPath, stderrPath string, extraEnv map[string]string, fn func(argv []string, workDir string) error) error {
-	stdoutFile, stderrFile, err := openLogFiles(artifactRoot, stdoutPath, stderrPath)
+func invokeArgv(argv []string, workDir, stdoutPath, stderrPath string, extraEnv map[string]string, fn func(argv []string, workDir string) error) error {
+	stdoutFile, stderrFile, err := openLogFiles(stdoutPath, stderrPath)
 	if err != nil {
 		return err
 	}
@@ -262,44 +263,6 @@ func invokeArgv(argv []string, workDir, artifactRoot, stdoutPath, stderrPath str
 	return cmd.Run()
 }
 
-func deriveLogPaths(schedulePath, stepID string, attempt int) (string, string) {
-	logDir := deriveLogDir(schedulePath)
-	base := fmt.Sprintf("%s.%d", stepID, attempt)
-	return filepath.Join(logDir, base+".stdout.log"), filepath.Join(logDir, base+".stderr.log")
-}
-
-func deriveLogDir(schedulePath string) string {
-	base := filepath.Base(schedulePath)
-	ext := filepath.Ext(base)
-	name := strings.TrimSuffix(base, ext)
-	if name == "" {
-		name = base
-	}
-	if name == "" {
-		name = "default"
-	}
-	return filepath.Join(".waveplan", "swim", name, "logs")
-}
-
-func deriveDispatchReceiptPath(schedulePath, stepID string, attempt int) string {
-	receiptDir := deriveDispatchReceiptDir(schedulePath)
-	base := fmt.Sprintf("%s.%d", stepID, attempt)
-	return filepath.Join(receiptDir, base+".dispatch.json")
-}
-
-func deriveDispatchReceiptDir(schedulePath string) string {
-	base := filepath.Base(schedulePath)
-	ext := filepath.Ext(base)
-	name := strings.TrimSuffix(base, ext)
-	if name == "" {
-		name = base
-	}
-	if name == "" {
-		name = "default"
-	}
-	return filepath.Join(".waveplan", "swim", name, "receipts")
-}
-
 func applyEnv(extraEnv map[string]string) func() {
 	if len(extraEnv) == 0 {
 		return func() {}
@@ -327,13 +290,7 @@ func applyEnv(extraEnv map[string]string) func() {
 	}
 }
 
-func openLogFiles(artifactRoot, stdoutPath, stderrPath string) (*os.File, *os.File, error) {
-	stdoutAbs := stdoutPath
-	stderrAbs := stderrPath
-	if artifactRoot != "" {
-		stdoutAbs = filepath.Join(artifactRoot, stdoutPath)
-		stderrAbs = filepath.Join(artifactRoot, stderrPath)
-	}
+func openLogFiles(stdoutAbs, stderrAbs string) (*os.File, *os.File, error) {
 	if err := os.MkdirAll(filepath.Dir(stdoutAbs), 0o755); err != nil {
 		return nil, nil, fmt.Errorf("create stdout log dir: %w", err)
 	}

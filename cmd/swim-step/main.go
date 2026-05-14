@@ -12,6 +12,7 @@ func main() {
 	schedulePath := flag.String("schedule", "", "path to schedule JSON")
 	journalPath := flag.String("journal", "", "path to journal JSON")
 	statePath := flag.String("state", "", "path to state JSON")
+	artifactRoot := flag.String("artifact-root", "", "root directory for SWIM runtime artifacts (logs, receipts, lock). Default: <dirname(schedule)>/.waveplan/swim/<schedule-name>. Env: WAVEPLAN_SWIM_ARTIFACT_ROOT")
 	seq := flag.Int("seq", 0, "expected current sequence")
 	stepID := flag.String("step-id", "", "expected current step_id")
 	apply := flag.Bool("apply", false, "apply current step")
@@ -39,6 +40,9 @@ func main() {
 	if *schedulePath == "" || *journalPath == "" || *statePath == "" {
 		writeError(2, "missing required --schedule/--journal/--state")
 	}
+	if *artifactRoot == "" {
+		*artifactRoot = os.Getenv("WAVEPLAN_SWIM_ARTIFACT_ROOT")
+	}
 
 	decision, err := swim.ResolveNextFromPaths(swim.NextOptions{
 		SchedulePath: *schedulePath,
@@ -63,6 +67,7 @@ func main() {
 		SchedulePath: *schedulePath,
 		JournalPath:  *journalPath,
 		StatePath:    *statePath,
+		ArtifactRoot: *artifactRoot,
 	})
 	if err != nil {
 		writeError(3, err.Error())

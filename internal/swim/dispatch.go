@@ -22,13 +22,13 @@ func isDispatchAction(action string) bool {
 	}
 }
 
-func dispatchReceiptExists(schedulePath, stepID string, attempt int) bool {
-	_, err := os.Stat(dispatchReceiptAbsPath(schedulePath, stepID, attempt))
+func dispatchReceiptExists(schedulePath, artifactRoot, stepID string, attempt int) bool {
+	_, err := os.Stat(dispatchReceiptAbsPath(schedulePath, artifactRoot, stepID, attempt))
 	return err == nil
 }
 
-func loadDispatchReceipt(schedulePath, stepID string, attempt int) (*dispatchReceipt, error) {
-	body, err := os.ReadFile(dispatchReceiptAbsPath(schedulePath, stepID, attempt))
+func loadDispatchReceipt(schedulePath, artifactRoot, stepID string, attempt int) (*dispatchReceipt, error) {
+	body, err := os.ReadFile(dispatchReceiptAbsPath(schedulePath, artifactRoot, stepID, attempt))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -42,8 +42,8 @@ func loadDispatchReceipt(schedulePath, stepID string, attempt int) (*dispatchRec
 	return &receipt, nil
 }
 
-func anyDispatchReceiptExists(schedulePath, stepID string) bool {
-	pattern := filepath.Join(dispatchReceiptAbsDir(schedulePath), stepID+".*.dispatch.json")
+func anyDispatchReceiptExists(schedulePath, artifactRoot, stepID string) bool {
+	pattern := filepath.Join(dispatchReceiptAbsDir(schedulePath, artifactRoot), stepID+".*.dispatch.json")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		return false
@@ -51,10 +51,10 @@ func anyDispatchReceiptExists(schedulePath, stepID string) bool {
 	return len(matches) > 0
 }
 
-func dispatchReceiptAbsPath(schedulePath, stepID string, attempt int) string {
-	return filepath.Join(filepath.Dir(schedulePath), deriveDispatchReceiptPath(schedulePath, stepID, attempt))
+func dispatchReceiptAbsPath(schedulePath, artifactRoot, stepID string, attempt int) string {
+	return deriveDispatchReceiptPath(schedulePath, artifactRoot, stepID, attempt)
 }
 
-func dispatchReceiptAbsDir(schedulePath string) string {
-	return filepath.Join(filepath.Dir(schedulePath), deriveDispatchReceiptDir(schedulePath))
+func dispatchReceiptAbsDir(schedulePath, artifactRoot string) string {
+	return filepath.Join(ResolveArtifactRoot(schedulePath, artifactRoot), "receipts")
 }
