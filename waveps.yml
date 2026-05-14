@@ -1,0 +1,16 @@
+# waveplan-ps local config
+#
+# plan/state/journal now come from explicit CLI flags or environment:
+#   WAVEPLAN_PLAN
+#   WAVEPLAN_STATE
+#   WAVEPLAN_JOURNAL
+#
+# Example:
+#   source ./env.contextsizr
+#   waveplan-ps --config waveps.yml --interval 3s
+
+log_dirs:
+  - /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/.waveplan
+
+display:
+  expand_first_wave: true

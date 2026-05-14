@@ -52,7 +52,7 @@ def _ordered(d: dict, known: tuple[str, ...]) -> dict:
 # Where the repo keeps its execution-wave plan files.
 _SCRIPT_PATH = Path(__file__).resolve()
 _SCRIPT_DIR = _SCRIPT_PATH.parent
-_REPO_PLAN_DIR = _SCRIPT_DIR.parent / "docs" / "superpowers" / "plans"
+_REPO_PLAN_DIR = _SCRIPT_DIR / "docs" / "plans"
 _REPO_ROOT = _SCRIPT_DIR
 
 
@@ -87,8 +87,8 @@ def _resolve_local_tool(name: str) -> str | None:
 
 
 def _find_auto_plan() -> Path | None:
-    """Find the *-execution-waves.json file in the repo plan directory."""
-    matches = sorted(_REPO_PLAN_DIR.glob("*-execution-waves.json"))
+    """Find the *-execution-waves.json file in the repo plan directory tree."""
+    matches = sorted(_REPO_PLAN_DIR.rglob("*-execution-waves.json"))
     if len(matches) == 1:
         return matches[0]
     # If multiple exist, prefer the one with a .state.json sibling (active plan).
@@ -757,7 +757,7 @@ def main() -> None:
     swim_run.add_argument("--schedule", required=True, help="Input schedule JSON path")
     swim_run.add_argument("--journal", required=False, help="Optional journal JSON path")
     swim_run.add_argument("--state", required=False, help="Optional state JSON path")
-    swim_run.add_argument("--until", required=True, help="Stop condition: action, seq:N, or step:<id>")
+    swim_run.add_argument("--until", required=True, help="Stop condition: action, seq:N, step:<id>, task:Tn, or bare Tn")
     swim_run.add_argument("--dry-run", action="store_true", help="Resolve without mutating state")
     swim_run.add_argument("--max-steps", type=int, required=False, help="Maximum number of steps to process")
     swim_journal = swim_sub.add_parser(

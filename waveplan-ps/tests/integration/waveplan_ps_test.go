@@ -32,10 +32,10 @@ func TestCompiledBinaryOnceRendersSnapshotOutput(t *testing.T) {
 	run := exec.Command(
 		binaryPath,
 		"--once",
-		"--plan-dir", fixtureRoot,
-		"--state-dir", fixtureRoot,
-		"--journal-dir", fixtureRoot,
-		"--log-dir", fixtureRoot,
+		"--plan", filepath.Join(fixtureRoot, "2026-demo-execution-waves.json"),
+		"--state", filepath.Join(fixtureRoot, "2026-demo-execution-waves.json.state.json"),
+		"--journal", filepath.Join(fixtureRoot, "2026-demo-execution-schedule.json.journal.json"),
+		"--log-dir", filepath.Join(fixtureRoot, ".waveplan"),
 	)
 	var stdout bytes.Buffer
 	run.Stdout = &stdout

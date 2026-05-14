@@ -142,11 +142,13 @@ func isPlanPath(path string) bool {
 }
 
 func isStatePath(path string) bool {
-	return strings.HasSuffix(filepath.Base(path), ".state.json")
+	name := filepath.Base(path)
+	return strings.HasSuffix(name, ".state.json") || strings.HasSuffix(name, "-execution-state.json")
 }
 
 func isJournalPath(path string) bool {
-	return strings.HasSuffix(filepath.Base(path), ".journal.json")
+	name := filepath.Base(path)
+	return strings.HasSuffix(name, ".journal.json") || strings.HasSuffix(name, "-execution-journal.json")
 }
 
 func isNotePath(path string) bool {

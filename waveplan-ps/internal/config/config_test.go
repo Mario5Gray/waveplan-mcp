@@ -29,16 +29,16 @@ func TestDecodePreservesExplicitFalseExpandFirstWave(t *testing.T) {
 	}
 }
 
-func TestDecodeLoadsConfiguredDiscoveryDirectories(t *testing.T) {
+func TestDecodeLoadsConfiguredExplicitPaths(t *testing.T) {
 	cfg, err := Decode(strings.NewReader(`
-plan_dirs:
-  - plans
-state_dirs:
-  - states
-journal_dirs:
-  - journals
-note_dirs:
-  - notes
+plan_paths:
+  - plans/demo-execution-waves.json
+state_paths:
+  - state/demo-execution-state.json
+journal_paths:
+  - journals/demo-execution-journal.json
+note_paths:
+  - notes/demo.md
 log_dirs:
   - logs
 `))
@@ -46,10 +46,10 @@ log_dirs:
 		t.Fatalf("Decode() error = %v", err)
 	}
 
-	assertStrings(t, cfg.PlanDirs, []string{"plans"})
-	assertStrings(t, cfg.StateDirs, []string{"states"})
-	assertStrings(t, cfg.JournalDirs, []string{"journals"})
-	assertStrings(t, cfg.NoteDirs, []string{"notes"})
+	assertStrings(t, cfg.PlanPaths, []string{"plans/demo-execution-waves.json"})
+	assertStrings(t, cfg.StatePaths, []string{"state/demo-execution-state.json"})
+	assertStrings(t, cfg.JournalPaths, []string{"journals/demo-execution-journal.json"})
+	assertStrings(t, cfg.NotePaths, []string{"notes/demo.md"})
 	assertStrings(t, cfg.LogDirs, []string{"logs"})
 }
 
@@ -67,7 +67,7 @@ func TestLoadReadsYAMLConfigFromPath(t *testing.T) {
 	}
 }
 
-func TestLoadResolvesRelativeDiscoveryDirectoriesAgainstConfigPath(t *testing.T) {
+func TestLoadResolvesRelativeExplicitPathsAgainstConfigPath(t *testing.T) {
 	root := t.TempDir()
 	cfgDir := filepath.Join(root, "observer")
 	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
@@ -75,14 +75,14 @@ func TestLoadResolvesRelativeDiscoveryDirectoriesAgainstConfigPath(t *testing.T)
 	}
 	path := filepath.Join(cfgDir, "waveplan-ps.yaml")
 	writeTestFile(t, path, `
-plan_dirs:
-  - ../plans
-state_dirs:
-  - ../state
-journal_dirs:
-  - ../journals
-note_dirs:
-  - ../notes
+plan_paths:
+  - ../plans/demo-execution-waves.json
+state_paths:
+  - ../state/demo-execution-state.json
+journal_paths:
+  - ../journals/demo-execution-journal.json
+note_paths:
+  - ../notes/demo.md
 log_dirs:
   - ../logs
 `)
@@ -92,11 +92,21 @@ log_dirs:
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	assertStrings(t, cfg.PlanDirs, []string{filepath.Join(root, "plans")})
-	assertStrings(t, cfg.StateDirs, []string{filepath.Join(root, "state")})
-	assertStrings(t, cfg.JournalDirs, []string{filepath.Join(root, "journals")})
-	assertStrings(t, cfg.NoteDirs, []string{filepath.Join(root, "notes")})
+	assertStrings(t, cfg.PlanPaths, []string{filepath.Join(root, "plans", "demo-execution-waves.json")})
+	assertStrings(t, cfg.StatePaths, []string{filepath.Join(root, "state", "demo-execution-state.json")})
+	assertStrings(t, cfg.JournalPaths, []string{filepath.Join(root, "journals", "demo-execution-journal.json")})
+	assertStrings(t, cfg.NotePaths, []string{filepath.Join(root, "notes", "demo.md")})
 	assertStrings(t, cfg.LogDirs, []string{filepath.Join(root, "logs")})
+}
+
+func TestDecodeRejectsLegacyDiscoveryDirectories(t *testing.T) {
+	_, err := Decode(strings.NewReader("plan_dirs:\n  - plans\n"))
+	if err == nil {
+		t.Fatal("Decode() error = nil, want legacy scan root rejection")
+	}
+	if !strings.Contains(err.Error(), "directory scan roots are no longer supported") {
+		t.Fatalf("error = %v", err)
+	}
 }
 
 func assertStrings(t *testing.T, got, want []string) {

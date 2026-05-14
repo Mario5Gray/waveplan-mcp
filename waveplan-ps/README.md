@@ -1,9 +1,9 @@
 # waveplan-ps
 
 `waveplan-ps` is a local observer for waveplan execution. It loads
-execution-wave plans, waveplan state sidecars, SWIM journals, txtstore notes,
-and SWIM step logs, then renders a live terminal view or a deterministic
-one-shot text snapshot.
+explicitly-specified execution-wave plans, waveplan state sidecars, SWIM
+journals, txtstore notes, and SWIM step logs, then renders a live terminal
+view or a deterministic one-shot text snapshot.
 
 ## Build
 
@@ -18,10 +18,9 @@ Render one text snapshot and exit:
 ```bash
 ./waveplan-ps \
   --once \
-  --plan-dir ../docs/plans \
-  --state-dir ../docs/plans \
-  --journal-dir ../docs/plans \
-  --note-dir ../docs/agent_notes \
+  --plan ../docs/plans/2026-05-12-waveplan-ps-execution-waves.json \
+  --state ../docs/plans/2026-05-12-waveplan-ps-execution-waves.json.state.json \
+  --journal ../docs/plans/2026-05-12-waveplan-ps-execution-schedule.json.journal.json \
   --log-dir ../docs/plans/.waveplan
 ```
 
@@ -33,27 +32,25 @@ Run the live terminal observer:
   --interval 2s
 ```
 
-Limit the view to one plan by absolute path, relative path, or basename. When a
-plan is selected, matching state sidecars are filtered to the selected plan.
+You can also supply the same explicit paths through environment variables:
 
 ```bash
-./waveplan-ps --once \
-  --plan-dir ../docs/plans \
-  --state-dir ../docs/plans \
-  --plan 2026-05-12-waveplan-ps-execution-waves.json
+export WAVEPLAN_PLAN=/abs/path/to/plan-execution-waves.json
+export WAVEPLAN_STATE=/abs/path/to/plan-execution-state.json
+export WAVEPLAN_JOURNAL=/abs/path/to/plan-execution-journal.json
+./waveplan-ps --config docs/waveplan-ps-config-example.yaml --interval 2s
 ```
 
 ## Flags
 
 | flag | default | description |
 |---|---:|---|
-| `--config` | empty | YAML config file. CLI directory flags are appended to config directories. |
+| `--config` | empty | YAML config file. Explicit CLI paths are appended to config path lists. |
 | `--once` | `false` | Render one text snapshot and exit. Without this flag, the live TUI runs until interrupted. |
-| `--plan` | empty | Plan path or basename to display. Repeat the flag to select multiple plans. |
-| `--plan-dir` | empty | Directory root to recursively scan for `*-execution-waves.json` plans. Repeatable. |
-| `--state-dir` | empty | Directory root to recursively scan for `*.state.json` sidecars. Repeatable. |
-| `--journal-dir` | empty | Directory root to recursively scan for `*.journal.json` SWIM journals. Repeatable. |
-| `--note-dir` | empty | Directory root to recursively scan for Markdown txtstore notes. Repeatable. |
+| `--plan` | empty | Execution-waves plan path. Repeatable. Falls back to `WAVEPLAN_PLAN` when omitted. |
+| `--state` | empty | Waveplan state sidecar path. Repeatable. Falls back to `WAVEPLAN_STATE` when omitted. |
+| `--journal` | empty | SWIM journal sidecar path. Repeatable. Falls back to `WAVEPLAN_JOURNAL` when omitted. |
+| `--note` | empty | Markdown txtstore note path. Repeatable. |
 | `--log-dir` | empty | Directory root to recursively scan for SWIM log files. Repeatable. This is not a glob pattern. |
 | `--interval` | `1s` | Live refresh interval, parsed as a Go duration such as `500ms`, `2s`, or `1m`. |
 | `--tail-limit` | `10` | Maximum waveplan tail rows to render. Values less than or equal to zero render all rows. |
@@ -62,18 +59,10 @@ plan is selected, matching state sidecars are filtered to the selected plan.
 
 ## Config
 
-All directory lists are recursive scan roots. They are directories that
-`waveplan-ps` walks with `filepath.WalkDir`; they are not shell globs.
+Plan/state/journal/note lists are explicit file paths. Only `log_dirs` remains
+directory-based because SWIM log discovery is fan-out over many step log files.
 
 ```yaml
-plan_dirs:
-  - ../docs/plans
-state_dirs:
-  - ../docs/plans
-journal_dirs:
-  - ../docs/plans
-note_dirs:
-  - ../docs/agent_notes
 log_dirs:
   - ../docs/plans/.waveplan
 display:
@@ -83,17 +72,15 @@ display:
 `display.expand_first_wave` defaults to `true` when omitted. Set it to `false`
 in YAML when the first wave should start collapsed.
 
-## Discovered Files
+## Explicit Inputs
 
-`waveplan-ps` recognizes files by filename:
+`waveplan-ps` no longer scans directories for plans, state files, journals, or
+notes. Those are loaded only from explicit CLI flags, config path lists, or the
+`WAVEPLAN_PLAN`, `WAVEPLAN_STATE`, and `WAVEPLAN_JOURNAL` environment
+variables.
 
-| source | recognized names |
-|---|---|
-| plans | `*-execution-waves.json` |
-| states | `*.state.json` |
-| SWIM journals | `*.journal.json` |
-| txtstore notes | `*.md` |
-| SWIM logs | `S<seq>_<task-id>_<action>.<attempt>.stdout.log` and `.stderr.log` |
+SWIM logs are still discovered under configured `log_dirs`. Valid SWIM log
+filenames are:
 
 Valid SWIM log actions are `implement`, `review`, `review_r<N>`, `fix`,
 `fix_r<N>`, `end_review`, and `finish`. Log files are correlated to units by

@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"sort"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
 
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/config"
-	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/discovery"
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/ui"
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/watch"
 	"github.com/rivo/tview"
@@ -24,16 +21,16 @@ const livePageName = "snapshot"
 type cliOptions struct {
 	configPath      string
 	once            bool
-	planFilters     []string
-	planDirs        []string
-	stateDirs       []string
-	journalDirs     []string
-	noteDirs        []string
+	planPaths       []string
+	statePaths      []string
+	journalPaths    []string
+	notePaths       []string
 	logDirs         []string
 	interval        time.Duration
 	tailLimit       int
 	journalLimit    int
 	logTailLines    int
+	unitLimit       int
 	expandFirstWave bool
 }
 
@@ -75,24 +72,11 @@ func (c *rootCommand) ExecuteContext(ctx context.Context) error {
 		tailLimit:       10,
 		journalLimit:    10,
 		logTailLines:    8,
+		unitLimit:       10,
 		expandFirstWave: true,
 	}
 
-	flags := flag.NewFlagSet("waveplan-ps", flag.ContinueOnError)
-	flags.SetOutput(c.err)
-	flags.StringVar(&opts.configPath, "config", "", "YAML config file")
-	flags.BoolVar(&opts.once, "once", false, "render one snapshot and exit")
-	flags.Var((*stringArray)(&opts.planFilters), "plan", "plan path or basename to display")
-	flags.Var((*stringArray)(&opts.planDirs), "plan-dir", "directory to recursively scan for execution-waves plans")
-	flags.Var((*stringArray)(&opts.stateDirs), "state-dir", "directory to recursively scan for waveplan state sidecars")
-	flags.Var((*stringArray)(&opts.journalDirs), "journal-dir", "directory to recursively scan for SWIM journals")
-	flags.Var((*stringArray)(&opts.noteDirs), "note-dir", "directory to recursively scan for txtstore notes")
-	flags.Var((*stringArray)(&opts.logDirs), "log-dir", "directory to recursively scan for SWIM logs")
-	flags.DurationVar(&opts.interval, "interval", time.Second, "live refresh interval")
-	flags.IntVar(&opts.tailLimit, "tail-limit", 10, "maximum tail rows to render")
-	flags.IntVar(&opts.journalLimit, "journal-limit", 10, "maximum journal events to render")
-	flags.IntVar(&opts.logTailLines, "log-lines", 8, "lines of stdio log to show in active log panel")
-	flags.BoolVar(&opts.expandFirstWave, "expand-first-wave", true, "expand the first wave initially")
+	flags := newFlagSet(&opts, c.err)
 	args := c.args
 	if !c.argsSet {
 		args = os.Args[1:]
@@ -121,10 +105,11 @@ func (c *rootCommand) ExecuteContext(ctx context.Context) error {
 		return err
 	}
 	renderOptions := ui.Options{
-		ExpandFirstWave: cfg.Display.ExpandFirstWave,
-		TailLimit:       opts.tailLimit,
-		JournalLimit:    opts.journalLimit,
-		LogTailLines:    opts.logTailLines,
+		ExpandFirstWave:  cfg.Display.ExpandFirstWave,
+		TailLimit:        opts.tailLimit,
+		JournalLimit:     opts.journalLimit,
+		LogTailLines:     opts.logTailLines,
+		TableVisibleRows: opts.unitLimit,
 	}
 	if opts.once {
 		return runOnce(c.out, watchOptions, renderOptions)
@@ -139,40 +124,32 @@ func main() {
 	}
 }
 
+func newFlagSet(opts *cliOptions, errOut io.Writer) *flag.FlagSet {
+	flags := flag.NewFlagSet("waveplan-ps", flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	flags.StringVar(&opts.configPath, "config", "", "YAML config file")
+	flags.BoolVar(&opts.once, "once", false, "render one snapshot and exit")
+	flags.Var((*stringArray)(&opts.planPaths), "plan", "execution-waves plan path (repeatable)")
+	flags.Var((*stringArray)(&opts.statePaths), "state", "waveplan state sidecar path (repeatable)")
+	flags.Var((*stringArray)(&opts.journalPaths), "journal", "SWIM journal sidecar path (repeatable)")
+	flags.Var((*stringArray)(&opts.notePaths), "note", "txtstore note path (repeatable)")
+	flags.Var((*stringArray)(&opts.logDirs), "log-dir", "directory to recursively scan for SWIM logs")
+	flags.DurationVar(&opts.interval, "interval", time.Second, "live refresh interval")
+	flags.IntVar(&opts.tailLimit, "tail-limit", 10, "maximum tail rows to render")
+	flags.IntVar(&opts.journalLimit, "journal-limit", 10, "maximum journal events to render")
+	flags.IntVar(&opts.logTailLines, "log-lines", 8, "lines of stdio log to show in active log panel")
+	flags.IntVar(&opts.unitLimit, "unit-limit", 10, "visible rows in the wave/unit table before scrolling")
+	flags.BoolVar(&opts.expandFirstWave, "expand-first-wave", true, "expand the first wave initially")
+	return flags
+}
+
 func buildWatchOptions(cfg config.Config, opts cliOptions) (watch.Options, error) {
-	planDirs := appendPaths(cfg.PlanDirs, opts.planDirs)
-	stateDirs := appendPaths(cfg.StateDirs, opts.stateDirs)
-	journalDirs := appendPaths(cfg.JournalDirs, opts.journalDirs)
-	noteDirs := appendPaths(cfg.NoteDirs, opts.noteDirs)
+	planPaths := appendPaths(cfg.PlanPaths, opts.planPaths)
+	statePaths := appendPaths(cfg.StatePaths, opts.statePaths)
+	journalPaths := appendPaths(cfg.JournalPaths, opts.journalPaths)
+	notePaths := appendPaths(cfg.NotePaths, opts.notePaths)
 	logDirs := appendPaths(cfg.LogDirs, opts.logDirs)
-
-	planPaths, err := discoverAllPaths(planDirs, discovery.DiscoverPlans)
-	if err != nil {
-		return watch.Options{}, err
-	}
-	statePaths, err := discoverAllPaths(stateDirs, discovery.DiscoverStates)
-	if err != nil {
-		return watch.Options{}, err
-	}
-	journalPaths, err := discoverAllPaths(journalDirs, discovery.DiscoverJournals)
-	if err != nil {
-		return watch.Options{}, err
-	}
-	notePaths, err := discoverAllPaths(noteDirs, discovery.DiscoverNotes)
-	if err != nil {
-		return watch.Options{}, err
-	}
-
-	if len(opts.planFilters) > 0 {
-		planPaths = filterPlanPaths(planPaths, opts.planFilters)
-		if len(planPaths) == 0 {
-			planPaths = appendExplicitPlans(opts.planFilters)
-		}
-		statePaths = filterStatePaths(statePaths, planPaths)
-		if len(statePaths) == 0 {
-			statePaths = appendExistingStateSidecars(planPaths)
-		}
-	}
+	applyEnvFallbacks(&planPaths, &statePaths, &journalPaths)
 
 	return watch.Options{
 		PlanPaths:    planPaths,
@@ -189,7 +166,7 @@ func validateWatchOptions(options watch.Options) error {
 		len(options.JournalPaths) == 0 &&
 		len(options.NotePaths) == 0 &&
 		len(options.LogDirs) == 0 {
-		return fmt.Errorf("no discovery roots configured; pass --config or at least one of --plan-dir, --state-dir, --journal-dir, --note-dir, or --log-dir")
+		return fmt.Errorf("no observer inputs configured; pass --config, explicit --plan/--state/--journal/--note flags, WAVEPLAN_PLAN/WAVEPLAN_STATE/WAVEPLAN_JOURNAL env vars, or --log-dir")
 	}
 	return nil
 }
@@ -259,82 +236,22 @@ func appendPaths(base, extra []string) []string {
 	return combined
 }
 
-func discoverAllPaths(roots []string, discover func(string) ([]string, error)) ([]string, error) {
-	var paths []string
-	for _, root := range roots {
-		if root == "" {
-			continue
-		}
-		discovered, err := discover(root)
-		if err != nil {
-			return nil, err
-		}
-		paths = append(paths, discovered...)
+func applyEnvFallbacks(planPaths, statePaths, journalPaths *[]string) {
+	if len(*planPaths) == 0 {
+		appendEnvPath(planPaths, "WAVEPLAN_PLAN")
 	}
-	sort.Strings(paths)
-	return paths, nil
+	if len(*statePaths) == 0 {
+		appendEnvPath(statePaths, "WAVEPLAN_STATE")
+	}
+	if len(*journalPaths) == 0 {
+		appendEnvPath(journalPaths, "WAVEPLAN_JOURNAL")
+	}
 }
 
-func filterPlanPaths(paths, filters []string) []string {
-	filterSet := pathFilterSet(filters)
-	var selected []string
-	for _, path := range paths {
-		if filterSet[filepath.Clean(path)] || filterSet[filepath.Base(path)] {
-			selected = append(selected, path)
-		}
+func appendEnvPath(paths *[]string, envVar string) {
+	if value := os.Getenv(envVar); value != "" {
+		*paths = append(*paths, value)
 	}
-	return selected
-}
-
-func filterStatePaths(paths, planPaths []string) []string {
-	wanted := map[string]bool{}
-	for _, path := range planPaths {
-		wanted[filepath.Base(path)+".state.json"] = true
-	}
-	var selected []string
-	for _, path := range paths {
-		if wanted[filepath.Base(path)] {
-			selected = append(selected, path)
-		}
-	}
-	return selected
-}
-
-func appendExplicitPlans(filters []string) []string {
-	var paths []string
-	for _, filter := range filters {
-		info, err := os.Stat(filter)
-		if err == nil && !info.IsDir() {
-			paths = append(paths, filter)
-		}
-	}
-	sort.Strings(paths)
-	return paths
-}
-
-func appendExistingStateSidecars(planPaths []string) []string {
-	var paths []string
-	for _, planPath := range planPaths {
-		statePath := planPath + ".state.json"
-		info, err := os.Stat(statePath)
-		if err == nil && !info.IsDir() {
-			paths = append(paths, statePath)
-		}
-	}
-	sort.Strings(paths)
-	return paths
-}
-
-func pathFilterSet(filters []string) map[string]bool {
-	set := map[string]bool{}
-	for _, filter := range filters {
-		if filter == "" {
-			continue
-		}
-		set[filepath.Clean(filter)] = true
-		set[filepath.Base(filter)] = true
-	}
-	return set
 }
 
 type stringArray []string

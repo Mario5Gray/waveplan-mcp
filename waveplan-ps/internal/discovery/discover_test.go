@@ -45,6 +45,31 @@ func TestDiscoverRecursivelyReturnsDeterministicFileSets(t *testing.T) {
 	}
 }
 
+func TestDiscoverRecursivelyRecognizesExecutionStateAndJournalNames(t *testing.T) {
+	root := t.TempDir()
+	planPath := filepath.Join(root, "2026-demo-execution-waves.json")
+	statePath := filepath.Join(root, "2026-demo-execution-state.json")
+	journalPath := filepath.Join(root, "2026-demo-execution-journal.json")
+	writeFile(t, planPath, "{}")
+	writeFile(t, statePath, "{}")
+	writeFile(t, journalPath, "{}")
+
+	inventory, err := Discover(root)
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	if !reflect.DeepEqual(inventory.PlanPaths, []string{planPath}) {
+		t.Fatalf("PlanPaths = %#v, want %#v", inventory.PlanPaths, []string{planPath})
+	}
+	if !reflect.DeepEqual(inventory.StatePaths, []string{statePath}) {
+		t.Fatalf("StatePaths = %#v, want %#v", inventory.StatePaths, []string{statePath})
+	}
+	if !reflect.DeepEqual(inventory.JournalPaths, []string{journalPath}) {
+		t.Fatalf("JournalPaths = %#v, want %#v", inventory.JournalPaths, []string{journalPath})
+	}
+}
+
 func TestDiscoverLogsParsesAndSortsValidLogFiles(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "z", "S2_T2.1_implement.1.stderr.log"), "err")

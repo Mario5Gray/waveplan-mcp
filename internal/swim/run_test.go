@@ -315,6 +315,98 @@ func TestRun_UntilStep(t *testing.T) {
 	}
 }
 
+func TestRun_UntilTaskPrefixed(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "schedule.json")
+	journalPath := filepath.Join(dir, "journal.json")
+	statePath := filepath.Join(dir, "state.json")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{Seq: 1, StepID: "S1_T1.1_implement", TaskID: "T1.1", Action: "implement", Requires: StatusWrapper{TaskStatus: "available"}, Produces: StatusWrapper{TaskStatus: "taken"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 2, StepID: "S1_T1.1_review", TaskID: "T1.1", Action: "review", Requires: StatusWrapper{TaskStatus: "taken"}, Produces: StatusWrapper{TaskStatus: "review_taken"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 3, StepID: "S1_T1.1_end_review", TaskID: "T1.1", Action: "end_review", Requires: StatusWrapper{TaskStatus: "review_taken"}, Produces: StatusWrapper{TaskStatus: "review_ended"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 4, StepID: "S1_T1.1_finish", TaskID: "T1.1", Action: "finish", Requires: StatusWrapper{TaskStatus: "review_ended"}, Produces: StatusWrapper{TaskStatus: "completed"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 5, StepID: "S1_T2.1_implement", TaskID: "T2.1", Action: "implement", Requires: StatusWrapper{TaskStatus: "available"}, Produces: StatusWrapper{TaskStatus: "taken"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+	})
+
+	statuses := []struct {
+		task   string
+		status Status
+	}{
+		{"T1.1", StatusAvailable}, {"T1.1", StatusAvailable}, {"T1.1", StatusTaken},
+		{"T1.1", StatusTaken}, {"T1.1", StatusTaken}, {"T1.1", StatusReviewTaken},
+		{"T1.1", StatusReviewTaken}, {"T1.1", StatusReviewTaken}, {"T1.1", StatusReviewEnded},
+		{"T1.1", StatusReviewEnded}, {"T1.1", StatusReviewEnded}, {"T1.1", StatusCompleted},
+	}
+	var reads int
+	report, err := Run(RunOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		StatePath:    statePath,
+		Until:        "task:T1",
+		ReadSnapshotFn: func(_ string) (*StateSnapshot, error) {
+			if reads >= len(statuses) {
+				return snapshotWithTaskStatus("T1.1", StatusCompleted), nil
+			}
+			cur := statuses[reads]
+			reads++
+			return snapshotWithTaskStatus(cur.task, cur.status), nil
+		},
+		InvokeFn: invokeFnWithReceipt(t),
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Stopped != "until" || !report.ReachedUntil {
+		t.Fatalf("stopped=%q reached=%v, want until/true", report.Stopped, report.ReachedUntil)
+	}
+	if len(report.Steps) != 4 {
+		t.Fatalf("steps len = %d, want 4", len(report.Steps))
+	}
+	if report.Steps[3].TaskID != "T1.1" || report.Steps[3].StepID != "S1_T1.1_finish" {
+		t.Fatalf("last step = %+v, want T1.1 finish", report.Steps[3])
+	}
+}
+
+func TestRun_UntilTaskBare(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "schedule.json")
+	journalPath := filepath.Join(dir, "journal.json")
+	statePath := filepath.Join(dir, "state.json")
+
+	writeSchedule(t, schedulePath, []ScheduleRow{
+		{Seq: 1, StepID: "S1_T1.1_implement", TaskID: "T1.1", Action: "implement", Requires: StatusWrapper{TaskStatus: "available"}, Produces: StatusWrapper{TaskStatus: "taken"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 2, StepID: "S1_T1.1_review", TaskID: "T1.1", Action: "review", Requires: StatusWrapper{TaskStatus: "taken"}, Produces: StatusWrapper{TaskStatus: "review_taken"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 3, StepID: "S1_T1.1_end_review", TaskID: "T1.1", Action: "end_review", Requires: StatusWrapper{TaskStatus: "review_taken"}, Produces: StatusWrapper{TaskStatus: "review_ended"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 4, StepID: "S1_T1.1_finish", TaskID: "T1.1", Action: "finish", Requires: StatusWrapper{TaskStatus: "review_ended"}, Produces: StatusWrapper{TaskStatus: "completed"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 5, StepID: "S1_T2.1_implement", TaskID: "T2.1", Action: "implement", Requires: StatusWrapper{TaskStatus: "available"}, Produces: StatusWrapper{TaskStatus: "taken"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 6, StepID: "S1_T2.1_review", TaskID: "T2.1", Action: "review", Requires: StatusWrapper{TaskStatus: "taken"}, Produces: StatusWrapper{TaskStatus: "review_taken"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 7, StepID: "S1_T2.1_end_review", TaskID: "T2.1", Action: "end_review", Requires: StatusWrapper{TaskStatus: "review_taken"}, Produces: StatusWrapper{TaskStatus: "review_ended"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+		{Seq: 8, StepID: "S1_T2.1_finish", TaskID: "T2.1", Action: "finish", Requires: StatusWrapper{TaskStatus: "review_ended"}, Produces: StatusWrapper{TaskStatus: "completed"}, Invoke: InvokeSpec{Argv: []string{"bash", "-lc", "true"}}},
+	})
+	writeStateSnapshot(t, statePath, StatusAvailable)
+
+	report, err := Run(RunOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		StatePath:    statePath,
+		Until:        "T2",
+		DryRun:       true,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Stopped != "until" || !report.ReachedUntil {
+		t.Fatalf("stopped=%q reached=%v, want until/true", report.Stopped, report.ReachedUntil)
+	}
+	if len(report.Steps) != 8 {
+		t.Fatalf("steps len = %d, want 8", len(report.Steps))
+	}
+	if report.Steps[7].TaskID != "T2.1" || report.Steps[7].StepID != "S1_T2.1_finish" {
+		t.Fatalf("last step = %+v, want T2.1 finish", report.Steps[7])
+	}
+}
+
 func TestRun_StopOnLockBusy(t *testing.T) {
 	dir := t.TempDir()
 	schedulePath := filepath.Join(dir, "schedule.json")

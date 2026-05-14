@@ -22,6 +22,7 @@ type ApplyOptions struct {
 type ApplyReport struct {
 	Status          string `json:"status"`
 	StepID          string `json:"step_id,omitempty"`
+	TaskID          string `json:"task_id,omitempty"`
 	Seq             int    `json:"seq,omitempty"`
 	ExitCode        int    `json:"exit_code,omitempty"`
 	StdoutPath      string `json:"stdout_path,omitempty"`
@@ -83,6 +84,7 @@ func Apply(opts ApplyOptions) (*ApplyReport, error) {
 	}
 	report := &ApplyReport{
 		StepID:     event.StepID,
+		TaskID:     event.TaskID,
 		Seq:        event.Seq,
 		ExitCode:   derefInt(event.ExitCode),
 		StdoutPath: event.StdoutPath,

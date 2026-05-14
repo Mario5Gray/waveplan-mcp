@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/config"
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/model"
@@ -15,45 +17,67 @@ import (
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/watch"
 )
 
-func TestBuildWatchOptionsPlanFilterNarrowsPlansAndStates(t *testing.T) {
+func TestBuildWatchOptionsUsesExplicitPaths(t *testing.T) {
 	root := t.TempDir()
 	alphaPlan := filepath.Join(root, "2026-alpha-execution-waves.json")
-	betaPlan := filepath.Join(root, "2026-beta-execution-waves.json")
 	alphaState := alphaPlan + ".state.json"
-	betaState := betaPlan + ".state.json"
-	writeFile(t, alphaPlan, planJSON("alpha", "Alpha"))
-	writeFile(t, betaPlan, planJSON("beta", "Beta"))
-	writeFile(t, alphaState, stateJSON("T1.1", "phi"))
-	writeFile(t, betaState, stateJSON("T2.1", "sigma"))
+	alphaJournal := filepath.Join(root, "2026-alpha-execution-journal.json")
 
 	options, err := buildWatchOptions(config.Config{
-		PlanDirs:  []string{root},
-		StateDirs: []string{root},
-	}, cliOptions{planFilters: []string{alphaPlan}})
+		PlanPaths:    []string{alphaPlan},
+		StatePaths:   []string{alphaState},
+		JournalPaths: []string{alphaJournal},
+	}, cliOptions{})
 	if err != nil {
 		t.Fatalf("buildWatchOptions() error = %v", err)
 	}
 
 	if !reflect.DeepEqual(options.PlanPaths, []string{alphaPlan}) {
-		t.Fatalf("PlanPaths = %#v, want only %#v", options.PlanPaths, []string{alphaPlan})
+		t.Fatalf("PlanPaths = %#v, want %#v", options.PlanPaths, []string{alphaPlan})
 	}
 	if !reflect.DeepEqual(options.StatePaths, []string{alphaState}) {
-		t.Fatalf("StatePaths = %#v, want only %#v", options.StatePaths, []string{alphaState})
+		t.Fatalf("StatePaths = %#v, want %#v", options.StatePaths, []string{alphaState})
+	}
+	if !reflect.DeepEqual(options.JournalPaths, []string{alphaJournal}) {
+		t.Fatalf("JournalPaths = %#v, want %#v", options.JournalPaths, []string{alphaJournal})
 	}
 }
 
-func TestOnceCommandPrintsSnapshotForSelectedPlan(t *testing.T) {
+func TestBuildWatchOptionsFallsBackToWaveplanEnvVars(t *testing.T) {
+	root := t.TempDir()
+	planPath := filepath.Join(root, "2026-selected-execution-waves.json")
+	statePath := filepath.Join(root, "2026-selected-execution-state.json")
+	journalPath := filepath.Join(root, "2026-selected-execution-journal.json")
+
+	t.Setenv("WAVEPLAN_PLAN", planPath)
+	t.Setenv("WAVEPLAN_STATE", statePath)
+	t.Setenv("WAVEPLAN_JOURNAL", journalPath)
+
+	options, err := buildWatchOptions(config.Config{}, cliOptions{})
+	if err != nil {
+		t.Fatalf("buildWatchOptions() error = %v", err)
+	}
+	if !reflect.DeepEqual(options.PlanPaths, []string{planPath}) {
+		t.Fatalf("PlanPaths = %#v, want %#v", options.PlanPaths, []string{planPath})
+	}
+	if !reflect.DeepEqual(options.StatePaths, []string{statePath}) {
+		t.Fatalf("StatePaths = %#v, want %#v", options.StatePaths, []string{statePath})
+	}
+	if !reflect.DeepEqual(options.JournalPaths, []string{journalPath}) {
+		t.Fatalf("JournalPaths = %#v, want %#v", options.JournalPaths, []string{journalPath})
+	}
+}
+
+func TestOnceCommandPrintsSnapshotForExplicitPlanPath(t *testing.T) {
 	root := t.TempDir()
 	selectedPlan := filepath.Join(root, "2026-selected-execution-waves.json")
-	ignoredPlan := filepath.Join(root, "2026-ignored-execution-waves.json")
 	writeFile(t, selectedPlan, planJSON("selected", "Selected"))
-	writeFile(t, ignoredPlan, planJSON("ignored", "Ignored"))
 
 	cmd := NewRootCommand()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"--once", "--plan-dir", root, "--plan", selectedPlan})
+	cmd.SetArgs([]string{"--once", "--plan", selectedPlan})
 
 	if err := cmd.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("ExecuteContext() error = %v\n%s", err, out.String())
@@ -63,24 +87,44 @@ func TestOnceCommandPrintsSnapshotForSelectedPlan(t *testing.T) {
 	if !strings.Contains(rendered, "selected - Selected") {
 		t.Fatalf("snapshot output missing selected plan:\n%s", rendered)
 	}
-	if strings.Contains(rendered, "ignored - Ignored") {
-		t.Fatalf("snapshot output included unselected plan:\n%s", rendered)
-	}
 }
 
-func TestExecuteContextErrorsWhenNoDiscoveryRootsConfigured(t *testing.T) {
+func TestExecuteContextErrorsWhenNoObserverInputsConfigured(t *testing.T) {
+	t.Setenv("WAVEPLAN_PLAN", "")
+	t.Setenv("WAVEPLAN_STATE", "")
+	t.Setenv("WAVEPLAN_JOURNAL", "")
+
 	cmd := NewRootCommand()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs(nil)
+	cmd.SetArgs([]string{})
 
 	err := cmd.ExecuteContext(context.Background())
 	if err == nil {
 		t.Fatal("ExecuteContext() error = nil, want configuration error")
 	}
-	if !strings.Contains(err.Error(), "no discovery roots configured") {
-		t.Fatalf("error = %v, want no discovery roots configured", err)
+	if !strings.Contains(err.Error(), "no observer inputs configured") {
+		t.Fatalf("error = %v, want no observer inputs configured", err)
+	}
+}
+
+func TestNewFlagSetParsesUnitLimit(t *testing.T) {
+	opts := cliOptions{
+		interval:        time.Second,
+		tailLimit:       10,
+		journalLimit:    10,
+		logTailLines:    8,
+		unitLimit:       10,
+		expandFirstWave: true,
+	}
+
+	flags := newFlagSet(&opts, io.Discard)
+	if err := flags.Parse([]string{"--unit-limit", "14"}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if opts.unitLimit != 14 {
+		t.Fatalf("unitLimit = %d, want 14", opts.unitLimit)
 	}
 }
 

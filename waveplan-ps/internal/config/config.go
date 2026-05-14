@@ -11,12 +11,12 @@ import (
 
 // Config is the normalized waveplan-ps YAML configuration.
 type Config struct {
-	PlanDirs    []string      `yaml:"plan_dirs"`
-	StateDirs   []string      `yaml:"state_dirs"`
-	JournalDirs []string      `yaml:"journal_dirs"`
-	NoteDirs    []string      `yaml:"note_dirs"`
-	LogDirs     []string      `yaml:"log_dirs"`
-	Display     DisplayConfig `yaml:"display"`
+	PlanPaths    []string      `yaml:"plan_paths"`
+	StatePaths   []string      `yaml:"state_paths"`
+	JournalPaths []string      `yaml:"journal_paths"`
+	NotePaths    []string      `yaml:"note_paths"`
+	LogDirs      []string      `yaml:"log_dirs"`
+	Display      DisplayConfig `yaml:"display"`
 }
 
 // DisplayConfig controls initial observer rendering behavior.
@@ -25,12 +25,17 @@ type DisplayConfig struct {
 }
 
 type rawConfig struct {
-	PlanDirs    []string         `yaml:"plan_dirs"`
-	StateDirs   []string         `yaml:"state_dirs"`
-	JournalDirs []string         `yaml:"journal_dirs"`
-	NoteDirs    []string         `yaml:"note_dirs"`
-	LogDirs     []string         `yaml:"log_dirs"`
-	Display     rawDisplayConfig `yaml:"display"`
+	PlanPaths    []string         `yaml:"plan_paths"`
+	StatePaths   []string         `yaml:"state_paths"`
+	JournalPaths []string         `yaml:"journal_paths"`
+	NotePaths    []string         `yaml:"note_paths"`
+	LogDirs      []string         `yaml:"log_dirs"`
+	Display      rawDisplayConfig `yaml:"display"`
+
+	PlanDirs    []string `yaml:"plan_dirs"`
+	StateDirs   []string `yaml:"state_dirs"`
+	JournalDirs []string `yaml:"journal_dirs"`
+	NoteDirs    []string `yaml:"note_dirs"`
 }
 
 type rawDisplayConfig struct {
@@ -59,10 +64,10 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("decode config %q: %w", path, err)
 	}
 	baseDir := filepath.Dir(path)
-	cfg.PlanDirs = resolvePaths(baseDir, cfg.PlanDirs)
-	cfg.StateDirs = resolvePaths(baseDir, cfg.StateDirs)
-	cfg.JournalDirs = resolvePaths(baseDir, cfg.JournalDirs)
-	cfg.NoteDirs = resolvePaths(baseDir, cfg.NoteDirs)
+	cfg.PlanPaths = resolvePaths(baseDir, cfg.PlanPaths)
+	cfg.StatePaths = resolvePaths(baseDir, cfg.StatePaths)
+	cfg.JournalPaths = resolvePaths(baseDir, cfg.JournalPaths)
+	cfg.NotePaths = resolvePaths(baseDir, cfg.NotePaths)
 	cfg.LogDirs = resolvePaths(baseDir, cfg.LogDirs)
 	return cfg, nil
 }
@@ -75,12 +80,15 @@ func Decode(r io.Reader) (*Config, error) {
 	if err := decoder.Decode(&raw); err != nil {
 		return nil, err
 	}
+	if len(raw.PlanDirs) > 0 || len(raw.StateDirs) > 0 || len(raw.JournalDirs) > 0 || len(raw.NoteDirs) > 0 {
+		return nil, fmt.Errorf("directory scan roots are no longer supported; use plan_paths, state_paths, journal_paths, and note_paths")
+	}
 
 	cfg := Default()
-	cfg.PlanDirs = raw.PlanDirs
-	cfg.StateDirs = raw.StateDirs
-	cfg.JournalDirs = raw.JournalDirs
-	cfg.NoteDirs = raw.NoteDirs
+	cfg.PlanPaths = raw.PlanPaths
+	cfg.StatePaths = raw.StatePaths
+	cfg.JournalPaths = raw.JournalPaths
+	cfg.NotePaths = raw.NotePaths
 	cfg.LogDirs = raw.LogDirs
 	if raw.Display.ExpandFirstWave != nil {
 		cfg.Display.ExpandFirstWave = *raw.Display.ExpandFirstWave

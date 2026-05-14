@@ -38,6 +38,7 @@ const (
 	untilAction untilKind = "action"
 	untilSeq    untilKind = "seq"
 	untilStep   untilKind = "step"
+	untilTask   untilKind = "task"
 )
 
 type untilCond struct {
@@ -45,6 +46,7 @@ type untilCond struct {
 	action string
 	seq    int
 	stepID string
+	taskID string
 }
 
 // Run executes repeated Apply() calls until a stop condition is met.
@@ -52,6 +54,18 @@ func Run(opts RunOptions) (*RunReport, error) {
 	cond, err := parseUntil(opts.Until)
 	if err != nil {
 		return nil, err
+	}
+	if cond.kind == untilTask {
+		schedule, err := loadSchedule(opts.SchedulePath)
+		if err != nil {
+			return nil, err
+		}
+		lastSeq, ok := lastSeqForTask(schedule, cond.taskID)
+		if !ok {
+			return nil, fmt.Errorf("invalid until %q: task not present in schedule", opts.Until)
+		}
+		cond.kind = untilSeq
+		cond.seq = lastSeq
 	}
 	report := &RunReport{DryRun: opts.DryRun}
 	if opts.DryRun {
@@ -133,6 +147,7 @@ func runDry(opts RunOptions, cond untilCond, report *RunReport) (*RunReport, err
 			step = ApplyReport{
 				Status: "would_apply",
 				StepID: decision.Row.StepID,
+				TaskID: decision.Row.TaskID,
 				Seq:    decision.Row.Seq,
 				Reason: strings.Join(decision.Row.Invoke.Argv, " "),
 			}
@@ -147,6 +162,7 @@ func runDry(opts RunOptions, cond untilCond, report *RunReport) (*RunReport, err
 			step = ApplyReport{
 				Status:   "would_block",
 				StepID:   decision.Row.StepID,
+				TaskID:   decision.Row.TaskID,
 				Seq:      decision.Row.Seq,
 				Reason:   decision.Reason,
 				Boundary: "blocked",
@@ -186,6 +202,16 @@ func parseUntil(raw string) (untilCond, error) {
 		}
 		return untilCond{kind: untilStep, stepID: stepID}, nil
 	}
+	if strings.HasPrefix(raw, "task:") {
+		taskID := strings.TrimPrefix(raw, "task:")
+		if !isTaskUntilID(taskID) {
+			return untilCond{}, fmt.Errorf("invalid until %q: expected task:Tn", raw)
+		}
+		return untilCond{kind: untilTask, taskID: taskID}, nil
+	}
+	if isTaskUntilID(raw) {
+		return untilCond{kind: untilTask, taskID: raw}, nil
+	}
 	return untilCond{}, fmt.Errorf("invalid until %q", raw)
 }
 
@@ -201,9 +227,40 @@ func matchesUntil(cond untilCond, step *ApplyReport) bool {
 		return step.Seq == cond.seq
 	case untilStep:
 		return step.StepID == cond.stepID
+	case untilTask:
+		return step.TaskID == cond.taskID || strings.HasPrefix(step.TaskID, cond.taskID+".")
 	default:
 		return false
 	}
+}
+
+func isTaskUntilID(raw string) bool {
+	if raw == "" || raw[0] != 'T' {
+		return false
+	}
+	for i := 1; i < len(raw); i++ {
+		if raw[i] < '0' || raw[i] > '9' {
+			return false
+		}
+	}
+	return len(raw) > 1
+}
+
+func lastSeqForTask(schedule *Schedule, taskID string) (int, bool) {
+	if schedule == nil {
+		return 0, false
+	}
+	lastSeq := 0
+	found := false
+	for _, row := range schedule.Execution {
+		if row.TaskID == taskID || strings.HasPrefix(row.TaskID, taskID+".") {
+			if row.Seq > lastSeq {
+				lastSeq = row.Seq
+			}
+			found = true
+		}
+	}
+	return lastSeq, found
 }
 
 func cloneJournal(j *Journal) *Journal {

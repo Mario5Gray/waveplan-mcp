@@ -105,6 +105,236 @@ func TestBuildPrimitiveRendersPlanTable(t *testing.T) {
 	}
 }
 
+func TestBuildPrimitiveSelectsFirstDataRowAndKeepsHeaderFixed(t *testing.T) {
+	primitive := BuildPrimitive(renderTestSnapshot(), Options{ExpandFirstWave: true})
+	root, ok := primitive.(*Root)
+	if !ok {
+		t.Fatalf("BuildPrimitive returned %T, want *Root", primitive)
+	}
+
+	row, col := root.Table().GetSelection()
+	if row != 1 || col != 0 {
+		t.Fatalf("initial selection = (%d,%d), want (1,0)", row, col)
+	}
+	if got := root.Flex.GetItemCount(); got != 5 {
+		t.Fatalf("layout item count = %d, want 5", got)
+	}
+	if got := root.Details().GetText(false); !strings.Contains(got, "T1.1  [completed]") {
+		t.Fatalf("details missing initial unit content:\n%s", got)
+	}
+}
+
+func TestBuildPrimitiveStatusStripShowsCurrentUnitStats(t *testing.T) {
+	snapshot := watch.Snapshot{
+		Plans: []watch.LoadedPlan{{
+			Path: "2026-demo-execution-waves.json",
+			Plan: &model.PlanFile{
+				Plan: model.PlanMetadata{ID: "demo", Title: "Demo"},
+				Units: map[string]model.Unit{
+					"T1.1": {Task: "T1", Title: "Adapter mapping", Wave: 1},
+				},
+				Waves: []model.Wave{{Wave: 1, Units: []string{"T1.1"}}},
+			},
+		}},
+		States: []watch.LoadedState{{
+			Path: "2026-demo-execution-state.json",
+			State: &model.StateFile{
+				Plan: "2026-demo-execution-waves.json",
+				Taken: map[string]model.TaskEntry{
+					"T1.1": {
+						TakenBy:         "phi",
+						StartedAt:       "2026-05-12 14:49",
+						ReviewEnteredAt: "2026-05-12 14:54",
+						Reviewer:        "sigma",
+					},
+				},
+			},
+		}},
+		Journals: []watch.LoadedJournal{{
+			Path: "2026-demo-execution-journal.json",
+			Journal: &model.Journal{
+				Events: []model.JournalEvent{{
+					StepID:      "S2_T1.1_review",
+					Seq:         2,
+					TaskID:      "T1.1",
+					Action:      "review",
+					Attempt:     1,
+					StartedOn:   "2026-05-12T14:54:00Z",
+					CompletedOn: "2026-05-12T14:59:00Z",
+					Outcome:     "applied",
+					StateBefore: model.StatusWrapper{TaskStatus: model.StatusTaken},
+					StateAfter:  model.StatusWrapper{TaskStatus: model.StatusReviewTaken},
+				}},
+			},
+		}},
+		Logs: []model.LogRef{
+			{Path: "logs/S1_T1.1_implement.1.stdout.log", StepID: "S1_T1.1_implement", Attempt: 1, Stream: model.LogStreamStdout},
+			{Path: "logs/S2_T1.1_review.1.stdout.log", StepID: "S2_T1.1_review", Attempt: 1, Stream: model.LogStreamStdout},
+		},
+		LoadedAt: time.Date(2026, 5, 12, 15, 4, 5, 0, time.UTC),
+	}
+
+	root := BuildPrimitive(snapshot, Options{}).(*Root)
+	got := root.Status().GetText(false)
+	for _, want := range []string{
+		"log# 2",
+		"seq# 2",
+		"status review_taken",
+		"actor sigma [review]",
+		"action review",
+		"wall 5m0s",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status strip missing %q in %q", want, got)
+		}
+	}
+}
+
+func TestVisibleTableRowsCapsToTenDataRowsByDefault(t *testing.T) {
+	if got := visibleTableRows(25, Options{}); got != 11 {
+		t.Fatalf("visibleTableRows() = %d, want 11", got)
+	}
+}
+
+func TestVisibleTableRowsUsesConfiguredLimit(t *testing.T) {
+	if got := visibleTableRows(25, Options{TableVisibleRows: 6}); got != 7 {
+		t.Fatalf("visibleTableRows() = %d, want 7", got)
+	}
+}
+
+func TestVisibleTableRowsDoesNotExceedActualRowCount(t *testing.T) {
+	if got := visibleTableRows(4, Options{}); got != 4 {
+		t.Fatalf("visibleTableRows() = %d, want 4", got)
+	}
+}
+
+func TestBuildTableUsesSingleDiscoveredStateAndJournalFromExecutionBundle(t *testing.T) {
+	snapshot := watch.Snapshot{
+		Plans: []watch.LoadedPlan{{
+			Path: "docs/plans/context-sizer-adapter/2026-demo-execution-waves.json",
+			Plan: &model.PlanFile{
+				Plan: model.PlanMetadata{ID: "demo", Title: "Context bundle"},
+				Units: map[string]model.Unit{
+					"T1.1": {Task: "T1", Title: "Write adapter tests first", Wave: 1},
+				},
+				Waves: []model.Wave{{Wave: 1, Units: []string{"T1.1"}}},
+			},
+		}},
+		States: []watch.LoadedState{{
+			Path: "docs/plans/context-sizer-adapter/2026-demo-execution-state.json",
+			State: &model.StateFile{
+				Plan: "2026-demo-execution-waves.json",
+				Completed: map[string]model.TaskEntry{
+					"T1.1": {TakenBy: "phi", FinishedAt: "2026-05-14 11:28"},
+				},
+			},
+		}},
+		Journals: []watch.LoadedJournal{{
+			Path: "docs/plans/context-sizer-adapter/2026-demo-execution-journal.json",
+			Journal: &model.Journal{
+				Events: []model.JournalEvent{{
+					StepID:      "S1_T1.1_finish",
+					TaskID:      "T1.1",
+					Action:      "finish",
+					Outcome:     "applied",
+					StateBefore: model.StatusWrapper{TaskStatus: model.StatusReviewEnded},
+					StateAfter:  model.StatusWrapper{TaskStatus: model.StatusCompleted},
+				}},
+			},
+		}},
+	}
+
+	table := BuildTable(snapshot, Options{})
+	if got := table.GetCell(1, 2).Text; got != "completed" {
+		t.Fatalf("status cell = %q, want completed", got)
+	}
+	if got := table.GetCell(1, 3).Text; got != "phi" {
+		t.Fatalf("agent cell = %q, want phi", got)
+	}
+	if got := table.GetCell(1, 4).Text; got != "finish" {
+		t.Fatalf("action cell = %q, want finish", got)
+	}
+}
+
+func TestBuildTableShowsReviewerWhenReviewIsActive(t *testing.T) {
+	snapshot := watch.Snapshot{
+		Plans: []watch.LoadedPlan{{
+			Path: "docs/plans/context-sizer-adapter/2026-demo-execution-waves.json",
+			Plan: &model.PlanFile{
+				Plan: model.PlanMetadata{ID: "demo", Title: "Context bundle"},
+				Units: map[string]model.Unit{
+					"T1.1": {Task: "T1", Title: "Write adapter tests first", Wave: 1},
+				},
+				Waves: []model.Wave{{Wave: 1, Units: []string{"T1.1"}}},
+			},
+		}},
+		States: []watch.LoadedState{{
+			Path: "docs/plans/context-sizer-adapter/2026-demo-execution-state.json",
+			State: &model.StateFile{
+				Plan: "2026-demo-execution-waves.json",
+				Taken: map[string]model.TaskEntry{
+					"T1.1": {
+						TakenBy:         "phi",
+						ReviewEnteredAt: "2026-05-14 10:00",
+						Reviewer:        "sigma",
+					},
+				},
+			},
+		}},
+	}
+
+	table := BuildTable(snapshot, Options{})
+	if got := table.GetCell(1, 2).Text; got != "review_taken" {
+		t.Fatalf("status cell = %q, want review_taken", got)
+	}
+	if got := table.GetCell(1, 3).Text; got != "sigma [review]" {
+		t.Fatalf("agent cell = %q, want sigma [review]", got)
+	}
+}
+
+func TestBuildTableMatchesCustomNamedStateByEmbeddedPlanName(t *testing.T) {
+	snapshot := watch.Snapshot{
+		Plans: []watch.LoadedPlan{{
+			Path: "docs/plans/context-sizer-adapter/2026-demo-execution-waves.json",
+			Plan: &model.PlanFile{
+				Plan: model.PlanMetadata{ID: "demo", Title: "Context bundle"},
+				Units: map[string]model.Unit{
+					"T1.1": {Task: "T1", Title: "Write adapter tests first", Wave: 1},
+				},
+				Waves: []model.Wave{{Wave: 1, Units: []string{"T1.1"}}},
+			},
+		}},
+		States: []watch.LoadedState{
+			{
+				Path: "docs/plans/other/2026-other-execution-state.json",
+				State: &model.StateFile{
+					Plan: "2026-other-execution-waves.json",
+					Completed: map[string]model.TaskEntry{
+						"T9.9": {TakenBy: "theta", FinishedAt: "2026-05-14 11:00"},
+					},
+				},
+			},
+			{
+				Path: "docs/plans/context-sizer-adapter/2026-demo-execution-state.json",
+				State: &model.StateFile{
+					Plan: "2026-demo-execution-waves.json",
+					Completed: map[string]model.TaskEntry{
+						"T1.1": {TakenBy: "phi", FinishedAt: "2026-05-14 11:28"},
+					},
+				},
+			},
+		},
+	}
+
+	table := BuildTable(snapshot, Options{})
+	if got := table.GetCell(1, 2).Text; got != "completed" {
+		t.Fatalf("status cell = %q, want completed", got)
+	}
+	if got := table.GetCell(1, 3).Text; got != "phi" {
+		t.Fatalf("agent cell = %q, want phi", got)
+	}
+}
+
 func TestRenderLogEventStepStart(t *testing.T) {
 	line := `{"type":"step_start","timestamp":1778492597000,"sessionID":"ses_1e994c983ffeXJ7d2xAotRhyeF","part":{"id":"prt_1","messageID":"msg_1","sessionID":"ses_1e994c983ffeXJ7d2xAotRhyeF","snapshot":"3f801dc51d26cee3ce5d4ea648972eb1d27a7c53","type":"step-start"}}`
 	got := renderLogEvent(line)
