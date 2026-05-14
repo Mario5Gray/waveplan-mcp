@@ -1,0 +1,8 @@
+{
+  "review_ended_at": "2026-05-14 11:39",
+  "review_note": "${WP_COMMENT:-}",
+  "reviewer": "sigma",
+  "success": true,
+  "task_id": "T1.2",
+  "title": "Implement task and unit mapping"
+}

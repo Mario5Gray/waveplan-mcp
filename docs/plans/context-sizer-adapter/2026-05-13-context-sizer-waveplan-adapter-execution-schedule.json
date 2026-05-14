@@ -1,0 +1,995 @@
+{
+  "schema_version": 2,
+  "execution": [
+    {
+      "seq": 1,
+      "step_id": "S1_T1.1_implement",
+      "task_id": "T1.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "opencode",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target opencode --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 2,
+      "step_id": "S1_T1.1_review",
+      "task_id": "T1.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 3,
+      "step_id": "S1_T1.1_end_review",
+      "task_id": "T1.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T1.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T1.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 4,
+      "step_id": "S1_T1.1_finish",
+      "task_id": "T1.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T1.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T1.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 5,
+      "step_id": "S2_T1.2_implement",
+      "task_id": "T1.2",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "opencode",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target opencode --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 6,
+      "step_id": "S2_T1.2_review",
+      "task_id": "T1.2",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 7,
+      "step_id": "S2_T1.2_end_review",
+      "task_id": "T1.2",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T1.2",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T1.2 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 8,
+      "step_id": "S2_T1.2_finish",
+      "task_id": "T1.2",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T1.2",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T1.2 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 9,
+      "step_id": "S3_T1.3_implement",
+      "task_id": "T1.3",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "opencode",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target opencode --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 10,
+      "step_id": "S3_T1.3_review",
+      "task_id": "T1.3",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 11,
+      "step_id": "S3_T1.3_end_review",
+      "task_id": "T1.3",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T1.3",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T1.3 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 12,
+      "step_id": "S3_T1.3_finish",
+      "task_id": "T1.3",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T1.3",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T1.3 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 13,
+      "step_id": "S4_T2.1_implement",
+      "task_id": "T2.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "opencode",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target opencode --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 14,
+      "step_id": "S4_T2.1_review",
+      "task_id": "T2.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 15,
+      "step_id": "S4_T2.1_end_review",
+      "task_id": "T2.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T2.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T2.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 16,
+      "step_id": "S4_T2.1_finish",
+      "task_id": "T2.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T2.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T2.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 17,
+      "step_id": "S5_T2.2_implement",
+      "task_id": "T2.2",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "opencode",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target opencode --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 18,
+      "step_id": "S5_T2.2_review",
+      "task_id": "T2.2",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 19,
+      "step_id": "S5_T2.2_end_review",
+      "task_id": "T2.2",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T2.2",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T2.2 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 20,
+      "step_id": "S5_T2.2_finish",
+      "task_id": "T2.2",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T2.2",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T2.2 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 21,
+      "step_id": "S6_T2.3_implement",
+      "task_id": "T2.3",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "opencode",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target opencode --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 22,
+      "step_id": "S6_T2.3_review",
+      "task_id": "T2.3",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 23,
+      "step_id": "S6_T2.3_end_review",
+      "task_id": "T2.3",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T2.3",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T2.3 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 24,
+      "step_id": "S6_T2.3_finish",
+      "task_id": "T2.3",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T2.3",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T2.3 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 25,
+      "step_id": "S7_T3.1_implement",
+      "task_id": "T3.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "opencode",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target opencode --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 26,
+      "step_id": "S7_T3.1_review",
+      "task_id": "T3.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 27,
+      "step_id": "S7_T3.1_end_review",
+      "task_id": "T3.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T3.1",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T3.1 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 28,
+      "step_id": "S7_T3.1_finish",
+      "task_id": "T3.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T3.1",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T3.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 29,
+      "step_id": "S8_T3.2_implement",
+      "task_id": "T3.2",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "opencode",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target opencode --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 30,
+      "step_id": "S8_T3.2_review",
+      "task_id": "T3.2",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 31,
+      "step_id": "S8_T3.2_end_review",
+      "task_id": "T3.2",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T3.2",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T3.2 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 32,
+      "step_id": "S8_T3.2_finish",
+      "task_id": "T3.2",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T3.2",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T3.2 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    },
+    {
+      "seq": 33,
+      "step_id": "S9_T3.3_implement",
+      "task_id": "T3.3",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "implement",
+          "--target",
+          "opencode",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target opencode --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi",
+      "status": "available"
+    },
+    {
+      "seq": 34,
+      "step_id": "S9_T3.3_review",
+      "task_id": "T3.3",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review",
+          "--target",
+          "codex",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--agent",
+          "phi",
+          "--reviewer",
+          "sigma"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "status": "taken"
+    },
+    {
+      "seq": 35,
+      "step_id": "S9_T3.3_end_review",
+      "task_id": "T3.3",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "review_end",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T3.3",
+          "--review-note",
+          "${WP_COMMENT:-}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T3.3 --review-note '${WP_COMMENT:-}'",
+      "status": "taken"
+    },
+    {
+      "seq": 36,
+      "step_id": "S9_T3.3_finish",
+      "task_id": "T3.3",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "wp-plan-to-agent.sh",
+          "--mode",
+          "fin",
+          "--plan",
+          "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
+          "--task-id",
+          "T3.3",
+          "--git-sha",
+          "${GIT_SHA:-DEFERRED}"
+        ]
+      },
+      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --task-id T3.3 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "status": "completed"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+**Findings (ordered by severity)**
+
+1. **High — `depends_on` contract is violated for task candidates (unit IDs returned instead of task IDs).**  
+   Spec requires collapsed **external task** dependencies (`depends_on` should be task IDs), but implementation appends external **unit** IDs.  
+   Evidence: [`waveplan.go:187-189`](/Users/darkbit1001/workspace/waveplan-mcp/internal/contextsize/adapter/waveplan.go:187), contract: [`context-sizer-design.md:341`](/Users/darkbit1001/workspace/waveplan-mcp/docs/superpowers/specs/2026-05-13-context-sizer-design.md:341).  
+   Current test also encodes the wrong behavior (`"T1.2"` expected): [`waveplan_test.go:247-255`](/Users/darkbit1001/workspace/waveplan-mcp/internal/contextsize/adapter/waveplan_test.go:247).
+
+2. **High — Unit `doc_refs` missing from `doc_index` are silently swallowed.**  
+   `resolveDocRefs` returns `nil` on first missing ref, but `FromWaveplanUnit` does not validate or error; it can return a candidate with empty `referenced_files`, causing underestimation and hidden data-quality errors.  
+   Evidence: [`waveplan.go:131-141`](/Users/darkbit1001/workspace/waveplan-mcp/internal/contextsize/adapter/waveplan.go:131), call site without check: [`waveplan.go:96-99`](/Users/darkbit1001/workspace/waveplan-mcp/internal/contextsize/adapter/waveplan.go:96).
+
+3. **Medium — Test coverage misses the failure mode above and reinforces incorrect dependency semantics.**  
+   There is a task-path missing-doc-ref test, but no equivalent unit-path test; and dependency test asserts unit IDs instead of task IDs.  
+   Evidence: missing-doc-ref test only for task: [`waveplan_test.go:303-330`](/Users/darkbit1001/workspace/waveplan-mcp/internal/contextsize/adapter/waveplan_test.go:303), dependency test: [`waveplan_test.go:237-255`](/Users/darkbit1001/workspace/waveplan-mcp/internal/contextsize/adapter/waveplan_test.go:237).
+
+**Required Fixes**
+
+1. Change task dependency collapse to emit external **task IDs** (`depTask`) and dedupe/sort those IDs.
+2. Make `resolveDocRefs` return `([]string, error)` and fail deterministically for missing refs in both `FromWaveplanTask` and `FromWaveplanUnit`.
+3. Update tests:
+   1. Expect task-level `depends_on` as task IDs (e.g., `["T1"]`, not `["T1.2"]`).
+   2. Add `FromWaveplanUnit` missing-doc-ref error test.
+   3. Add a dedupe test where multiple external units from same task collapse to one task ID.
+
+**Verification run**
+
+- Passed: `go test ./internal/contextsize/...`
+- Full-suite limitation in this sandbox: `go test ./...` root package test failed due local port bind restriction (`httptest` cannot listen).

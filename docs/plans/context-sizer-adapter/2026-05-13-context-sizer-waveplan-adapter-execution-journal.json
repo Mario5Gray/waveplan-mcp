@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "schedule_path": "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-schedule.json",
+  "cursor": 9,
+  "last_event": {
+    "event_id": "E0014",
+    "step_id": "S3_T1.3_implement",
+    "seq": 9,
+    "task_id": "T1.3",
+    "action": "implement",
+    "attempt": 1,
+    "started_on": "2026-05-14T18:39:24Z",
+    "completed_on": "2026-05-14T18:40:12Z",
+    "outcome": "applied",
+    "state_before": {
+      "task_status": "available"
+    },
+    "state_after": {
+      "task_status": "taken"
+    },
+    "stdout_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S3_T1.3_implement.1.stdout.log",
+    "stderr_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S3_T1.3_implement.1.stderr.log"
+  },
+  "events": [
+    {
+      "event_id": "E0001",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 1,
+      "started_on": "2026-05-14T08:23:15Z",
+      "completed_on": "2026-05-14T08:23:15Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 2,
+      "stdout_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S1_T1.1_implement.1.stdout.log",
+      "stderr_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S1_T1.1_implement.1.stderr.log",
+      "reason": "exit status 2"
+    },
+    {
+      "event_id": "E0002",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 2,
+      "started_on": "2026-05-14T08:24:34Z",
+      "completed_on": "2026-05-14T08:24:34Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 2,
+      "stdout_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S1_T1.1_implement.2.stdout.log",
+      "stderr_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S1_T1.1_implement.2.stderr.log",
+      "reason": "exit status 2"
+    },
+    {
+      "event_id": "E0003",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 3,
+      "started_on": "2026-05-14T08:27:22Z",
+      "completed_on": "2026-05-14T08:27:22Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 2,
+      "stdout_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S1_T1.1_implement.3.stdout.log",
+      "stderr_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S1_T1.1_implement.3.stderr.log",
+      "reason": "exit status 2"
+    },
+    {
+      "event_id": "E0004",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 4,
+      "started_on": "2026-05-14T08:30:02Z",
+      "completed_on": "2026-05-14T08:31:57Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "taken"
+      },
+      "exit_code": 130,
+      "stdout_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S1_T1.1_implement.4.stdout.log",
+      "stderr_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S1_T1.1_implement.4.stderr.log",
+      "reason": "terminated_local_probe: downstream dispatch intentionally interrupted after path verification"
+    },
+    {
+      "event_id": "E0005",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 5,
+      "started_on": "2026-05-14T18:22:30Z",
+      "completed_on": "2026-05-14T18:28:44Z",
+      "outcome": "blocked",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "completed"
+      },
+      "stdout_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S1_T1.1_implement.5.stdout.log",
+      "stderr_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S1_T1.1_implement.5.stderr.log",
+      "reason": "postcondition_unmet: action=implement produces=taken actual=completed"
+    },
+    {
+      "event_id": "E0006",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 6,
+      "started_on": "2026-05-14T18:32:54Z",
+      "completed_on": "2026-05-14T18:32:54Z",
+      "outcome": "applied",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "taken"
+      },
+      "reason": "idempotent_adopt: action=implement actual exceeds produces=taken; operator advance via swim-adopt-drift"
+    },
+    {
+      "event_id": "E0007",
+      "step_id": "S1_T1.1_review",
+      "seq": 2,
+      "task_id": "T1.1",
+      "action": "review",
+      "attempt": 1,
+      "started_on": "2026-05-14T18:33:06Z",
+      "completed_on": "2026-05-14T18:33:06Z",
+      "outcome": "applied",
+      "state_before": {
+        "task_status": "taken"
+      },
+      "state_after": {
+        "task_status": "review_taken"
+      },
+      "reason": "idempotent_adopt: action=review actual exceeds produces=review_taken; operator advance via swim-adopt-drift"
+    },
+    {
+      "event_id": "E0008",
+      "step_id": "S1_T1.1_end_review",
+      "seq": 3,
+      "task_id": "T1.1",
+      "action": "end_review",
+      "attempt": 1,
+      "started_on": "2026-05-14T18:33:06Z",
+      "completed_on": "2026-05-14T18:33:06Z",
+      "outcome": "applied",
+      "state_before": {
+        "task_status": "review_taken"
+      },
+      "state_after": {
+        "task_status": "review_ended"
+      },
+      "reason": "idempotent_adopt: action=end_review actual exceeds produces=review_ended; operator advance via swim-adopt-drift"
+    },
+    {
+      "event_id": "E0009",
+      "step_id": "S1_T1.1_finish",
+      "seq": 4,
+      "task_id": "T1.1",
+      "action": "finish",
+      "attempt": 1,
+      "started_on": "2026-05-14T18:33:07Z",
+      "completed_on": "2026-05-14T18:33:07Z",
+      "outcome": "applied",
+      "state_before": {
+        "task_status": "review_ended"
+      },
+      "state_after": {
+        "task_status": "completed"
+      },
+      "reason": "idempotent_adopt: action=finish actual exceeds produces=completed; operator advance via swim-adopt-drift"
+    },
+    {
+      "event_id": "E0010",
+      "step_id": "S2_T1.2_implement",
+      "seq": 5,
+      "task_id": "T1.2",
+      "action": "implement",
+      "attempt": 1,
+      "started_on": "2026-05-14T18:34:37Z",
+      "completed_on": "2026-05-14T18:36:01Z",
+      "outcome": "applied",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "taken"
+      },
+      "stdout_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S2_T1.2_implement.1.stdout.log",
+      "stderr_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S2_T1.2_implement.1.stderr.log"
+    },
+    {
+      "event_id": "E0011",
+      "step_id": "S2_T1.2_review",
+      "seq": 6,
+      "task_id": "T1.2",
+      "action": "review",
+      "attempt": 1,
+      "started_on": "2026-05-14T18:36:01Z",
+      "completed_on": "2026-05-14T18:39:17Z",
+      "outcome": "applied",
+      "state_before": {
+        "task_status": "taken"
+      },
+      "state_after": {
+        "task_status": "review_taken"
+      },
+      "stdout_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S2_T1.2_review.1.stdout.log",
+      "stderr_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S2_T1.2_review.1.stderr.log"
+    },
+    {
+      "event_id": "E0012",
+      "step_id": "S2_T1.2_end_review",
+      "seq": 7,
+      "task_id": "T1.2",
+      "action": "end_review",
+      "attempt": 1,
+      "started_on": "2026-05-14T18:39:17Z",
+      "completed_on": "2026-05-14T18:39:21Z",
+      "outcome": "applied",
+      "state_before": {
+        "task_status": "review_taken"
+      },
+      "state_after": {
+        "task_status": "review_ended"
+      },
+      "stdout_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S2_T1.2_end_review.1.stdout.log",
+      "stderr_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S2_T1.2_end_review.1.stderr.log"
+    },
+    {
+      "event_id": "E0013",
+      "step_id": "S2_T1.2_finish",
+      "seq": 8,
+      "task_id": "T1.2",
+      "action": "finish",
+      "attempt": 1,
+      "started_on": "2026-05-14T18:39:21Z",
+      "completed_on": "2026-05-14T18:39:24Z",
+      "outcome": "applied",
+      "state_before": {
+        "task_status": "review_ended"
+      },
+      "state_after": {
+        "task_status": "completed"
+      },
+      "stdout_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S2_T1.2_finish.1.stdout.log",
+      "stderr_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S2_T1.2_finish.1.stderr.log"
+    },
+    {
+      "event_id": "E0014",
+      "step_id": "S3_T1.3_implement",
+      "seq": 9,
+      "task_id": "T1.3",
+      "action": "implement",
+      "attempt": 1,
+      "started_on": "2026-05-14T18:39:24Z",
+      "completed_on": "2026-05-14T18:40:12Z",
+      "outcome": "applied",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "taken"
+      },
+      "stdout_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S3_T1.3_implement.1.stdout.log",
+      "stderr_path": ".waveplan/swim/2026-05-13-context-sizer-waveplan-adapter-execution-schedule/logs/S3_T1.3_implement.1.stderr.log"
+    }
+  ]
+}

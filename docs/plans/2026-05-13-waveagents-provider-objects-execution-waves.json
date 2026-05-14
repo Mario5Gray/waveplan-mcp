@@ -1,0 +1,372 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-05-13",
+  "plan": {
+    "id": "waveagents-provider-objects",
+    "title": "waveagents provider catalog and command-provider schedule emission",
+    "plan_doc": {
+      "path": "docs/superpowers/plans/2026-05-13-waveagents-provider-objects.md",
+      "line": 1
+    },
+    "spec_doc": {
+      "path": "docs/specs/2026-05-05-swim-ops.md",
+      "line": 1
+    }
+  },
+  "tasks": {
+    "T1": {
+      "title": "Define provider catalog contract and migrate fixture/config shapes",
+      "plan_line": 48,
+      "doc_refs": [
+        "plan",
+        "readme",
+        "swim_ops_spec",
+        "swim_ops_example",
+        "fixture_waveagents",
+        "agent_config_example"
+      ],
+      "files": [
+        "README.md",
+        "docs/specs/2026-05-05-swim-ops.md",
+        "docs/specs/swim-ops-examples/waveagents.json",
+        "tests/swim/fixtures/waveagents.json",
+        "docs/waveplan-agent-config-example.json"
+      ]
+    },
+    "T2": {
+      "title": "Parse provider catalogs and agent provider keys in the schedule compiler",
+      "plan_line": 49,
+      "doc_refs": [
+        "plan",
+        "emit_script",
+        "main_test"
+      ],
+      "files": [
+        "wp-emit-wave-execution.sh",
+        "main_test.go"
+      ]
+    },
+    "T3": {
+      "title": "Emit provider command argv for agent-dispatch rows",
+      "plan_line": 50,
+      "doc_refs": [
+        "plan",
+        "emit_script",
+        "fixture_expected_schedule"
+      ],
+      "files": [
+        "wp-emit-wave-execution.sh",
+        "tests/swim/fixtures/expected-schedule.json"
+      ]
+    },
+    "T4": {
+      "title": "Refresh compile-schedule coverage for provider-object configs",
+      "plan_line": 51,
+      "doc_refs": [
+        "plan",
+        "main_test",
+        "cli_wired_test",
+        "fixture_waveagents"
+      ],
+      "files": [
+        "main_test.go",
+        "tests/swim/test_t4_2_cli_wired.sh",
+        "tests/swim/fixtures/waveagents.json"
+      ]
+    },
+    "T5": {
+      "title": "Document migration and validate provider-object schedule compilation",
+      "plan_line": 52,
+      "doc_refs": [
+        "plan",
+        "readme",
+        "swim_ops_spec",
+        "swim_ops_example",
+        "agent_config_example",
+        "waveplan_cli"
+      ],
+      "files": [
+        "README.md",
+        "docs/specs/2026-05-05-swim-ops.md",
+        "docs/specs/swim-ops-examples/waveagents.json",
+        "docs/waveplan-agent-config-example.json",
+        "waveplan-cli"
+      ]
+    }
+  },
+  "units": {
+    "T1.1": {
+      "task": "T1",
+      "title": "Replace legacy flat provider strings with a `providers` object and provider-key agent refs in examples and fixtures",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 59,
+      "depends_on": [],
+      "fp_refs": [],
+      "doc_refs": [
+        "readme",
+        "swim_ops_spec",
+        "swim_ops_example",
+        "fixture_waveagents",
+        "agent_config_example"
+      ]
+    },
+    "T1.2": {
+      "task": "T1",
+      "title": "Add negative fixture expectations for legacy `provider` strings and missing provider references",
+      "kind": "test",
+      "wave": 2,
+      "plan_line": 60,
+      "depends_on": [
+        "T1.1"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "fixture_waveagents",
+        "main_test"
+      ]
+    },
+    "T2.1": {
+      "task": "T2",
+      "title": "Load the `providers` catalog and resolve each agent's provider key in `wp-emit-wave-execution.sh`",
+      "kind": "impl",
+      "wave": 3,
+      "plan_line": 61,
+      "depends_on": [
+        "T1.2"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "emit_script"
+      ]
+    },
+    "T2.2": {
+      "task": "T2",
+      "title": "Reject missing providers, duplicate provider keys, unsupported stereotypes, and legacy flat provider strings deterministically",
+      "kind": "test",
+      "wave": 4,
+      "plan_line": 62,
+      "depends_on": [
+        "T2.1"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "emit_script",
+        "main_test"
+      ]
+    },
+    "T3.1": {
+      "task": "T3",
+      "title": "Build implement and review `invoke.argv` by prepending `provider.command.cmd` and `provider.command.args`",
+      "kind": "impl",
+      "wave": 5,
+      "plan_line": 63,
+      "depends_on": [
+        "T2.2"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "emit_script",
+        "fixture_expected_schedule"
+      ]
+    },
+    "T3.2": {
+      "task": "T3",
+      "title": "Keep `end_review` and `finish` on the generic lifecycle invoker and refresh expected schedule fixtures",
+      "kind": "verify",
+      "wave": 6,
+      "plan_line": 64,
+      "depends_on": [
+        "T3.1"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "emit_script",
+        "fixture_expected_schedule"
+      ]
+    },
+    "T4.1": {
+      "task": "T4",
+      "title": "Update `main_test.go` compile-schedule coverage for provider catalog configs",
+      "kind": "test",
+      "wave": 7,
+      "plan_line": 65,
+      "depends_on": [
+        "T3.2"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "main_test",
+        "fixture_waveagents"
+      ]
+    },
+    "T4.2": {
+      "task": "T4",
+      "title": "Refresh shell smoke tests to write provider-catalog `waveagents.json` fixtures",
+      "kind": "test",
+      "wave": 8,
+      "plan_line": 66,
+      "depends_on": [
+        "T4.1"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "cli_wired_test",
+        "fixture_waveagents"
+      ]
+    },
+    "T5.1": {
+      "task": "T5",
+      "title": "Document the provider catalog schema, command stereotype, and migration from flat provider strings",
+      "kind": "doc",
+      "wave": 9,
+      "plan_line": 67,
+      "depends_on": [
+        "T4.2"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "readme",
+        "swim_ops_spec",
+        "swim_ops_example",
+        "agent_config_example"
+      ]
+    },
+    "T5.2": {
+      "task": "T5",
+      "title": "Validate canonical plan JSON and compile a schedule using provider-object fixtures",
+      "kind": "verify",
+      "wave": 10,
+      "plan_line": 68,
+      "depends_on": [
+        "T5.1"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "waveplan_cli",
+        "fixture_waveagents"
+      ]
+    }
+  },
+  "doc_index": {
+    "agent_config_example": {
+      "path": "docs/waveplan-agent-config-example.json",
+      "line": 1,
+      "kind": "doc"
+    },
+    "cli_wired_test": {
+      "path": "tests/swim/test_t4_2_cli_wired.sh",
+      "line": 1,
+      "kind": "test"
+    },
+    "emit_script": {
+      "path": "wp-emit-wave-execution.sh",
+      "line": 1,
+      "kind": "code"
+    },
+    "fixture_expected_schedule": {
+      "path": "tests/swim/fixtures/expected-schedule.json",
+      "line": 1,
+      "kind": "test"
+    },
+    "fixture_waveagents": {
+      "path": "tests/swim/fixtures/waveagents.json",
+      "line": 1,
+      "kind": "test"
+    },
+    "main_test": {
+      "path": "main_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    "plan": {
+      "path": "docs/superpowers/plans/2026-05-13-waveagents-provider-objects.md",
+      "line": 1,
+      "kind": "plan"
+    },
+    "readme": {
+      "path": "README.md",
+      "line": 1,
+      "kind": "doc"
+    },
+    "swim_ops_example": {
+      "path": "docs/specs/swim-ops-examples/waveagents.json",
+      "line": 1,
+      "kind": "doc"
+    },
+    "swim_ops_spec": {
+      "path": "docs/specs/2026-05-05-swim-ops.md",
+      "line": 1,
+      "kind": "spec"
+    },
+    "waveplan_cli": {
+      "path": "waveplan-cli",
+      "line": 1,
+      "kind": "code"
+    }
+  },
+  "fp_index": {},
+  "waves": [
+    {
+      "wave": 1,
+      "units": [
+        "T1.1"
+      ]
+    },
+    {
+      "wave": 2,
+      "units": [
+        "T1.2"
+      ]
+    },
+    {
+      "wave": 3,
+      "units": [
+        "T2.1"
+      ]
+    },
+    {
+      "wave": 4,
+      "units": [
+        "T2.2"
+      ]
+    },
+    {
+      "wave": 5,
+      "units": [
+        "T3.1"
+      ]
+    },
+    {
+      "wave": 6,
+      "units": [
+        "T3.2"
+      ]
+    },
+    {
+      "wave": 7,
+      "units": [
+        "T4.1"
+      ]
+    },
+    {
+      "wave": 8,
+      "units": [
+        "T4.2"
+      ]
+    },
+    {
+      "wave": 9,
+      "units": [
+        "T5.1"
+      ]
+    },
+    {
+      "wave": 10,
+      "units": [
+        "T5.2"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,334 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-05-14",
+  "plan": {
+    "id": "swim-review-schedule-sidecar",
+    "title": "SWIM Review Schedule Sidecar",
+    "plan_doc": {
+      "path": "docs/superpowers/plans/2026-05-14-swim-review-schedule-sidecar-swim.md",
+      "line": 1
+    },
+    "spec_doc": {
+      "path": "docs/specs/2026-05-14-swim-review-schedule-sidecar.md",
+      "line": 1
+    }
+  },
+  "tasks": {
+    "T1": {
+      "title": "Define review sidecar contract and explicit path rules",
+      "plan_line": 1,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "swim_fixes_spec",
+        "waveplan_cli",
+        "swim_contracts_go"
+      ],
+      "files": [
+        "waveplan-cli",
+        "internal/swim/contracts.go",
+        "docs/specs/2026-05-14-swim-review-schedule-sidecar.md"
+      ]
+    },
+    "T2": {
+      "title": "Merge base and review schedules at runtime",
+      "plan_line": 1,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "swim_run_go",
+        "swim_contracts_go",
+        "swim_resolver_test_go"
+      ],
+      "files": [
+        "internal/swim/run.go",
+        "internal/swim/contracts.go",
+        "internal/swim/resolver_test.go"
+      ]
+    },
+    "T3": {
+      "title": "Insert fix loops and align observer behavior",
+      "plan_line": 1,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli",
+        "waveplan_ps_main_go"
+      ],
+      "files": [
+        "waveplan-cli",
+        "waveplan-ps/cmd/waveplan-ps/main.go"
+      ]
+    }
+  },
+  "units": {
+    "T1.1": {
+      "task": "T1",
+      "title": "Define review sidecar schema and anchor validation rules",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 1,
+      "depends_on": [],
+      "fp_refs": [
+        "FP-CONTRACT"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "swim_fixes_spec",
+        "swim_contracts_go"
+      ]
+    },
+    "T1.2": {
+      "task": "T1",
+      "title": "Add explicit review-schedule flag and env resolution contract",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 1,
+      "depends_on": [
+        "T1.1"
+      ],
+      "fp_refs": [
+        "FP-CONTRACT"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli"
+      ]
+    },
+    "T1.3": {
+      "task": "T1",
+      "title": "Verify fail-fast behavior for missing or invalid review-schedule paths",
+      "kind": "verify",
+      "wave": 3,
+      "plan_line": 1,
+      "depends_on": [
+        "T1.2"
+      ],
+      "fp_refs": [
+        "FP-CONTRACT"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli"
+      ]
+    },
+    "T2.1": {
+      "task": "T2",
+      "title": "Merge anchored sidecar rows into the executable runtime frame",
+      "kind": "impl",
+      "wave": 4,
+      "plan_line": 1,
+      "depends_on": [
+        "T1.3"
+      ],
+      "fp_refs": [
+        "FP-RUNTIME"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "swim_run_go",
+        "swim_contracts_go"
+      ]
+    },
+    "T2.2": {
+      "task": "T2",
+      "title": "Block end_review and finish while pending sidecar rows exist",
+      "kind": "impl",
+      "wave": 5,
+      "plan_line": 1,
+      "depends_on": [
+        "T2.1"
+      ],
+      "fp_refs": [
+        "FP-RUNTIME"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "swim_run_go",
+        "swim_contracts_go"
+      ]
+    },
+    "T2.3": {
+      "task": "T2",
+      "title": "Add resolver and runner tests for merged review loops",
+      "kind": "test",
+      "wave": 6,
+      "plan_line": 1,
+      "depends_on": [
+        "T2.2"
+      ],
+      "fp_refs": [
+        "FP-RUNTIME"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "swim_resolver_test_go"
+      ]
+    },
+    "T3.1": {
+      "task": "T3",
+      "title": "Add deterministic insert-fix-loop sidecar writer command",
+      "kind": "impl",
+      "wave": 7,
+      "plan_line": 1,
+      "depends_on": [
+        "T2.3"
+      ],
+      "fp_refs": [
+        "FP-CLI"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli"
+      ]
+    },
+    "T3.2": {
+      "task": "T3",
+      "title": "Thread review-schedule through swim execution and waveplan-ps observation",
+      "kind": "impl",
+      "wave": 8,
+      "plan_line": 1,
+      "depends_on": [
+        "T3.1"
+      ],
+      "fp_refs": [
+        "FP-CLI"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli",
+        "waveplan_ps_main_go"
+      ]
+    },
+    "T3.3": {
+      "task": "T3",
+      "title": "Refresh docs and fixture-backed verification for sidecar review loops",
+      "kind": "verify",
+      "wave": 9,
+      "plan_line": 1,
+      "depends_on": [
+        "T3.2"
+      ],
+      "fp_refs": [
+        "FP-CLI"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli",
+        "waveplan_ps_main_go"
+      ]
+    }
+  },
+  "doc_index": {
+    "plan": {
+      "path": "docs/superpowers/plans/2026-05-14-swim-review-schedule-sidecar-swim.md",
+      "line": 1,
+      "kind": "plan"
+    },
+    "spec": {
+      "path": "docs/specs/2026-05-14-swim-review-schedule-sidecar.md",
+      "line": 1,
+      "kind": "spec"
+    },
+    "swim_contracts_go": {
+      "path": "internal/swim/contracts.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "swim_fixes_spec": {
+      "path": "docs/specs/2026-05-10-swim-fixes.md",
+      "line": 1,
+      "kind": "spec"
+    },
+    "swim_resolver_test_go": {
+      "path": "internal/swim/resolver_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    "swim_run_go": {
+      "path": "internal/swim/run.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "waveplan_cli": {
+      "path": "waveplan-cli",
+      "line": 1,
+      "kind": "code"
+    },
+    "waveplan_ps_main_go": {
+      "path": "waveplan-ps/cmd/waveplan-ps/main.go",
+      "line": 1,
+      "kind": "code"
+    }
+  },
+  "fp_index": {
+    "FP-CLI": "FP-akaejfjb",
+    "FP-CONTRACT": "FP-byeibgzt",
+    "FP-RUNTIME": "FP-aihwddfz"
+  },
+  "waves": [
+    {
+      "wave": 1,
+      "units": [
+        "T1.1"
+      ]
+    },
+    {
+      "wave": 2,
+      "units": [
+        "T1.2"
+      ]
+    },
+    {
+      "wave": 3,
+      "units": [
+        "T1.3"
+      ]
+    },
+    {
+      "wave": 4,
+      "units": [
+        "T2.1"
+      ]
+    },
+    {
+      "wave": 5,
+      "units": [
+        "T2.2"
+      ]
+    },
+    {
+      "wave": 6,
+      "units": [
+        "T2.3"
+      ]
+    },
+    {
+      "wave": 7,
+      "units": [
+        "T3.1"
+      ]
+    },
+    {
+      "wave": 8,
+      "units": [
+        "T3.2"
+      ]
+    },
+    {
+      "wave": 9,
+      "units": [
+        "T3.3"
+      ]
+    }
+  ]
+}

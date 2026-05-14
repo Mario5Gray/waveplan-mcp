@@ -1,0 +1,319 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-05-13",
+  "plan": {
+    "id": "context-sizer-waveplan-adapter",
+    "title": "Context Sizer Waveplan Adapter",
+    "plan_doc": {
+      "path": "docs/superpowers/plans/2026-05-13-context-sizer-waveplan-adapter.md",
+      "line": 1
+    },
+    "spec_doc": {
+      "path": "docs/superpowers/specs/2026-05-13-context-sizer-design.md",
+      "line": 1
+    }
+  },
+  "tasks": {
+    "T1": {
+      "title": "Waveplan adapter mapping",
+      "plan_line": 26,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "adapter_waveplan_go",
+        "adapter_waveplan_test_go",
+        "cloudflare_execution_waves"
+      ],
+      "files": [
+        "internal/contextsize/adapter/waveplan.go",
+        "internal/contextsize/adapter/waveplan_test.go",
+        "docs/plans/2026-05-13-cloudflare-ai-worker-execution-waves.json"
+      ]
+    },
+    "T2": {
+      "title": "waveplan-cli native context estimate selectors",
+      "plan_line": 65,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli"
+      ],
+      "files": [
+        "waveplan-cli"
+      ]
+    },
+    "T3": {
+      "title": "End-to-end verification and docs cutover",
+      "plan_line": 112,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli",
+        "adapter_waveplan_test_go",
+        "cloudflare_execution_waves"
+      ],
+      "files": [
+        "internal/contextsize/adapter/waveplan_test.go",
+        "waveplan-cli",
+        "docs/superpowers/specs/2026-05-13-context-sizer-design.md",
+        "docs/plans/2026-05-13-cloudflare-ai-worker-execution-waves.json"
+      ]
+    }
+  },
+  "units": {
+    "T1.1": {
+      "task": "T1",
+      "title": "Write adapter tests first",
+      "kind": "test",
+      "wave": 1,
+      "plan_line": 30,
+      "depends_on": [],
+      "fp_refs": [
+        "FP-ADAPTER-MAP"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "adapter_waveplan_test_go",
+        "cloudflare_execution_waves"
+      ]
+    },
+    "T1.2": {
+      "task": "T1",
+      "title": "Implement task and unit mapping",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 40,
+      "depends_on": [
+        "T1.1"
+      ],
+      "fp_refs": [
+        "FP-ADAPTER-MAP"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "adapter_waveplan_go",
+        "cloudflare_execution_waves"
+      ]
+    },
+    "T1.3": {
+      "task": "T1",
+      "title": "Verify adapter package tests",
+      "kind": "verify",
+      "wave": 3,
+      "plan_line": 55,
+      "depends_on": [
+        "T1.2"
+      ],
+      "fp_refs": [
+        "FP-ADAPTER-MAP"
+      ],
+      "doc_refs": [
+        "plan",
+        "adapter_waveplan_test_go"
+      ]
+    },
+    "T2.1": {
+      "task": "T2",
+      "title": "Add native selector flags",
+      "kind": "impl",
+      "wave": 4,
+      "plan_line": 69,
+      "depends_on": [
+        "T1.3"
+      ],
+      "fp_refs": [
+        "FP-ADAPTER-CLI"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli"
+      ]
+    },
+    "T2.2": {
+      "task": "T2",
+      "title": "Enforce selector validation and route through adapter",
+      "kind": "impl",
+      "wave": 5,
+      "plan_line": 84,
+      "depends_on": [
+        "T2.1"
+      ],
+      "fp_refs": [
+        "FP-ADAPTER-CLI"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli",
+        "adapter_waveplan_go"
+      ]
+    },
+    "T2.3": {
+      "task": "T2",
+      "title": "Verify candidate and native plan paths",
+      "kind": "verify",
+      "wave": 6,
+      "plan_line": 100,
+      "depends_on": [
+        "T2.2"
+      ],
+      "fp_refs": [
+        "FP-ADAPTER-CLI"
+      ],
+      "doc_refs": [
+        "plan",
+        "waveplan_cli",
+        "cloudflare_execution_waves"
+      ]
+    },
+    "T3.1": {
+      "task": "T3",
+      "title": "Add fixture-backed end-to-end tests",
+      "kind": "test",
+      "wave": 7,
+      "plan_line": 116,
+      "depends_on": [
+        "T2.3"
+      ],
+      "fp_refs": [
+        "FP-ADAPTER-E2E"
+      ],
+      "doc_refs": [
+        "plan",
+        "adapter_waveplan_test_go",
+        "cloudflare_execution_waves"
+      ]
+    },
+    "T3.2": {
+      "task": "T3",
+      "title": "Update docs for normal workflow",
+      "kind": "doc",
+      "wave": 8,
+      "plan_line": 124,
+      "depends_on": [
+        "T3.1"
+      ],
+      "fp_refs": [
+        "FP-ADAPTER-E2E"
+      ],
+      "doc_refs": [
+        "plan",
+        "spec"
+      ]
+    },
+    "T3.3": {
+      "task": "T3",
+      "title": "Verify install path and wrapper behavior",
+      "kind": "verify",
+      "wave": 9,
+      "plan_line": 130,
+      "depends_on": [
+        "T3.2"
+      ],
+      "fp_refs": [
+        "FP-ADAPTER-E2E"
+      ],
+      "doc_refs": [
+        "plan",
+        "waveplan_cli",
+        "cloudflare_execution_waves"
+      ]
+    }
+  },
+  "doc_index": {
+    "adapter_waveplan_go": {
+      "path": "internal/contextsize/adapter/waveplan.go",
+      "line": 1,
+      "kind": "code"
+    },
+    "adapter_waveplan_test_go": {
+      "path": "internal/contextsize/adapter/waveplan_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    "cloudflare_execution_waves": {
+      "path": "docs/plans/2026-05-13-cloudflare-ai-worker-execution-waves.json",
+      "line": 1,
+      "kind": "test"
+    },
+    "plan": {
+      "path": "docs/superpowers/plans/2026-05-13-context-sizer-waveplan-adapter.md",
+      "line": 1,
+      "kind": "plan"
+    },
+    "spec": {
+      "path": "docs/superpowers/specs/2026-05-13-context-sizer-design.md",
+      "line": 290,
+      "kind": "spec"
+    },
+    "waveplan_cli": {
+      "path": "waveplan-cli",
+      "line": 531,
+      "kind": "code"
+    }
+  },
+  "fp_index": {
+    "FP-ADAPTER-CLI": "FP-pkymdlbv#FP-ljdtcbbi",
+    "FP-ADAPTER-E2E": "FP-pkymdlbv#FP-kaxwxxpx",
+    "FP-ADAPTER-MAP": "FP-pkymdlbv#FP-rrxobrej"
+  },
+  "waves": [
+    {
+      "wave": 1,
+      "units": [
+        "T1.1"
+      ]
+    },
+    {
+      "wave": 2,
+      "units": [
+        "T1.2"
+      ]
+    },
+    {
+      "wave": 3,
+      "units": [
+        "T1.3"
+      ]
+    },
+    {
+      "wave": 4,
+      "units": [
+        "T2.1"
+      ]
+    },
+    {
+      "wave": 5,
+      "units": [
+        "T2.2"
+      ]
+    },
+    {
+      "wave": 6,
+      "units": [
+        "T2.3"
+      ]
+    },
+    {
+      "wave": 7,
+      "units": [
+        "T3.1"
+      ]
+    },
+    {
+      "wave": 8,
+      "units": [
+        "T3.2"
+      ]
+    },
+    {
+      "wave": 9,
+      "units": [
+        "T3.3"
+      ]
+    }
+  ]
+}

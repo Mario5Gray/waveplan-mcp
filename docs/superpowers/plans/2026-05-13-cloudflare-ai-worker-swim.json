@@ -1,0 +1,569 @@
+{
+  "title": "cloudflare-ai-worker",
+  "meta": {
+    "schema_version": 1,
+    "generated_on": "2026-05-13",
+    "plan_version": 1,
+    "plan_generation": "2026-05-13T00:00:00Z"
+  },
+  "plan": {
+    "plan_id": "cloudflare-ai-worker",
+    "plan_title": "Cloudflare AI Worker Integration",
+    "plan_doc_path": "docs/superpowers/plans/2026-05-13-cloudflare-ai-worker.md",
+    "spec_doc_path": "docs/superpowers/plans/2026-05-13-cloudflare-ai-worker.md"
+  },
+  "doc_index": [
+    {
+      "ref": "cloudflare_worker_env_example",
+      "path": "cloudflare-worker/.env.example",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "cloudflare_worker_esbuild_config_js",
+      "path": "cloudflare-worker/esbuild.config.js",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "cloudflare_worker_metadata_json",
+      "path": "cloudflare-worker/metadata.json",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "cloudflare_worker_package_json",
+      "path": "cloudflare-worker/package.json",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "cloudflare_worker_scripts_deploy_sh",
+      "path": "cloudflare-worker/scripts/deploy.sh",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "cloudflare_worker_scripts_test_sh",
+      "path": "cloudflare-worker/scripts/test.sh",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "cloudflare_worker_src_types_ts",
+      "path": "cloudflare-worker/src/types.ts",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "cloudflare_worker_src_worker_ts",
+      "path": "cloudflare-worker/src/worker.ts",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "cloudflare_worker_tsconfig_json",
+      "path": "cloudflare-worker/tsconfig.json",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "internal_aiclient_client_go",
+      "path": "internal/aiclient/client.go",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "internal_aiclient_client_test_go",
+      "path": "internal/aiclient/client_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "main_go",
+      "path": "main.go",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "plan",
+      "path": "docs/superpowers/plans/2026-05-13-cloudflare-ai-worker.md",
+      "line": 1,
+      "kind": "plan"
+    },
+    {
+      "ref": "spec",
+      "path": "docs/superpowers/plans/2026-05-13-cloudflare-ai-worker.md",
+      "line": 1,
+      "kind": "spec"
+    }
+  ],
+  "fp_index": [
+    {
+      "fp_ref": "FP-WORKER",
+      "fp_id": "FP-sscpykry#FP-WORKER"
+    },
+    {
+      "fp_ref": "FP-CLIENT",
+      "fp_id": "FP-sscpykry#FP-CLIENT"
+    },
+    {
+      "fp_ref": "FP-SERVER",
+      "fp_id": "FP-sscpykry#FP-SERVER"
+    },
+    {
+      "fp_ref": "FP-DEPLOY",
+      "fp_id": "FP-sscpykry#FP-DEPLOY"
+    },
+    {
+      "fp_ref": "FP-SECURITY",
+      "fp_id": "FP-sscpykry#FP-SECURITY"
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "T1",
+      "title": "Cloudflare Worker",
+      "plan_line": 27,
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_src_worker_ts",
+        "cloudflare_worker_src_types_ts",
+        "cloudflare_worker_esbuild_config_js",
+        "cloudflare_worker_package_json",
+        "cloudflare_worker_tsconfig_json",
+        "cloudflare_worker_metadata_json"
+      ],
+      "files": [
+        "cloudflare-worker/src/worker.ts",
+        "cloudflare-worker/src/types.ts",
+        "cloudflare-worker/esbuild.config.js",
+        "cloudflare-worker/package.json",
+        "cloudflare-worker/tsconfig.json",
+        "cloudflare-worker/metadata.json"
+      ]
+    },
+    {
+      "task_id": "T2",
+      "title": "Go Client Package \u2014 `internal/aiclient`",
+      "plan_line": 71,
+      "doc_refs": [
+        "plan",
+        "internal_aiclient_client_go",
+        "internal_aiclient_client_test_go"
+      ],
+      "files": [
+        "internal/aiclient/client.go",
+        "internal/aiclient/client_test.go"
+      ]
+    },
+    {
+      "task_id": "T3",
+      "title": "Server Integration Scaffolding",
+      "plan_line": 99,
+      "doc_refs": [
+        "plan",
+        "main_go"
+      ],
+      "files": [
+        "main.go"
+      ]
+    },
+    {
+      "task_id": "T4",
+      "title": "Deployment & Tool Integration",
+      "plan_line": 126,
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_scripts_deploy_sh",
+        "cloudflare_worker_scripts_test_sh",
+        "cloudflare_worker_env_example"
+      ],
+      "files": [
+        "cloudflare-worker/scripts/deploy.sh",
+        "cloudflare-worker/scripts/test.sh",
+        "cloudflare-worker/.env.example"
+      ]
+    },
+    {
+      "task_id": "T5",
+      "title": "Security Hardening & Verification",
+      "plan_line": 176,
+      "doc_refs": [
+        "plan"
+      ],
+      "files": []
+    }
+  ],
+  "units": [
+    {
+      "unit_id": "T1.1",
+      "task_id": "T1",
+      "title": "Write the worker entry point",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 39,
+      "depends_on": [],
+      "fp_refs": [
+        "FP-WORKER"
+      ],
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_src_worker_ts",
+        "cloudflare_worker_src_types_ts",
+        "cloudflare_worker_esbuild_config_js",
+        "cloudflare_worker_package_json",
+        "cloudflare_worker_tsconfig_json",
+        "cloudflare_worker_metadata_json"
+      ]
+    },
+    {
+      "unit_id": "T1.2",
+      "task_id": "T1",
+      "title": "Write types and build config",
+      "kind": "impl",
+      "wave": 2,
+      "plan_line": 44,
+      "depends_on": [
+        "T1.1"
+      ],
+      "fp_refs": [
+        "FP-WORKER"
+      ],
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_src_worker_ts",
+        "cloudflare_worker_src_types_ts",
+        "cloudflare_worker_esbuild_config_js",
+        "cloudflare_worker_package_json",
+        "cloudflare_worker_tsconfig_json",
+        "cloudflare_worker_metadata_json"
+      ]
+    },
+    {
+      "unit_id": "T1.3",
+      "task_id": "T1",
+      "title": "Build and verify the worker bundle",
+      "kind": "verify",
+      "wave": 3,
+      "plan_line": 61,
+      "depends_on": [
+        "T1.2"
+      ],
+      "fp_refs": [
+        "FP-WORKER"
+      ],
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_src_worker_ts",
+        "cloudflare_worker_src_types_ts",
+        "cloudflare_worker_esbuild_config_js",
+        "cloudflare_worker_package_json",
+        "cloudflare_worker_tsconfig_json",
+        "cloudflare_worker_metadata_json"
+      ]
+    },
+    {
+      "unit_id": "T2.1",
+      "task_id": "T2",
+      "title": "Write the client implementation",
+      "kind": "impl",
+      "wave": 4,
+      "plan_line": 79,
+      "depends_on": [
+        "T1.3"
+      ],
+      "fp_refs": [
+        "FP-CLIENT"
+      ],
+      "doc_refs": [
+        "plan",
+        "internal_aiclient_client_go",
+        "internal_aiclient_client_test_go"
+      ]
+    },
+    {
+      "unit_id": "T2.2",
+      "task_id": "T2",
+      "title": "Write the test file",
+      "kind": "test",
+      "wave": 5,
+      "plan_line": 84,
+      "depends_on": [
+        "T2.1"
+      ],
+      "fp_refs": [
+        "FP-CLIENT"
+      ],
+      "doc_refs": [
+        "plan",
+        "internal_aiclient_client_go",
+        "internal_aiclient_client_test_go"
+      ]
+    },
+    {
+      "unit_id": "T2.3",
+      "task_id": "T2",
+      "title": "Build and test",
+      "kind": "verify",
+      "wave": 6,
+      "plan_line": 89,
+      "depends_on": [
+        "T2.2"
+      ],
+      "fp_refs": [
+        "FP-CLIENT"
+      ],
+      "doc_refs": [
+        "plan",
+        "internal_aiclient_client_go",
+        "internal_aiclient_client_test_go"
+      ]
+    },
+    {
+      "unit_id": "T3.1",
+      "task_id": "T3",
+      "title": "Add ai field to WaveplanServer",
+      "kind": "impl",
+      "wave": 7,
+      "plan_line": 106,
+      "depends_on": [
+        "T2.3"
+      ],
+      "fp_refs": [
+        "FP-SERVER"
+      ],
+      "doc_refs": [
+        "plan",
+        "main_go"
+      ]
+    },
+    {
+      "unit_id": "T3.2",
+      "task_id": "T3",
+      "title": "Wire NewClient at startup",
+      "kind": "impl",
+      "wave": 8,
+      "plan_line": 111,
+      "depends_on": [
+        "T3.1"
+      ],
+      "fp_refs": [
+        "FP-SERVER"
+      ],
+      "doc_refs": [
+        "plan",
+        "main_go"
+      ]
+    },
+    {
+      "unit_id": "T3.3",
+      "task_id": "T3",
+      "title": "Build to verify compilation",
+      "kind": "verify",
+      "wave": 9,
+      "plan_line": 116,
+      "depends_on": [
+        "T3.2"
+      ],
+      "fp_refs": [
+        "FP-SERVER"
+      ],
+      "doc_refs": [
+        "plan",
+        "main_go"
+      ]
+    },
+    {
+      "unit_id": "T4.1",
+      "task_id": "T4",
+      "title": "Write the deploy script",
+      "kind": "impl",
+      "wave": 10,
+      "plan_line": 136,
+      "depends_on": [
+        "T3.3"
+      ],
+      "fp_refs": [
+        "FP-DEPLOY"
+      ],
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_scripts_deploy_sh",
+        "cloudflare_worker_scripts_test_sh",
+        "cloudflare_worker_env_example"
+      ]
+    },
+    {
+      "unit_id": "T4.2",
+      "task_id": "T4",
+      "title": "Write the test script",
+      "kind": "test",
+      "wave": 11,
+      "plan_line": 141,
+      "depends_on": [
+        "T4.1"
+      ],
+      "fp_refs": [
+        "FP-DEPLOY"
+      ],
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_scripts_deploy_sh",
+        "cloudflare_worker_scripts_test_sh",
+        "cloudflare_worker_env_example"
+      ]
+    },
+    {
+      "unit_id": "T4.3",
+      "task_id": "T4",
+      "title": "Write .env.example",
+      "kind": "doc",
+      "wave": 12,
+      "plan_line": 146,
+      "depends_on": [
+        "T4.2"
+      ],
+      "fp_refs": [
+        "FP-DEPLOY"
+      ],
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_scripts_deploy_sh",
+        "cloudflare_worker_scripts_test_sh",
+        "cloudflare_worker_env_example"
+      ]
+    },
+    {
+      "unit_id": "T4.4",
+      "task_id": "T4",
+      "title": "Integrate AI into handleSwimRefineRun",
+      "kind": "impl",
+      "wave": 13,
+      "plan_line": 151,
+      "depends_on": [
+        "T4.3"
+      ],
+      "fp_refs": [
+        "FP-DEPLOY"
+      ],
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_scripts_deploy_sh",
+        "cloudflare_worker_scripts_test_sh",
+        "cloudflare_worker_env_example"
+      ]
+    },
+    {
+      "unit_id": "T4.5",
+      "task_id": "T4",
+      "title": "Integrate AI into handleGet",
+      "kind": "impl",
+      "wave": 14,
+      "plan_line": 156,
+      "depends_on": [
+        "T4.4"
+      ],
+      "fp_refs": [
+        "FP-DEPLOY"
+      ],
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_scripts_deploy_sh",
+        "cloudflare_worker_scripts_test_sh",
+        "cloudflare_worker_env_example"
+      ]
+    },
+    {
+      "unit_id": "T4.6",
+      "task_id": "T4",
+      "title": "Implement AI cache (LRU)",
+      "kind": "impl",
+      "wave": 15,
+      "plan_line": 161,
+      "depends_on": [
+        "T4.5"
+      ],
+      "fp_refs": [
+        "FP-DEPLOY"
+      ],
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_scripts_deploy_sh",
+        "cloudflare_worker_scripts_test_sh",
+        "cloudflare_worker_env_example"
+      ]
+    },
+    {
+      "unit_id": "T4.7",
+      "task_id": "T4",
+      "title": "Build and test",
+      "kind": "verify",
+      "wave": 16,
+      "plan_line": 166,
+      "depends_on": [
+        "T4.6"
+      ],
+      "fp_refs": [
+        "FP-DEPLOY"
+      ],
+      "doc_refs": [
+        "plan",
+        "cloudflare_worker_scripts_deploy_sh",
+        "cloudflare_worker_scripts_test_sh",
+        "cloudflare_worker_env_example"
+      ]
+    },
+    {
+      "unit_id": "T5.1",
+      "task_id": "T5",
+      "title": "Add prompt allowlist test",
+      "kind": "test",
+      "wave": 17,
+      "plan_line": 184,
+      "depends_on": [
+        "T4.7"
+      ],
+      "fp_refs": [
+        "FP-SECURITY"
+      ],
+      "doc_refs": [
+        "plan"
+      ]
+    },
+    {
+      "unit_id": "T5.2",
+      "task_id": "T5",
+      "title": "Implement buildRefinePrompt and buildGetPrompt",
+      "kind": "impl",
+      "wave": 18,
+      "plan_line": 189,
+      "depends_on": [
+        "T5.1"
+      ],
+      "fp_refs": [
+        "FP-SECURITY"
+      ],
+      "doc_refs": [
+        "plan"
+      ]
+    },
+    {
+      "unit_id": "T5.3",
+      "task_id": "T5",
+      "title": "Run all tests",
+      "kind": "verify",
+      "wave": 19,
+      "plan_line": 194,
+      "depends_on": [
+        "T5.2"
+      ],
+      "fp_refs": [
+        "FP-SECURITY"
+      ],
+      "doc_refs": [
+        "plan"
+      ]
+    }
+  ]
+}

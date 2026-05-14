@@ -24,3 +24,8 @@ internal/swim/.waveplan/
 txtstore
 txtstore-mcp
 FP_AGENTS.md
+env.*
+opencode.json
+*agents.json
+local_tools/
+session*.md
