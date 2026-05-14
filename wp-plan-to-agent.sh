@@ -50,16 +50,34 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+resolve_runtime_plan() {
+  local requested="$1"
+  local env_plan="${WAVEPLAN_PLAN:-}"
+  if [[ -n "$requested" && -f "$requested" ]]; then
+    printf '%s\n' "$requested"
+    return 0
+  fi
+  if [[ -n "$env_plan" && -f "$env_plan" ]]; then
+    printf '%s\n' "$env_plan"
+    return 0
+  fi
+  return 1
+}
+
 if [[ -z "$MODE" || -z "$PLAN" ]]; then
   echo "Missing required args: --mode and --plan" >&2
   usage
   exit 2
 fi
 
-if [[ ! -f "$PLAN" ]]; then
+if ! RESOLVED_PLAN="$(resolve_runtime_plan "$PLAN")"; then
   echo "Plan file not found: $PLAN" >&2
+  if [[ -n "${WAVEPLAN_PLAN:-}" ]]; then
+    echo "WAVEPLAN_PLAN fallback also missing: $WAVEPLAN_PLAN" >&2
+  fi
   exit 2
 fi
+PLAN="$RESOLVED_PLAN"
 
 if [[ -z "$WP_TASK_TO_AGENT_BIN" ]]; then
   if command -v wp-task-to-agent.sh >/dev/null 2>&1; then

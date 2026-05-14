@@ -16,7 +16,7 @@ Outputs a JSON ContextEstimate with fit classification, confidence scoring,
 and split/merge recommendations.
 
 USAGE
-  contextsize estimate --candidate <file.json> [options]
+  contextsize [estimate] --candidate <file.json> [options]
 
 ARGUMENTS
   --candidate       Path to ContextCandidate JSON file (required)
@@ -24,14 +24,14 @@ ARGUMENTS
   --base-dir        Root directory for resolving referenced file paths
 
 EXAMPLES
-  # Estimate a hand-authored candidate
-  contextsize estimate --candidate issue.json
+	# Estimate a hand-authored candidate
+	contextsize --candidate issue.json
 
-  # With custom budget
-  contextsize estimate --candidate issue.json --budget 96000:192000
+	# With custom budget
+	contextsize --candidate issue.json --budget 96000:192000
 
-  # With base directory for relative file paths
-  contextsize estimate --candidate issue.json --base-dir /path/to/repo
+	# With base directory for relative file paths
+	contextsize --candidate issue.json --base-dir /path/to/repo
 
   # Via waveplan-cli
   python waveplan-cli context estimate --candidate issue.json --base-dir /path/to/repo
@@ -59,7 +59,13 @@ func main() {
 	budgetFlag := flag.String("budget", "64000:192000", "Budget range in tokens (min:max)")
 	baseDir := flag.String("base-dir", "", "Root for resolving referenced file paths")
 	helpFlag := flag.Bool("help", false, "Show this help message")
-	flag.Parse()
+	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "estimate" {
+		args = args[1:]
+	}
+	if err := flag.CommandLine.Parse(args); err != nil {
+		os.Exit(2)
+	}
 
 	if *helpFlag || flag.NFlag() == 0 {
 		fmt.Print(usage)

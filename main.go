@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/internal/contextsize"
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/internal/swim"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -382,6 +383,15 @@ func (s *WaveplanServer) createTools() []server.ServerTool {
 				mcp.WithString("work_dir", mcp.Description("Working directory passed to invoke")),
 			),
 			Handler: s.handleSwimRefineRun,
+		},
+		{
+			Tool: mcp.NewTool("waveplan_context_estimate",
+				mcp.WithDescription("Estimate the context footprint (token budget) of an issue candidate. Accepts a ContextCandidate JSON object, optional budget range, and base directory for resolving file paths."),
+				mcp.WithString("candidate", mcp.Required(), mcp.Description("ContextCandidate JSON object (id, title, description, referenced_files, referenced_sections, depends_on, source)")),
+				mcp.WithString("budget", mcp.Description("Budget range in tokens, min:max (default: 64000:192000)")),
+				mcp.WithString("base_dir", mcp.Description("Root directory for resolving referenced file paths")),
+			),
+			Handler: s.handleContextEstimate,
 		},
 	}
 	return tools
@@ -1211,6 +1221,55 @@ func (s *WaveplanServer) handleSwimRefineRun(ctx context.Context, request mcp.Ca
 		return swimErrorResult(3, err.Error()), nil
 	}
 	return swimJSONResult(report), nil
+}
+
+func (s *WaveplanServer) handleContextEstimate(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	candidateJSON, err := requiredStringParam(request.Params.Arguments, "candidate")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("missing required parameter: candidate - %v", err)), nil
+	}
+
+	var candidate contextsize.ContextCandidate
+	if err := json.Unmarshal([]byte(candidateJSON), &candidate); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid candidate JSON: %v", err)), nil
+	}
+
+	budgetStr := optionalOrDefault(request.Params.Arguments, "budget", "64000:192000")
+	budgetParts := strings.Split(budgetStr, ":")
+	if len(budgetParts) != 2 {
+		return mcp.NewToolResultError("budget must be in format min:max"), nil
+	}
+
+	var minTokens, maxTokens int
+	if _, err := fmt.Sscanf(budgetParts[0], "%d", &minTokens); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid budget min: %s", budgetParts[0])), nil
+	}
+	if _, err := fmt.Sscanf(budgetParts[1], "%d", &maxTokens); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid budget max: %s", budgetParts[1])), nil
+	}
+
+	budget := contextsize.Budget{
+		MinTokens: minTokens,
+		MaxTokens: maxTokens,
+	}
+
+	baseDir, _ := optionalStringParam(request.Params.Arguments, "base_dir")
+
+	estimator := &contextsize.Estimator{
+		BaseDir: baseDir,
+	}
+
+	est, err := estimator.Estimate(candidate, budget)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("estimation failed: %v", err)), nil
+	}
+
+	output, err := contextsize.EncodeEstimateJSON(est)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to encode result: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(string(output)), nil
 }
 
 // Helper functions

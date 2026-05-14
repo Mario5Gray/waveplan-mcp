@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -66,9 +67,14 @@ func (e *Estimator) Estimate(c ContextCandidate, budget Budget) (ContextEstimate
 
 	var totalTokens int
 	var fileCount int
-	var localImportCount int
 	var hasSignal bool
 	var hasHugeFile bool
+	localImports := map[string]struct{}{}
+	fileSizes := map[string]int64{}
+	modulePath, err := findModulePath(e.BaseDir)
+	if err != nil {
+		return ContextEstimate{}, err
+	}
 
 	// Estimate tokens from referenced files.
 	for _, refFile := range c.ReferencedFiles {
@@ -80,17 +86,16 @@ func (e *Estimator) Estimate(c ContextCandidate, budget Budget) (ContextEstimate
 		info, err := os.Stat(path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				est.MissingFiles = append(est.MissingFiles, refFile)
+				est.MissingFiles = appendUniqueString(est.MissingFiles, refFile)
 				continue
 			}
-			// Other IO error — treat as missing.
-			est.MissingFiles = append(est.MissingFiles, refFile)
-			continue
+			return ContextEstimate{}, fmt.Errorf("stat %s: %w", refFile, err)
 		}
 
 		fileCount++
 		hasSignal = true
 		bytes := info.Size()
+		fileSizes[refFile] = bytes
 		if bytes > 50000 {
 			hasHugeFile = true
 		}
@@ -98,14 +103,20 @@ func (e *Estimator) Estimate(c ContextCandidate, budget Budget) (ContextEstimate
 		totalTokens += tokens
 
 		// Track local imports for Go files.
-		if strings.HasSuffix(path, ".go") {
-			localImportCount += countLocalImports(path)
+		if strings.HasSuffix(path, ".go") && modulePath != "" {
+			imports, err := collectLocalImports(path, modulePath)
+			if err != nil {
+				return ContextEstimate{}, err
+			}
+			for _, importPath := range imports {
+				localImports[importPath] = struct{}{}
+			}
 		}
 
 		// Check for unknown extension.
 		ext := strings.ToLower(filepath.Ext(path))
 		if !codeExtensions[ext] && !proseExtensions[ext] {
-			est.UnknownFiles = append(est.UnknownFiles, refFile)
+			est.UnknownFiles = appendUniqueString(est.UnknownFiles, refFile)
 		}
 	}
 
@@ -125,9 +136,26 @@ func (e *Estimator) Estimate(c ContextCandidate, budget Budget) (ContextEstimate
 
 		content, err := os.ReadFile(path)
 		if err != nil {
-			// File missing — section also missing.
-			est.MissingSections = append(est.MissingSections, section)
-			continue
+			if os.IsNotExist(err) {
+				est.MissingFiles = appendUniqueString(est.MissingFiles, section.Path)
+				continue
+			}
+			return ContextEstimate{}, fmt.Errorf("read section file %s: %w", section.Path, err)
+		}
+
+		info, err := os.Stat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				est.MissingFiles = appendUniqueString(est.MissingFiles, section.Path)
+				continue
+			}
+			return ContextEstimate{}, fmt.Errorf("stat section file %s: %w", section.Path, err)
+		}
+		if _, seen := fileSizes[section.Path]; !seen {
+			fileSizes[section.Path] = info.Size()
+			if info.Size() > 50000 {
+				hasHugeFile = true
+			}
 		}
 
 		sectionTokens := estimateSectionTokens(content, section.Heading)
@@ -141,7 +169,7 @@ func (e *Estimator) Estimate(c ContextCandidate, budget Budget) (ContextEstimate
 
 	// Build drivers.
 	est.Drivers = append(est.Drivers, fmt.Sprintf("%d referenced files", fileCount))
-	est.Drivers = append(est.Drivers, fmt.Sprintf("%d imported local packages", localImportCount))
+	est.Drivers = append(est.Drivers, fmt.Sprintf("%d imported local packages", len(localImports)))
 	if c.Description != "" {
 		est.Drivers = append(est.Drivers, fmt.Sprintf("description %d chars", len([]rune(c.Description))))
 	}
@@ -165,7 +193,7 @@ func (e *Estimator) Estimate(c ContextCandidate, budget Budget) (ContextEstimate
 	est.Recommendation = classifyRecommendation(totalTokens, budget, est.Fit)
 
 	// Determine confidence.
-	est.Confidence = determineConfidence(est, fileCount, hasSignal, hasHugeFile)
+	est.Confidence = determineConfidence(est, hasSignal, hasHugeFile)
 
 	// Set estimated tokens before building candidates (they reference it).
 	est.EstimatedTokens = totalTokens
@@ -192,71 +220,54 @@ func estimateFileTokens(path string, bytes int64) int {
 
 // estimateSectionTokens returns token estimate for a markdown section, or -1 if heading not found.
 func estimateSectionTokens(content []byte, heading string) int {
-	lines := strings.Split(string(content), "\n")
-	found := false
-	var sectionBytes int
+	lines := strings.SplitAfter(string(content), "\n")
+	start := -1
+	end := len(content)
+	offset := 0
+	currentLevel := 0
 
-	for i, line := range lines {
+	for _, rawLine := range lines {
+		line := strings.TrimRight(rawLine, "\n")
 		matches := headingRe.FindStringSubmatch(line)
-		if matches == nil {
-			continue
-		}
-		if matches[1] == heading {
-			found = true
-			// Count bytes from this heading to next heading at same/lower level or EOF.
-			for j := i + 1; j < len(lines); j++ {
-				nextMatch := headingRe.FindStringSubmatch(lines[j])
-				if nextMatch != nil {
-					// Check heading level (count # characters).
-					currentLevel := 0
-					for _, c := range line {
-						if c == '#' {
-							currentLevel++
-						}
-					}
-					nextLevel := 0
-					for _, c := range nextMatch[0] {
-						if c == '#' {
-							nextLevel++
-						}
-					}
-					if nextLevel <= currentLevel {
-						// Next heading at same or lower level — stop here.
-						break
-					}
-				}
-				sectionBytes += len(lines[j]) + 1 // +1 for newline
+		if matches != nil {
+			level := headingLevel(line)
+			if start == -1 && matches[1] == heading {
+				start = offset
+				currentLevel = level
+			} else if start != -1 && level <= currentLevel {
+				end = offset
+				break
 			}
-			break
 		}
+		offset += len(rawLine)
 	}
 
-	if !found {
+	if start == -1 {
 		return -1
 	}
 
 	// Sections are prose.
-	return sectionBytes / 4
+	return (end - start) / 4
 }
 
-// countLocalImports counts import paths in a Go file.
-func countLocalImports(path string) int {
+// collectLocalImports returns unique local import paths referenced by a Go file.
+func collectLocalImports(path string, modulePath string) ([]string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return 0
+		return nil, fmt.Errorf("read go file %s: %w", path, err)
 	}
 
-	// Simple heuristic: count import paths in import blocks.
 	text := string(content)
-	importCount := 0
 	inImportBlock := false
+	seen := map[string]struct{}{}
 
 	for _, line := range strings.Split(text, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "import ") {
-			// Single import: import "path"
 			if !strings.Contains(trimmed, "(") {
-				importCount++
+				if importPath, ok := quotedImportPath(trimmed); ok && strings.HasPrefix(importPath, modulePath) {
+					seen[importPath] = struct{}{}
+				}
 				continue
 			}
 			inImportBlock = true
@@ -267,12 +278,18 @@ func countLocalImports(path string) int {
 				inImportBlock = false
 				continue
 			}
-			// Count this import line.
-			importCount++
+			if importPath, ok := quotedImportPath(trimmed); ok && strings.HasPrefix(importPath, modulePath) {
+				seen[importPath] = struct{}{}
+			}
 		}
 	}
 
-	return importCount
+	imports := make([]string, 0, len(seen))
+	for importPath := range seen {
+		imports = append(imports, importPath)
+	}
+	slices.Sort(imports)
+	return imports, nil
 }
 
 // classifyFit returns "within", "over", or "under".
@@ -298,7 +315,7 @@ func classifyRecommendation(tokens int, budget Budget, fit string) string {
 }
 
 // determineConfidence returns "high", "medium", or "low".
-func determineConfidence(est ContextEstimate, fileCount int, hasSignal bool, hasHugeFile bool) string {
+func determineConfidence(est ContextEstimate, hasSignal bool, hasHugeFile bool) string {
 	confidence := "high"
 
 	// Missing files → low.
@@ -327,6 +344,76 @@ func determineConfidence(est ContextEstimate, fileCount int, hasSignal bool, has
 	}
 
 	return confidence
+}
+
+func findModulePath(baseDir string) (string, error) {
+	start := baseDir
+	if start == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("get working directory: %w", err)
+		}
+		start = cwd
+	}
+
+	current, err := filepath.Abs(start)
+	if err != nil {
+		return "", fmt.Errorf("resolve base dir %s: %w", start, err)
+	}
+
+	for {
+		goModPath := filepath.Join(current, "go.mod")
+		data, err := os.ReadFile(goModPath)
+		if err == nil {
+			for _, line := range strings.Split(string(data), "\n") {
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "module ") {
+					return strings.TrimSpace(strings.TrimPrefix(trimmed, "module ")), nil
+				}
+			}
+			return "", nil
+		}
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("read %s: %w", goModPath, err)
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", nil
+		}
+		current = parent
+	}
+}
+
+func quotedImportPath(line string) (string, bool) {
+	start := strings.IndexByte(line, '"')
+	if start == -1 {
+		return "", false
+	}
+	end := strings.IndexByte(line[start+1:], '"')
+	if end == -1 {
+		return "", false
+	}
+	return line[start+1 : start+1+end], true
+}
+
+func headingLevel(line string) int {
+	level := 0
+	for _, c := range line {
+		if c != '#' {
+			break
+		}
+		level++
+	}
+	return level
+}
+
+func appendUniqueString(values []string, value string) []string {
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 // downgrade downgrades confidence by one level.

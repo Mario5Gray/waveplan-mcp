@@ -13,7 +13,7 @@ A deterministic tool that estimates the context footprint of an issue candidate 
 ContextCandidate + Budget → Estimator.Estimate() → ContextEstimate
 ```
 
-The core package is source-agnostic. Adapters convert Waveplan units or FP issues into `ContextCandidate`. The CLI provides a scriptable entrypoint. An MCP tool can be added later once the contract proves useful.
+The core package is source-agnostic. Adapters convert Waveplan units or FP issues into `ContextCandidate`. The CLI provides a scriptable entrypoint. An MCP tool (`waveplan_context_estimate`) is implemented and documented in `2026-05-13-contextsizer-mcp-integration.md`.
 
 ---
 
@@ -192,17 +192,22 @@ cmd/contextsize/main.go
 ```
 
 ```bash
-go run ./cmd/contextsize estimate \
+go run ./cmd/contextsize \
   --candidate issue.json \
   --budget 64000:192000 \
   --base-dir /path/to/repo
 ```
 
 Arguments:
-- `estimate` (subcommand, required)
 - `--candidate` (required): path to ContextCandidate JSON file
 - `--budget` (optional): `min:max` in tokens. Default `64000:192000`
 - `--base-dir` (optional): root for resolving referenced file paths. Defaults to cwd
+
+The binary accepts an optional leading `estimate` alias for compatibility:
+
+```bash
+go run ./cmd/contextsize estimate --candidate issue.json
+```
 
 Exit codes: 0 = success, 2 = invalid input, 3 = IO error.
 
@@ -282,18 +287,97 @@ Candidate exceeding budget with issues:
 
 ---
 
+## Native Waveplan Input
+
+The current `ContextCandidate` JSON path is the low-level estimator interface.
+It is appropriate for tests and hand-authored advanced usage, but it is not the
+intended normal workflow for Waveplan users.
+
+Normal Waveplan usage should be:
+
+```bash
+python waveplan-cli context estimate \
+  --plan docs/plans/<plan>-execution-waves.json \
+  --task T1
+```
+
+or:
+
+```bash
+python waveplan-cli context estimate \
+  --plan docs/plans/<plan>-execution-waves.json \
+  --unit T1.1
+```
+
+The wrapper should:
+
+1. Load the execution-waves JSON
+2. Resolve the selected task or unit
+3. Convert that source object into `ContextCandidate`
+4. Invoke `contextsize`
+5. Print the `ContextEstimate`
+
+`ContextCandidate` therefore remains the adapter boundary, not the primary UX.
+
+### Waveplan Adapter Contract
+
+The first native adapter targets execution-waves JSON and supports both
+task-level and unit-level estimation.
+
+Suggested surface:
+
+```go
+func FromWaveplanTask(planPath string, taskID string) (contextsize.ContextCandidate, error)
+func FromWaveplanUnit(planPath string, unitID string) (contextsize.ContextCandidate, error)
+```
+
+V1 mapping rules:
+
+- **Task candidate**
+  - `id` = task ID
+  - `title` = task title
+  - `description` = `""`
+  - `referenced_files` = union of task `files` and task `doc_refs` resolved through `doc_index`
+  - `depends_on` = collapsed external task dependencies derived from unit-level dependencies
+  - `source` = `"waveplan"`
+- **Unit candidate**
+  - `id` = unit ID
+  - `title` = unit title
+  - `description` = `""`
+  - `referenced_files` = unit `doc_refs` resolved through `doc_index`
+  - `depends_on` = unit `depends_on`
+  - `source` = `"waveplan"`
+
+Additional rules:
+
+- Deduplicate and sort `referenced_files`
+- Reject missing `task_id` / `unit_id` deterministically
+- Reject invalid selector combinations (`--candidate` with `--plan`, `--task` with `--unit`, missing selector for `--plan`)
+- Keep the raw `--candidate` path for advanced/manual use
+
+### Adapter Scope
+
+Keep the estimator package source-agnostic. The Waveplan-specific decode and
+mapping logic belongs in a separate adapter layer, not in `internal/contextsize`
+itself.
+
 ## Future Extensions (deferred)
 
-- **Waveplan adapter**: `FromWaveplanUnit(plan, unitID) ContextCandidate` — requires moving `PlanUnit` to `internal/waveplan/model.go`
 - **FP issue adapter**: `FromFPIssue(issue) ContextCandidate`
 - **Tree-sitter/LSP enrichment**: symbol maps, precise dependency graph
-- **MCP tool**: `waveplan_contextize` on the waveplan-mcp server
 - **Dagdir integration**: candidates from `dagdir2waveplan` output
 
 These extend the adapters layer without changing the core `Estimate()` contract.
 
 ---
 
+## MCP Tool (implemented)
+
+The MCP tool `waveplan_context_estimate` is implemented. See `docs/superpowers/specs/2026-05-13-contextsizer-mcp-integration.md` for the full spec.
+
+---
+
 ## Changelog
 
-- **2026-05-13** Initial draft.
+- **2026-05-13** Initial draft. MCP tool implemented (FP-vedqsmra, see `2026-05-13-contextsizer-mcp-integration.md`).
+- **2026-05-13** Added native Waveplan adapter contract and `waveplan-cli context estimate --plan/--task|--unit` follow-up scope.

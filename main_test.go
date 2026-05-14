@@ -1463,3 +1463,111 @@ func TestGetUsesPlanNotPlanRef(t *testing.T) {
 		t.Error("get should not return plan_ref")
 	}
 }
+
+func TestHandleContextEstimate(t *testing.T) {
+	dir := t.TempDir()
+	testFile := filepath.Join(dir, "test.go")
+	if err := os.WriteFile(testFile, []byte("package main\nfunc Hello() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	candidate := `{
+		"id": "T1.1",
+		"title": "Test task",
+		"description": "Add a new feature",
+		"referenced_files": ["` + testFile + `"],
+		"referenced_sections": [],
+		"depends_on": [],
+		"source": "test"
+	}`
+
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"candidate": candidate,
+			"budget":    "64000:192000",
+			"base_dir":  dir,
+		}},
+	}
+
+	res, err := srv.handleContextEstimate(nil, req)
+	if err != nil {
+		t.Fatalf("handleContextEstimate returned error: %v", err)
+	}
+
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+
+	if _, ok := got["estimated_tokens"]; !ok {
+		t.Error("result missing estimated_tokens")
+	}
+	if _, ok := got["fit"]; !ok {
+		t.Error("result missing fit")
+	}
+	if _, ok := got["confidence"]; !ok {
+		t.Error("result missing confidence")
+	}
+	if _, ok := got["recommendation"]; !ok {
+		t.Error("result missing recommendation")
+	}
+	if _, ok := got["budget_min"]; !ok {
+		t.Error("result missing budget_min")
+	}
+	if _, ok := got["budget_max"]; !ok {
+		t.Error("result missing budget_max")
+	}
+}
+
+func TestHandleContextEstimate_MissingCandidate(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"budget": "64000:192000",
+		}},
+	}
+
+	res, err := srv.handleContextEstimate(nil, req)
+	if err != nil {
+		t.Fatalf("handleContextEstimate returned error: %v", err)
+	}
+
+	if !res.IsError {
+		t.Fatal("expected error for missing candidate parameter")
+	}
+}
+
+func TestHandleContextEstimate_InvalidCandidate(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"candidate": "not valid json",
+		}},
+	}
+
+	res, err := srv.handleContextEstimate(nil, req)
+	if err != nil {
+		t.Fatalf("handleContextEstimate returned error: %v", err)
+	}
+
+	if !res.IsError {
+		t.Fatal("expected error for invalid candidate JSON")
+	}
+}
+
+func TestHandleContextEstimate_InvalidBudget(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"candidate": `{"id":"T1.1","title":"Test"}`,
+			"budget":    "invalid",
+		}},
+	}
+
+	res, err := srv.handleContextEstimate(nil, req)
+	if err != nil {
+		t.Fatalf("handleContextEstimate returned error: %v", err)
+	}
+
+	if !res.IsError {
+		t.Fatal("expected error for invalid budget")
+	}
+}

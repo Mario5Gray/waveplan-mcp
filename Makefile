@@ -1,5 +1,5 @@
 .PHONY: build install install-bin install-helpers uninstall-helpers test clean build-mcp install-mcp install-config install-specs \
-        ps-build ps-install ps-once ps-watch
+        ps-build ps-install ps-once ps-watch contextsize txtstore
 
 BINARY_NAME := waveplan-mcp
 MCP_BINARY  := txtstore-mcp
@@ -17,14 +17,17 @@ PS_DIR      := waveplan-ps
 PS_BIN      := $(PS_DIR)/waveplan-ps
 PS_INTERVAL ?= 1s
 
-build:
+build: build-contextsize
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY_NAME)
+
+build-contextsize:
+	go build -o contextsize ./cmd/contextsize
 
 build-mcp:
 	go build -o $(MCP_BINARY) ./cmd/txtstore-mcp/
 	go build -o txtstore ./cmd/txtstore/
 
-install: install-bin install-helpers install-swim-bins install-specs install-config ps-install
+install: install-bin install-helpers install-swim-bins install-specs install-config ps-install install-contextsize install-txtstore
 
 install-bin: build
 	@mkdir -p $(INSTALL_DIR)
@@ -37,11 +40,10 @@ install-bin: build
 		echo "Skipping $(SHARE_DIR)/plans - already exists"; \
 	fi
 
-install-mcp: build-mcp install-config
+install-mcp: build-mcp install-config install-txtstore
 	@mkdir -p $(INSTALL_DIR)
 	install -m 755 $(MCP_BINARY) $(INSTALL_DIR)/$(MCP_BINARY)
-	install -m 755 txtstore $(INSTALL_DIR)/txtstore
-	@echo "Installed $(MCP_BINARY) and txtstore to $(INSTALL_DIR)/"
+	@echo "Installed $(MCP_BINARY) to $(INSTALL_DIR)/"
 
 install-swim-bins:
 	@mkdir -p $(INSTALL_DIR)
@@ -84,6 +86,16 @@ ps-install: ps-build
 	install -m 755 $(PS_BIN) $(INSTALL_DIR)/waveplan-ps
 	@echo "Installed waveplan-ps to $(INSTALL_DIR)/waveplan-ps"
 
+install-contextsize: contextsize
+	@mkdir -p $(INSTALL_DIR)
+	install -m 755 contextsize $(INSTALL_DIR)/contextsize
+	@echo "Installed contextsize to $(INSTALL_DIR)/contextsize"
+
+install-txtstore: txtstore
+	@mkdir -p $(INSTALL_DIR)
+	install -m 755 txtstore $(INSTALL_DIR)/txtstore
+	@echo "Installed txtstore to $(INSTALL_DIR)/txtstore"
+
 ps-build:
 	cd $(PS_DIR) && go build -o waveplan-ps ./cmd/waveplan-ps
 
@@ -108,8 +120,10 @@ test:
 clean:
 	rm -f $(BINARY_NAME) $(MCP_BINARY) txtstore contextsize
 
-contextsize:
-	go build -o $@ ./cmd/contextsize
+contextsize: build-contextsize
 
 contextsize-help:
 	./contextsize
+
+txtstore:
+	go build -o txtstore ./cmd/txtstore/

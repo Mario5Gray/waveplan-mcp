@@ -3,6 +3,7 @@ package contextsize
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -40,8 +41,8 @@ func TestEstimate_SmallGoFile(t *testing.T) {
 	os.WriteFile(goFile, []byte("package test\n"), 0644) // 14 bytes
 
 	c := ContextCandidate{
-		ID:            "T1.1",
-		Title:         "Small Go file",
+		ID:              "T1.1",
+		Title:           "Small Go file",
 		ReferencedFiles: []string{"test.go"},
 	}
 	budget := Budget{MinTokens: 64000, MaxTokens: 192000}
@@ -74,8 +75,8 @@ func TestEstimate_LargeGoFile(t *testing.T) {
 	os.WriteFile(goFile, data, 0644)
 
 	c := ContextCandidate{
-		ID:            "T1.1",
-		Title:         "Large Go file",
+		ID:              "T1.1",
+		Title:           "Large Go file",
 		ReferencedFiles: []string{"large.go"},
 	}
 	budget := Budget{MinTokens: 64000, MaxTokens: 192000}
@@ -106,8 +107,8 @@ func TestEstimate_ExceedsBudget(t *testing.T) {
 	}
 
 	c := ContextCandidate{
-		ID:            "T1.1",
-		Title:         "Exceeds budget",
+		ID:              "T1.1",
+		Title:           "Exceeds budget",
 		ReferencedFiles: []string{"a.go", "b.go"},
 	}
 	budget := Budget{MinTokens: 64000, MaxTokens: 192000}
@@ -133,8 +134,8 @@ func TestEstimate_MissingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	c := ContextCandidate{
-		ID:            "T1.1",
-		Title:         "Missing file",
+		ID:              "T1.1",
+		Title:           "Missing file",
 		ReferencedFiles: []string{"nonexistent.go"},
 	}
 	budget := Budget{MinTokens: 64000, MaxTokens: 192000}
@@ -168,8 +169,8 @@ func TestEstimate_MixedExtensions(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "weird.xyz"), unkData, 0644)
 
 	c := ContextCandidate{
-		ID:            "T1.1",
-		Title:         "Mixed extensions",
+		ID:              "T1.1",
+		Title:           "Mixed extensions",
 		ReferencedFiles: []string{"code.go", "doc.md", "weird.xyz"},
 	}
 	budget := Budget{MinTokens: 64000, MaxTokens: 192000}
@@ -224,6 +225,56 @@ func TestEstimate_HeadingNotFound(t *testing.T) {
 	}
 }
 
+func TestEstimate_MissingSectionFileLowersConfidence(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	c := ContextCandidate{
+		ID:                 "T1.1",
+		Title:              "Missing section file",
+		ReferencedSections: []SectionRef{{Path: "missing.md", Heading: "Architecture"}},
+	}
+	budget := Budget{MinTokens: 64000, MaxTokens: 192000}
+	e := &Estimator{BaseDir: tmpDir}
+
+	est, err := e.Estimate(c, budget)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if est.Confidence != "low" {
+		t.Errorf("expected confidence 'low', got %q", est.Confidence)
+	}
+	if len(est.MissingFiles) != 1 || est.MissingFiles[0] != "missing.md" {
+		t.Errorf("expected missing_files ['missing.md'], got %v", est.MissingFiles)
+	}
+	if len(est.MissingSections) != 0 {
+		t.Errorf("expected no missing_sections entry for a missing file, got %v", est.MissingSections)
+	}
+}
+
+func TestEstimate_SectionTokensIncludeHeading(t *testing.T) {
+	tmpDir := t.TempDir()
+	mdData := []byte("## Architecture\n")
+	if err := os.WriteFile(filepath.Join(tmpDir, "doc.md"), mdData, 0644); err != nil {
+		t.Fatalf("write doc: %v", err)
+	}
+
+	c := ContextCandidate{
+		ID:                 "T1.1",
+		Title:              "Heading only section",
+		ReferencedSections: []SectionRef{{Path: "doc.md", Heading: "Architecture"}},
+	}
+	budget := Budget{MinTokens: 64000, MaxTokens: 192000}
+	e := &Estimator{BaseDir: tmpDir}
+
+	est, err := e.Estimate(c, budget)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if est.EstimatedTokens != len(mdData)/4 {
+		t.Errorf("expected %d tokens, got %d", len(mdData)/4, est.EstimatedTokens)
+	}
+}
+
 func TestEstimate_UnderBudgetThreshold(t *testing.T) {
 	tmpDir := t.TempDir()
 	// 5k bytes of Go code = ~1666 tokens
@@ -231,8 +282,8 @@ func TestEstimate_UnderBudgetThreshold(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "small.go"), data, 0644)
 
 	c := ContextCandidate{
-		ID:            "T1.1",
-		Title:         "Under threshold",
+		ID:              "T1.1",
+		Title:           "Under threshold",
 		ReferencedFiles: []string{"small.go"},
 	}
 	budget := Budget{MinTokens: 64000, MaxTokens: 192000}
@@ -252,13 +303,13 @@ func TestEstimate_UnderBudgetThreshold(t *testing.T) {
 
 func TestEstimate_WithinBudget(t *testing.T) {
 	tmpDir := t.TempDir()
-	// 100k bytes of Go code = ~33333 tokens
-	data := make([]byte, 100000)
+	// 300k bytes of Go code = 100000 tokens
+	data := make([]byte, 300000)
 	os.WriteFile(filepath.Join(tmpDir, "medium.go"), data, 0644)
 
 	c := ContextCandidate{
-		ID:            "T1.1",
-		Title:         "Within budget",
+		ID:              "T1.1",
+		Title:           "Within budget",
 		ReferencedFiles: []string{"medium.go"},
 	}
 	budget := Budget{MinTokens: 64000, MaxTokens: 192000}
@@ -268,11 +319,11 @@ func TestEstimate_WithinBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if est.EstimatedTokens != 33333 {
-		t.Errorf("expected 33333 tokens, got %d", est.EstimatedTokens)
+	if est.EstimatedTokens != 100000 {
+		t.Errorf("expected 100000 tokens, got %d", est.EstimatedTokens)
 	}
-	if est.Fit != "under" {
-		t.Errorf("expected fit 'under', got '%s'", est.Fit)
+	if est.Fit != "within" {
+		t.Errorf("expected fit 'within', got '%s'", est.Fit)
 	}
 	if est.Recommendation != "keep" {
 		t.Errorf("expected 'keep', got '%s'", est.Recommendation)
@@ -297,5 +348,53 @@ func TestEstimate_DescriptionTokens(t *testing.T) {
 	// 40 runes / 4 = 10 tokens
 	if est.EstimatedTokens != 10 {
 		t.Errorf("expected 10 tokens, got %d", est.EstimatedTokens)
+	}
+}
+
+func TestEstimate_CountsUniqueLocalImportsOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	goMod := []byte("module example.com/contextsize-test\n\ngo 1.26\n")
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), goMod, 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	goFile := []byte(`package test
+
+import (
+	"fmt"
+	alias "example.com/contextsize-test/internal/foo"
+	"example.com/contextsize-test/internal/bar"
+	"example.com/contextsize-test/internal/foo"
+)
+
+func _() {
+	fmt.Println(alias.Name)
+}
+`)
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.go"), goFile, 0644); err != nil {
+		t.Fatalf("write test.go: %v", err)
+	}
+
+	c := ContextCandidate{
+		ID:              "T1.1",
+		Title:           "Local imports only",
+		ReferencedFiles: []string{"test.go"},
+	}
+	budget := Budget{MinTokens: 64000, MaxTokens: 192000}
+	e := &Estimator{BaseDir: tmpDir}
+
+	est, err := e.Estimate(c, budget)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	found := false
+	for _, driver := range est.Drivers {
+		if strings.Contains(driver, "2 imported local packages") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected driver reporting 2 imported local packages, got %v", est.Drivers)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
 // Status is the canonical runtime-state value for a task.
@@ -177,4 +178,117 @@ func canonicalize(r rawState) []byte {
 		return nil
 	}
 	return body
+}
+
+// AdvanceStateSnapshot applies a canonical task-status transition to the SWIM
+// state file, creating the file when absent. The state file is SWIM-owned
+// execution state and is updated after successful step application so future
+// resolver decisions do not depend on external tools mutating it.
+func AdvanceStateSnapshot(path, planRef, taskID string, status Status, now time.Time) error {
+	s, err := ReadStateSnapshotOrEmpty(path)
+	if err != nil {
+		return err
+	}
+	raw := s.raw
+	if raw.Plan == "" {
+		raw.Plan = planRef
+	}
+	if raw.Taken == nil {
+		raw.Taken = map[string]takenEntry{}
+	}
+	if raw.Completed == nil {
+		raw.Completed = map[string]completedEntry{}
+	}
+
+	applyStateTransition(&raw, taskID, status, now.UTC().Format(time.RFC3339))
+
+	body, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal state file %q: %w", path, err)
+	}
+	body = append(body, '\n')
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		return fmt.Errorf("write state file %q: %w", path, err)
+	}
+	return nil
+}
+
+func applyStateTransition(raw *rawState, taskID string, status Status, ts string) {
+	if raw == nil {
+		return
+	}
+	if raw.Taken == nil {
+		raw.Taken = map[string]takenEntry{}
+	}
+	if raw.Completed == nil {
+		raw.Completed = map[string]completedEntry{}
+	}
+
+	taken := raw.Taken[taskID]
+	if completed, ok := raw.Completed[taskID]; ok {
+		if taken.TakenBy == "" {
+			taken.TakenBy = completed.TakenBy
+		}
+		if taken.StartedAt == "" {
+			taken.StartedAt = completed.StartedAt
+		}
+		if taken.Reviewer == "" {
+			taken.Reviewer = completed.Reviewer
+		}
+		if taken.ReviewEnteredAt == "" {
+			taken.ReviewEnteredAt = completed.ReviewEnteredAt
+		}
+		if taken.ReviewEndedAt == "" {
+			taken.ReviewEndedAt = completed.ReviewEndedAt
+		}
+	}
+	if taken.TakenBy == "" {
+		taken.TakenBy = "swim"
+	}
+	if taken.StartedAt == "" {
+		taken.StartedAt = ts
+	}
+
+	switch status {
+	case StatusAvailable:
+		delete(raw.Taken, taskID)
+		delete(raw.Completed, taskID)
+	case StatusTaken:
+		taken.ReviewEnteredAt = ""
+		taken.ReviewEndedAt = ""
+		taken.Reviewer = ""
+		raw.Taken[taskID] = taken
+		delete(raw.Completed, taskID)
+	case StatusReviewTaken:
+		if taken.ReviewEnteredAt == "" {
+			taken.ReviewEnteredAt = ts
+		}
+		taken.ReviewEndedAt = ""
+		if taken.Reviewer == "" {
+			taken.Reviewer = "swim"
+		}
+		raw.Taken[taskID] = taken
+		delete(raw.Completed, taskID)
+	case StatusReviewEnded:
+		if taken.ReviewEnteredAt == "" {
+			taken.ReviewEnteredAt = ts
+		}
+		if taken.Reviewer == "" {
+			taken.Reviewer = "swim"
+		}
+		taken.ReviewEndedAt = ts
+		raw.Taken[taskID] = taken
+		delete(raw.Completed, taskID)
+	case StatusCompleted:
+		completed := completedEntry{
+			TakenBy:         taken.TakenBy,
+			StartedAt:       taken.StartedAt,
+			ReviewEnteredAt: taken.ReviewEnteredAt,
+			ReviewEndedAt:   taken.ReviewEndedAt,
+			Reviewer:        taken.Reviewer,
+			FinishedAt:      ts,
+		}
+		raw.Completed[taskID] = completed
+		delete(raw.Taken, taskID)
+	}
 }

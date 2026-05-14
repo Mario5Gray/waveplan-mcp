@@ -74,6 +74,12 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 
 	decision := ResolveNext(schedule, journal, snapA)
 	recoverDispatch := false
+	if decision.Action == ActionReady && isDispatchAction(decision.Row.Action) && anyDispatchReceiptExists(opts.SchedulePath, decision.Row.StepID) {
+		if err := AdvanceStateSnapshot(opts.StatePath, opts.SchedulePath, decision.Row.TaskID, Predict(decision.Row), time.Now().UTC()); err != nil {
+			return nil, err
+		}
+		return appendAdoptedAppliedResult(opts, journal, decision.Row, Predict(decision.Row), "receipt_adopt")
+	}
 	switch decision.Action {
 	case ActionDone:
 		if err := saveJournal(opts.JournalPath, journal); err != nil {
@@ -104,7 +110,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 					recoverDispatch = true
 					break
 				}
-				return appendAdoptedAppliedResult(opts, journal, decision.Row, actual)
+				return appendAdoptedAppliedResult(opts, journal, decision.Row, actual, "idempotent_adopt")
 			}
 		}
 		return appendBlockedResult(opts, journal, decision.Row, decision.Reason, snapA.StatusOf(decision.Row.TaskID))
@@ -209,6 +215,9 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 			stateAfter = Status(decision.Row.Requires.TaskStatus)
 		}
 	} else {
+		if err := AdvanceStateSnapshot(opts.StatePath, opts.SchedulePath, decision.Row.TaskID, Predict(decision.Row), time.Now().UTC()); err != nil {
+			return nil, err
+		}
 		snapC, err := readSnapshot(opts.StatePath)
 		if err != nil {
 			return nil, err
@@ -323,7 +332,10 @@ func appendBlockedResult(opts SafeExecOptions, journal *Journal, row ScheduleRow
 	}, nil
 }
 
-func appendAdoptedAppliedResult(opts SafeExecOptions, journal *Journal, row ScheduleRow, actual Status) (*ExecNextResult, error) {
+func appendAdoptedAppliedResult(opts SafeExecOptions, journal *Journal, row ScheduleRow, actual Status, adoptionKind string) (*ExecNextResult, error) {
+	if adoptionKind == "" {
+		adoptionKind = "idempotent_adopt"
+	}
 	event := JournalEvent{
 		EventID:     nextEventID(journal),
 		StepID:      row.StepID,
@@ -337,7 +349,8 @@ func appendAdoptedAppliedResult(opts SafeExecOptions, journal *Journal, row Sche
 		StateBefore: StatusWrapper{TaskStatus: row.Requires.TaskStatus},
 		StateAfter:  StatusWrapper{TaskStatus: string(actual)},
 		Reason: fmt.Sprintf(
-			"idempotent_adopt: action=%s actual=%s matches_produces=%s",
+			"%s: action=%s actual=%s matches_produces=%s",
+			adoptionKind,
 			row.Action,
 			actual,
 			Predict(row),
