@@ -10,6 +10,7 @@ import (
 
 func main() {
 	schedulePath := flag.String("schedule", "", "path to schedule JSON")
+	reviewSchedulePath := flag.String("review-schedule", "", "path to review schedule sidecar JSON")
 	journalPath := flag.String("journal", "", "path to journal JSON")
 	statePath := flag.String("state", "", "path to state JSON")
 	artifactRoot := flag.String("artifact-root", "", "root directory for SWIM runtime artifacts (logs, receipts, lock). Default: <dirname(schedule)>/.waveplan/swim/<schedule-name>. Env: WAVEPLAN_SWIM_ARTIFACT_ROOT")
@@ -45,9 +46,10 @@ func main() {
 	}
 
 	decision, err := swim.ResolveNextFromPaths(swim.NextOptions{
-		SchedulePath: *schedulePath,
-		JournalPath:  *journalPath,
-		StatePath:    *statePath,
+		SchedulePath:       *schedulePath,
+		ReviewSchedulePath: *reviewSchedulePath,
+		JournalPath:        *journalPath,
+		StatePath:          *statePath,
 	})
 	if err != nil {
 		writeError(3, err.Error())
@@ -64,10 +66,11 @@ func main() {
 	}
 
 	report, err := swim.Apply(swim.ApplyOptions{
-		SchedulePath: *schedulePath,
-		JournalPath:  *journalPath,
-		StatePath:    *statePath,
-		ArtifactRoot: *artifactRoot,
+		SchedulePath:       *schedulePath,
+		ReviewSchedulePath: *reviewSchedulePath,
+		JournalPath:        *journalPath,
+		StatePath:          *statePath,
+		ArtifactRoot:       *artifactRoot,
 	})
 	if err != nil {
 		writeError(3, err.Error())

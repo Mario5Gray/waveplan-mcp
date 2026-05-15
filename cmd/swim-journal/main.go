@@ -10,6 +10,7 @@ import (
 
 func main() {
 	schedulePath := flag.String("schedule", "", "path to schedule JSON")
+	reviewSchedulePath := flag.String("review-schedule", "", "path to review schedule sidecar JSON")
 	journalPath := flag.String("journal", "", "path to journal JSON")
 	tail := flag.Int("tail", 0, "tail N events")
 	flag.Parse()
@@ -17,7 +18,7 @@ func main() {
 	if *journalPath == "" {
 		writeError(2, "missing required --journal")
 	}
-	view, err := swim.ReadJournalView(*journalPath, *schedulePath, *tail)
+	view, err := swim.ReadJournalView(*journalPath, *schedulePath, *reviewSchedulePath, *tail)
 	if err != nil {
 		writeError(3, err.Error())
 	}

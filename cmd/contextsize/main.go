@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/internal/contextsize"
+	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/internal/contextsize/adapter"
 )
 
 const usage = `contextsize — estimate context footprint of an issue candidate
@@ -17,9 +18,14 @@ and split/merge recommendations.
 
 USAGE
   contextsize [estimate] --candidate <file.json> [options]
+  contextsize [estimate] --plan <plan.json> --task <taskID> [options]
+  contextsize [estimate] --plan <plan.json> --unit <unitID> [options]
 
 ARGUMENTS
-  --candidate       Path to ContextCandidate JSON file (required)
+  --candidate       Path to ContextCandidate JSON file (mutually exclusive with --plan/--task/--unit)
+  --plan            Path to *-execution-waves.json plan (mutually exclusive with --candidate)
+  --task            Task ID to estimate (requires --plan, mutually exclusive with --unit)
+  --unit            Unit ID to estimate (requires --plan, mutually exclusive with --task)
   --budget          Budget range in tokens, min:max (default: 64000:192000)
   --base-dir        Root directory for resolving referenced file paths
 
@@ -33,10 +39,16 @@ EXAMPLES
 	# With base directory for relative file paths
 	contextsize --candidate issue.json --base-dir /path/to/repo
 
+	# Estimate from a waveplan task
+	contextsize --plan docs/plans/my-plan.json --task T1.1 --base-dir /path/to/repo
+
+	# Estimate from a waveplan unit
+	contextsize --plan docs/plans/my-plan.json --unit T1.1 --base-dir /path/to/repo
+
   # Via waveplan-cli
   python waveplan-cli context estimate --candidate issue.json --base-dir /path/to/repo
 
-CANDIDATE FORMAT
+CANDIDATE FORMAT (hand-authored)
   The candidate file must be valid JSON matching the ContextCandidate schema:
   {
     "id": "T1.1",
@@ -56,6 +68,9 @@ OUTPUT
 
 func main() {
 	candidatePath := flag.String("candidate", "", "Path to ContextCandidate JSON file")
+	planPath := flag.String("plan", "", "Path to *-execution-waves.json plan")
+	taskID := flag.String("task", "", "Task ID to estimate (requires --plan, mutually exclusive with --unit)")
+	unitID := flag.String("unit", "", "Unit ID to estimate (requires --plan, mutually exclusive with --task)")
 	budgetFlag := flag.String("budget", "64000:192000", "Budget range in tokens (min:max)")
 	baseDir := flag.String("base-dir", "", "Root for resolving referenced file paths")
 	helpFlag := flag.Bool("help", false, "Show this help message")
@@ -72,8 +87,23 @@ func main() {
 		os.Exit(0)
 	}
 
-	if *candidatePath == "" {
-		fmt.Fprintln(os.Stderr, "Error: --candidate is required")
+	if *candidatePath != "" && (*planPath != "" || *taskID != "" || *unitID != "") {
+		fmt.Fprintln(os.Stderr, "Error: --candidate is mutually exclusive with --plan/--task/--unit")
+		os.Exit(2)
+	}
+
+	if *planPath != "" && *taskID == "" && *unitID == "" {
+		fmt.Fprintln(os.Stderr, "Error: --task or --unit is required with --plan")
+		os.Exit(2)
+	}
+
+	if *taskID != "" && *unitID != "" {
+		fmt.Fprintln(os.Stderr, "Error: --task and --unit are mutually exclusive")
+		os.Exit(2)
+	}
+
+	if *candidatePath == "" && *planPath == "" {
+		fmt.Fprintln(os.Stderr, "Error: --candidate or --plan is required")
 		fmt.Fprintln(os.Stderr, "Run 'contextsize' with no arguments for usage info.")
 		os.Exit(2)
 	}
@@ -100,17 +130,37 @@ func main() {
 		MaxTokens: maxTokens,
 	}
 
-	// Read candidate JSON.
-	candidateData, err := os.ReadFile(*candidatePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading candidate file: %v\n", err)
-		os.Exit(3)
-	}
+	var candidate contextsize.ContextCandidate
 
-	candidate, err := contextsize.DecodeCandidateJSON(candidateData)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error decoding candidate: %v\n", err)
-		os.Exit(2)
+	if *candidatePath != "" {
+		// Read candidate JSON.
+		candidateData, err := os.ReadFile(*candidatePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading candidate file: %v\n", err)
+			os.Exit(3)
+		}
+
+		candidate, err = contextsize.DecodeCandidateJSON(candidateData)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error decoding candidate: %v\n", err)
+			os.Exit(2)
+		}
+	} else if *taskID != "" {
+		// Derive candidate from waveplan task.
+		c, err := adapter.FromWaveplanTask(*planPath, *taskID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(2)
+		}
+		candidate = c
+	} else {
+		// Derive candidate from waveplan unit.
+		c, err := adapter.FromWaveplanUnit(*planPath, *unitID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(2)
+		}
+		candidate = c
 	}
 
 	// Run estimation.

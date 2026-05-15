@@ -155,16 +155,16 @@
           "--mode",
           "review",
           "--target",
-          "codex",
+          "claude",
           "--plan",
           "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
           "--agent",
           "phi",
           "--reviewer",
-          "sigma"
+          "theta"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer theta",
       "status": "taken"
     },
     {
@@ -375,16 +375,16 @@
           "--mode",
           "review",
           "--target",
-          "codex",
+          "claude",
           "--plan",
           "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
           "--agent",
           "phi",
           "--reviewer",
-          "sigma"
+          "theta"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer theta",
       "status": "taken"
     },
     {
@@ -595,16 +595,16 @@
           "--mode",
           "review",
           "--target",
-          "codex",
+          "claude",
           "--plan",
           "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
           "--agent",
           "phi",
           "--reviewer",
-          "sigma"
+          "theta"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer theta",
       "status": "taken"
     },
     {
@@ -815,16 +815,16 @@
           "--mode",
           "review",
           "--target",
-          "codex",
+          "claude",
           "--plan",
           "/Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json",
           "--agent",
           "phi",
           "--reviewer",
-          "sigma"
+          "theta"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target codex --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan /Users/darkbit1001/workspace/waveplan-mcp/docs/plans/context-sizer-adapter/2026-05-13-context-sizer-waveplan-adapter-execution-waves.json --agent phi --reviewer theta",
       "status": "taken"
     },
     {

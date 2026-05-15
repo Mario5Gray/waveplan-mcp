@@ -29,3 +29,11 @@ opencode.json
 *agents.json
 local_tools/
 session*.md
+env.lsp
+env.custom
+.mcp.json
+contextsize
+*-lsp.sh
+logs
+Makefile.lsp
+check-types.sh

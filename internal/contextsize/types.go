@@ -11,6 +11,7 @@ type ContextCandidate struct {
 	ID                 string        `json:"id"`
 	Title              string        `json:"title"`
 	Description        string        `json:"description"`
+	Kind               string        `json:"kind,omitempty"`
 	ReferencedFiles    []string      `json:"referenced_files"`
 	ReferencedSections []SectionRef  `json:"referenced_sections"`
 	DependsOn          []string      `json:"depends_on"`

@@ -173,13 +173,32 @@ func loadOrInitJournal(journalPath, schedulePath string) (*Journal, error) {
 	if err := json.Unmarshal(raw, &journal); err != nil {
 		return nil, fmt.Errorf("decode journal: %w", err)
 	}
-	if schedulePath != "" && journal.SchedulePath != "" && journal.SchedulePath != schedulePath {
+	if schedulePath != "" && journal.SchedulePath != "" && !samePath(journal.SchedulePath, schedulePath) {
 		return nil, fmt.Errorf("journal schedule_path mismatch: journal=%q schedule=%q", journal.SchedulePath, schedulePath)
 	}
 	if schedulePath != "" && journal.SchedulePath == "" {
 		journal.SchedulePath = schedulePath
 	}
 	return &journal, nil
+}
+
+func samePath(a, b string) bool {
+	return canonicalPath(a) == canonicalPath(b)
+}
+
+func canonicalPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return filepath.Clean(path)
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err == nil {
+		return resolved
+	}
+	return abs
 }
 
 func saveJournal(path string, journal *Journal) error {

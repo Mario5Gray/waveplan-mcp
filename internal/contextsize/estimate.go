@@ -120,6 +120,11 @@ func (e *Estimator) Estimate(c ContextCandidate, budget Budget) (ContextEstimate
 		}
 	}
 
+	// Artifacts contribute 0 tokens.
+	if c.Kind == "artifact" {
+		totalTokens = 0
+	}
+
 	// Estimate tokens from description.
 	if c.Description != "" {
 		hasSignal = true
@@ -173,6 +178,9 @@ func (e *Estimator) Estimate(c ContextCandidate, budget Budget) (ContextEstimate
 	if c.Description != "" {
 		est.Drivers = append(est.Drivers, fmt.Sprintf("description %d chars", len([]rune(c.Description))))
 	}
+	if c.Kind == "artifact" {
+		est.Drivers = append(est.Drivers, "kind=artifact: 0 tokens")
+	}
 	for _, missing := range est.MissingFiles {
 		est.Drivers = append(est.Drivers, fmt.Sprintf("file not found: %s", missing))
 	}
@@ -214,8 +222,8 @@ func estimateFileTokens(path string, bytes int64) int {
 	if proseExtensions[ext] {
 		return int(bytes) / 4
 	}
-	// Unknown extension: assume code-like density (conservative).
-	return int(bytes) / 3
+	// Unknown extension (binary): 0 tokens.
+	return 0
 }
 
 // estimateSectionTokens returns token estimate for a markdown section, or -1 if heading not found.

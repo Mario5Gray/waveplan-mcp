@@ -532,7 +532,7 @@ func TestHandleSwimJournalTail(t *testing.T) {
 	journalPath := filepath.Join(dir, "journal.json")
 	body := `{
   "schema_version": 1,
-  "schedule_path": "demo-schedule.json",
+  "schedule_path": "tests/swim/fixtures/expected-schedule.json",
   "cursor": 5,
   "events": [
     {"event_id":"E0001","step_id":"S1_T1.1_implement","seq":1,"task_id":"T1.1","action":"implement","attempt":1,"started_on":"2026-05-09T00:00:00Z","completed_on":"2026-05-09T00:00:01Z","outcome":"applied","state_before":{"task_status":"available"},"state_after":{"task_status":"taken"}},

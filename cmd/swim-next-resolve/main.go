@@ -10,6 +10,7 @@ import (
 
 func main() {
 	schedulePath := flag.String("schedule", "", "path to schedule JSON")
+	reviewSchedulePath := flag.String("review-schedule", "", "path to review schedule sidecar JSON")
 	journalPath := flag.String("journal", "", "path to journal JSON")
 	statePath := flag.String("state", "", "path to state JSON")
 	flag.Parse()
@@ -19,9 +20,10 @@ func main() {
 	}
 
 	decision, err := swim.ResolveNextFromPaths(swim.NextOptions{
-		SchedulePath: *schedulePath,
-		JournalPath:  *journalPath,
-		StatePath:    *statePath,
+		SchedulePath:       *schedulePath,
+		ReviewSchedulePath: *reviewSchedulePath,
+		JournalPath:        *journalPath,
+		StatePath:          *statePath,
 	})
 	if err != nil {
 		writeError(3, err.Error())

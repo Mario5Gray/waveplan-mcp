@@ -192,6 +192,9 @@ Canonical files:
 Notes:
 - Keep name prefix `waveplan` (not `waveplanner`).
 - Expand `~` before use.
+- Treat `*waveplan-manifest.yaml` as a legacy adapter artifact only. New plan
+  authoring must land in the SWIM payload/markdown chain and end at a
+  canonical `*-execution-waves.json`.
 
 ## 10) MCP Tool Surface (Authoring Additions)
 Base additions:

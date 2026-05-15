@@ -246,11 +246,20 @@ Compile a schedule from a plan. `--bootstrap-state` creates
 ```bash
 PLAN=docs/plans/2026-05-05-swim-execution-waves.json
 SCHEDULE=/tmp/swim-schedule.json
+REVIEW_SCHEDULE=/tmp/swim-review-schedule.json
 
 waveplan-cli swim compile-schedule \
   --plan "$PLAN" \
   --out "$SCHEDULE" \
   --bootstrap-state
+
+cat > "$REVIEW_SCHEDULE" <<JSON
+{
+  "schema_version": 1,
+  "base_schedule_path": "$SCHEDULE",
+  "insertions": []
+}
+JSON
 ```
 
 If you do not want to use the installed default agents file, pass one directly:
@@ -266,29 +275,44 @@ waveplan-cli swim compile-schedule \
 Inspect the next step without mutation:
 
 ```bash
-waveplan-cli swim next --schedule "$SCHEDULE"
+waveplan-cli swim next --schedule "$SCHEDULE" --review-schedule "$REVIEW_SCHEDULE"
 ```
 
 Apply one step:
 
 ```bash
-waveplan-cli swim step --apply --schedule "$SCHEDULE"
+waveplan-cli swim step --apply --schedule "$SCHEDULE" --review-schedule "$REVIEW_SCHEDULE"
 ```
 
 Apply until a boundary:
 
 ```bash
-waveplan-cli swim run --schedule "$SCHEDULE" --until review
-waveplan-cli swim run --schedule "$SCHEDULE" --until fix
-waveplan-cli swim run --schedule "$SCHEDULE" --until seq:4
-waveplan-cli swim run --schedule "$SCHEDULE" --until step:S1_T1.1_finish
+waveplan-cli swim run --schedule "$SCHEDULE" --review-schedule "$REVIEW_SCHEDULE" --until review
+waveplan-cli swim run --schedule "$SCHEDULE" --review-schedule "$REVIEW_SCHEDULE" --until fix
+waveplan-cli swim run --schedule "$SCHEDULE" --review-schedule "$REVIEW_SCHEDULE" --until seq:4
+waveplan-cli swim run --schedule "$SCHEDULE" --review-schedule "$REVIEW_SCHEDULE" --until step:S1_T1.1_finish
 ```
 
 Inspect recent journal events:
 
 ```bash
-waveplan-cli swim journal --schedule "$SCHEDULE" --tail 5
+waveplan-cli swim journal --schedule "$SCHEDULE" --review-schedule "$REVIEW_SCHEDULE" --tail 5
 ```
+
+Insert a deterministic review loop sidecar pair (`fix_rN` + `review_rN+1`):
+
+```bash
+waveplan-cli swim insert-fix-loop \
+  --schedule "$SCHEDULE" \
+  --review-schedule "$REVIEW_SCHEDULE" \
+  --task T1.1 \
+  --after-step S1_T1.1_review
+```
+
+Fixture-backed review-loop examples live under
+`tests/swim/fixtures/review-loop-*.json` and are verified by
+`tests/swim/test_t7_3_review_schedule_passthrough.sh` plus
+`tests/swim/test_t7_4_review_schedule_observer_fixture.sh`.
 
 Validate artifacts:
 
@@ -532,6 +556,23 @@ Plans are JSON files matching `*-execution-waves.json` with this structure:
   ]
 }
 ```
+
+### Canonical Authoring Chain
+
+The active authoring chain for new Waveplan work is:
+
+1. structured SWIM payload: `docs/superpowers/plans/<date>-<slug>-swim.json`
+2. canonical SWIM markdown: `docs/superpowers/plans/<date>-<slug>-swim.md`
+3. validated Waveplan manifest: `docs/plans/<date>-<slug>-execution-waves.json`
+
+Use `txtstore write-swim-plan` to render the canonical SWIM markdown from the
+structured payload, then use `waveplan-cli swim compile-plan-json` to validate
+and canonicalize the final `*-execution-waves.json`.
+
+`*waveplan-manifest.yaml` is deprecated. Do not create new YAML manifests.
+Legacy YAML adapter files are archived under
+`docs/legacy/waveplan-manifests/` and are retained only for historical
+reference.
 
 ## State File
 

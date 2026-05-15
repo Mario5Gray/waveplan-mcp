@@ -1142,7 +1142,7 @@ func (s *WaveplanServer) handleSwimJournal(ctx context.Context, request mcp.Call
 		return swimErrorResult(2, err.Error()), nil
 	}
 	journal := optionalOrDefault(request.Params.Arguments, "journal", schedule+".journal.json")
-	view, err := swim.ReadJournalView(journal, schedule, mcp.ParseInt(request, "tail", 0))
+	view, err := swim.ReadJournalView(journal, schedule, "", mcp.ParseInt(request, "tail", 0))
 	if err != nil {
 		return swimErrorResult(3, err.Error()), nil
 	}

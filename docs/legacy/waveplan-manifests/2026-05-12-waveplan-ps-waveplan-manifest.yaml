@@ -1,0 +1,183 @@
+# LEGACY FORMAT - DO NOT AUTHOR NEW FILES HERE.
+# Deprecated on 2026-05-15.
+# Canonical plan authoring now flows through:
+#   1. *-swim.json
+#   2. *-swim.md
+#   3. *-execution-waves.json
+#
+# This file is retained only as an archived adapter artifact.
+issue: waveplan-ps
+title: "waveplan-ps observer for waveplan execution"
+
+plan_doc:
+  path: ../workspace/waveplan-mcp/docs/superpowers/plans/2026-05-12-waveplan-ps.md
+  line: 1
+
+spec_doc:
+  path: ../workspace/waveplan-mcp/docs/specs/swim-markdown-plan-format-v1.md
+  line: 1
+
+units:
+  - source_id: model_types
+    fp_issue: FP-WPPS-T1
+    title: Add Go dependencies and domain model loaders
+    kind: impl
+    wave: 1
+    blocked_by_schema: false
+    depends_on: []
+    plan_line: 62
+    files:
+      - go.mod
+      - go.sum
+      - internal/model/plan.go
+      - internal/model/state.go
+      - internal/model/note.go
+      - internal/model/log.go
+    notes:
+      - root module only; do not create nested go.mod
+
+  - source_id: discovery
+    fp_issue: FP-WPPS-T2
+    title: Implement deterministic discovery helpers and log validation
+    kind: impl
+    wave: 2
+    blocked_by_schema: false
+    depends_on:
+      - model_types
+    plan_line: 63
+    files:
+      - internal/discovery/discover.go
+      - internal/discovery/discover_test.go
+    notes:
+      - discovery owns file scanning; model owns loading
+
+  - source_id: config
+    fp_issue: FP-WPPS-T3
+    title: Implement config loading with safe boolean pointer defaults
+    kind: impl
+    wave: 2
+    blocked_by_schema: false
+    depends_on:
+      - model_types
+    plan_line: 64
+    files:
+      - internal/config/config.go
+      - internal/config/config_test.go
+    notes:
+      - support explicit false for expand_first_wave
+
+  - source_id: watcher
+    fp_issue: FP-WPPS-T4
+    title: Implement watcher polling and exported PollOnce helper
+    kind: impl
+    wave: 3
+    blocked_by_schema: false
+    depends_on:
+      - model_types
+      - discovery
+    plan_line: 65
+    files:
+      - internal/watch/watcher.go
+      - internal/watch/watcher_test.go
+    notes:
+      - avoid duplicating single-shot load logic in CLI
+
+  - source_id: tui
+    fp_issue: FP-WPPS-T5
+    title: Implement tview rendering and exact step_id log correlation
+    kind: impl
+    wave: 3
+    blocked_by_schema: false
+    depends_on:
+      - model_types
+    plan_line: 66
+    files:
+      - internal/ui/tui.go
+      - internal/ui/tui_test.go
+    notes:
+      - match task IDs from step_id segments, not substrings
+
+  - source_id: cli
+    fp_issue: FP-WPPS-T6
+    title: Implement CLI flags, plan filtering, snapshot mode, and page-refreshing TUI
+    kind: impl
+    wave: 4
+    blocked_by_schema: false
+    depends_on:
+      - discovery
+      - config
+      - watcher
+      - tui
+    plan_line: 67
+    files:
+      - cmd/waveplan-ps/main.go
+      - cmd/waveplan-ps/main_test.go
+    notes:
+      - --plan must filter plan and state paths
+      - live TUI updates must replace the active page with QueueUpdateDraw
+
+  - source_id: integration
+    fp_issue: FP-WPPS-T7
+    title: Add integration test for --once snapshot output
+    kind: test
+    wave: 5
+    blocked_by_schema: false
+    depends_on:
+      - cli
+    plan_line: 68
+    files:
+      - tests/integration/waveplan_ps_test.go
+    notes: []
+
+  - source_id: docs
+    fp_issue: FP-WPPS-T8
+    title: Document usage, flags, and recursive log directory config
+    kind: doc
+    wave: 5
+    blocked_by_schema: false
+    depends_on:
+      - cli
+    plan_line: 69
+    files:
+      - README.md
+      - docs/waveplan-ps-config-example.yaml
+    notes:
+      - log_dirs are recursive directory roots, not glob patterns
+
+  - source_id: validate_plan
+    fp_issue: FP-WPPS-T9
+    title: Emit and validate execution-waves JSON from canonical source
+    kind: verify
+    wave: 6
+    blocked_by_schema: false
+    depends_on:
+      - integration
+      - docs
+    plan_line: 70
+    files:
+      - docs/plans/2026-05-12-waveplan-ps-execution-waves.json
+    notes:
+      - output must validate against waveplan-plan-schema.json
+
+  - source_id: compile_schedule
+    fp_issue: FP-WPPS-T10
+    title: Compile SWIM execution schedule from validated execution-waves JSON
+    kind: verify
+    wave: 7
+    blocked_by_schema: false
+    depends_on:
+      - validate_plan
+    plan_line: 71
+    files:
+      - docs/plans/2026-05-12-waveplan-ps-execution-schedule.json
+    notes:
+      - compile schedule after canonical plan JSON validation
+
+blockers: []
+
+risks:
+  - tview rendering behavior must be verified in a terminal-capable environment.
+  - The dagdir2waveplan transformer derives one task per manifest unit, so task numbering differs from the strict markdown source table grouping.
+
+open_decisions:
+  - Decide whether future dagdir2waveplan input should be strict markdown tables or this YAML manifest adapter.

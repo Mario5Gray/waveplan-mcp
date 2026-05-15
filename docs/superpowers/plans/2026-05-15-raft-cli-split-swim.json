@@ -1,0 +1,547 @@
+{
+  "title": "raft-cli-split",
+  "meta": {
+    "schema_version": 1,
+    "generated_on": "2026-05-15",
+    "plan_version": 1,
+    "plan_generation": "2026-05-15T00:00:00Z"
+  },
+  "plan": {
+    "plan_id": "raft-cli-split",
+    "plan_title": "Raft CLI Split",
+    "plan_doc_path": "docs/superpowers/plans/2026-05-15-raft-cli-split-swim.md",
+    "spec_doc_path": "docs/superpowers/specs/2026-05-15-raft-cli-split-design.md"
+  },
+  "doc_index": [
+    {
+      "ref": "plan",
+      "path": "docs/superpowers/plans/2026-05-15-raft-cli-split-swim.md",
+      "line": 1,
+      "kind": "plan"
+    },
+    {
+      "ref": "spec",
+      "path": "docs/superpowers/specs/2026-05-15-raft-cli-split-design.md",
+      "line": 1,
+      "kind": "spec"
+    },
+    {
+      "ref": "main_go",
+      "path": "main.go",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "main_test_go",
+      "path": "main_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "waveplan_cli",
+      "path": "waveplan-cli",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "raft_cli",
+      "path": "raft",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "swim_planjson_go",
+      "path": "internal/swim/planjson.go",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "swim_planjson_test_go",
+      "path": "internal/swim/planjson_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "swim_review_sidecar_insert_go",
+      "path": "internal/swim/review_sidecar_insert.go",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "swim_review_sidecar_insert_test_go",
+      "path": "internal/swim/review_sidecar_insert_test.go",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "makefile",
+      "path": "Makefile",
+      "line": 1,
+      "kind": "code"
+    },
+    {
+      "ref": "readme",
+      "path": "README.md",
+      "line": 1,
+      "kind": "doc"
+    },
+    {
+      "ref": "swim_cli_scaffold_test",
+      "path": "tests/swim/test_t4_1_cli_scaffold.sh",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "swim_cli_wired_test",
+      "path": "tests/swim/test_t4_2_cli_wired.sh",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "swim_docs_test",
+      "path": "tests/swim/test_t4_3_docs_present.sh",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "swim_installed_anydir_test",
+      "path": "tests/swim/test_installed_anydir.sh",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "swim_insert_fix_loop_test",
+      "path": "tests/swim/test_t7_2_insert_fix_loop.sh",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "swim_passthrough_test",
+      "path": "tests/swim/test_t7_3_review_schedule_passthrough.sh",
+      "line": 1,
+      "kind": "test"
+    },
+    {
+      "ref": "swim_compile_plan_json_test",
+      "path": "tests/swim/test_compile_plan_json.sh",
+      "line": 1,
+      "kind": "test"
+    }
+  ],
+  "fp_index": [],
+  "tasks": [
+    {
+      "task_id": "T1",
+      "title": "Bring the SWIM MCP surface to CLI parity",
+      "plan_line": 42,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "main_go",
+        "main_test_go",
+        "waveplan_cli"
+      ],
+      "files": [
+        "main.go",
+        "main_test.go"
+      ]
+    },
+    {
+      "task_id": "T2",
+      "title": "Move the remaining SWIM-only client logic into Go/core packages",
+      "plan_line": 118,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "main_go",
+        "main_test_go",
+        "swim_planjson_go",
+        "swim_planjson_test_go",
+        "swim_review_sidecar_insert_go",
+        "swim_review_sidecar_insert_test_go"
+      ],
+      "files": [
+        "internal/swim/planjson.go",
+        "internal/swim/planjson_test.go",
+        "internal/swim/review_sidecar_insert.go",
+        "internal/swim/review_sidecar_insert_test.go",
+        "main.go",
+        "main_test.go"
+      ]
+    },
+    {
+      "task_id": "T3",
+      "title": "Add `raft` as the canonical SWIM CLI",
+      "plan_line": 181,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "raft_cli",
+        "main_go",
+        "waveplan_cli",
+        "swim_cli_scaffold_test",
+        "swim_cli_wired_test",
+        "swim_insert_fix_loop_test",
+        "swim_passthrough_test",
+        "swim_compile_plan_json_test",
+        "swim_installed_anydir_test"
+      ],
+      "files": [
+        "raft",
+        "tests/swim/test_t4_1_cli_scaffold.sh",
+        "tests/swim/test_t4_2_cli_wired.sh",
+        "tests/swim/test_t7_2_insert_fix_loop.sh",
+        "tests/swim/test_t7_3_review_schedule_passthrough.sh",
+        "tests/swim/test_compile_plan_json.sh",
+        "tests/swim/test_installed_anydir.sh"
+      ]
+    },
+    {
+      "task_id": "T4",
+      "title": "Remove the `swim` subtree from `waveplan-cli`",
+      "plan_line": 263,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli"
+      ],
+      "files": [
+        "waveplan-cli"
+      ]
+    },
+    {
+      "task_id": "T5",
+      "title": "Packaging, docs, and cutover",
+      "plan_line": 315,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "makefile",
+        "readme",
+        "swim_docs_test"
+      ],
+      "files": [
+        "Makefile",
+        "README.md",
+        "tests/swim/test_t4_3_docs_present.sh"
+      ]
+    },
+    {
+      "task_id": "T6",
+      "title": "Final verification",
+      "plan_line": 358,
+      "doc_refs": [
+        "plan",
+        "spec",
+        "main_go",
+        "waveplan_cli",
+        "raft_cli",
+        "swim_cli_scaffold_test",
+        "swim_cli_wired_test",
+        "swim_docs_test",
+        "swim_installed_anydir_test",
+        "swim_insert_fix_loop_test",
+        "swim_passthrough_test",
+        "swim_compile_plan_json_test"
+      ],
+      "files": [
+        "main.go",
+        "waveplan-cli",
+        "raft",
+        "tests/swim/test_t4_1_cli_scaffold.sh",
+        "tests/swim/test_t4_2_cli_wired.sh",
+        "tests/swim/test_t4_3_docs_present.sh",
+        "tests/swim/test_installed_anydir.sh",
+        "tests/swim/test_t7_2_insert_fix_loop.sh",
+        "tests/swim/test_t7_3_review_schedule_passthrough.sh",
+        "tests/swim/test_compile_plan_json.sh"
+      ]
+    }
+  ],
+  "units": [
+    {
+      "unit_id": "T1.1",
+      "task_id": "T1",
+      "title": "Expand SWIM MCP tool registration and argument surface",
+      "kind": "impl",
+      "wave": 1,
+      "plan_line": 46,
+      "depends_on": [],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "main_go",
+        "main_test_go"
+      ]
+    },
+    {
+      "unit_id": "T1.2",
+      "task_id": "T1",
+      "title": "Add parity handler coverage for new tools and passthrough arguments",
+      "kind": "test",
+      "wave": 2,
+      "plan_line": 83,
+      "depends_on": [
+        "T1.1"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "main_go",
+        "main_test_go"
+      ]
+    },
+    {
+      "unit_id": "T1.3",
+      "task_id": "T1",
+      "title": "Verify the server-side SWIM MCP suite before cutover",
+      "kind": "verify",
+      "wave": 3,
+      "plan_line": 95,
+      "depends_on": [
+        "T1.2"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "main_go",
+        "main_test_go"
+      ]
+    },
+    {
+      "unit_id": "T2.1",
+      "task_id": "T2",
+      "title": "Port deterministic plan canonicalization into internal/swim",
+      "kind": "impl",
+      "wave": 4,
+      "plan_line": 122,
+      "depends_on": [
+        "T1.3"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "swim_planjson_go",
+        "swim_planjson_test_go",
+        "waveplan_cli"
+      ]
+    },
+    {
+      "unit_id": "T2.2",
+      "task_id": "T2",
+      "title": "Port deterministic review-sidecar insertion with regression coverage",
+      "kind": "impl",
+      "wave": 5,
+      "plan_line": 139,
+      "depends_on": [
+        "T2.1"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "swim_review_sidecar_insert_go",
+        "swim_review_sidecar_insert_test_go",
+        "swim_insert_fix_loop_test"
+      ]
+    },
+    {
+      "unit_id": "T2.3",
+      "task_id": "T2",
+      "title": "Wire core SWIM conversion functions into MCP handlers and verify",
+      "kind": "verify",
+      "wave": 6,
+      "plan_line": 161,
+      "depends_on": [
+        "T2.2"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "main_go",
+        "main_test_go",
+        "swim_planjson_go",
+        "swim_review_sidecar_insert_go"
+      ]
+    },
+    {
+      "unit_id": "T3.1",
+      "task_id": "T3",
+      "title": "Create the raft CLI surface as a Python MCP proxy",
+      "kind": "impl",
+      "wave": 7,
+      "plan_line": 185,
+      "depends_on": [
+        "T2.3"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "raft_cli",
+        "waveplan_cli",
+        "main_go"
+      ]
+    },
+    {
+      "unit_id": "T3.2",
+      "task_id": "T3",
+      "title": "Map raft subcommands to SWIM MCP tools without changing CLI semantics",
+      "kind": "impl",
+      "wave": 8,
+      "plan_line": 209,
+      "depends_on": [
+        "T3.1"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "raft_cli",
+        "waveplan_cli",
+        "main_go"
+      ]
+    },
+    {
+      "unit_id": "T3.3",
+      "task_id": "T3",
+      "title": "Cut the SWIM shell suite over to raft",
+      "kind": "test",
+      "wave": 9,
+      "plan_line": 226,
+      "depends_on": [
+        "T3.2"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "raft_cli",
+        "swim_cli_scaffold_test",
+        "swim_cli_wired_test",
+        "swim_insert_fix_loop_test",
+        "swim_passthrough_test",
+        "swim_compile_plan_json_test",
+        "swim_installed_anydir_test"
+      ]
+    },
+    {
+      "unit_id": "T4.1",
+      "task_id": "T4",
+      "title": "Remove the swim parser, helpers, and dispatch path from waveplan-cli",
+      "kind": "impl",
+      "wave": 10,
+      "plan_line": 267,
+      "depends_on": [
+        "T3.3"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli"
+      ]
+    },
+    {
+      "unit_id": "T4.2",
+      "task_id": "T4",
+      "title": "Verify Waveplan-only CLI behavior and add the swim regression guard",
+      "kind": "verify",
+      "wave": 11,
+      "plan_line": 281,
+      "depends_on": [
+        "T4.1"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "waveplan_cli"
+      ]
+    },
+    {
+      "unit_id": "T5.1",
+      "task_id": "T5",
+      "title": "Update helper installation and uninstall flows for raft",
+      "kind": "impl",
+      "wave": 12,
+      "plan_line": 319,
+      "depends_on": [
+        "T4.2"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "makefile"
+      ]
+    },
+    {
+      "unit_id": "T5.2",
+      "task_id": "T5",
+      "title": "Cut README and docs-presence checks over to raft",
+      "kind": "doc",
+      "wave": 13,
+      "plan_line": 327,
+      "depends_on": [
+        "T5.1"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "readme",
+        "swim_docs_test"
+      ]
+    },
+    {
+      "unit_id": "T5.3",
+      "task_id": "T5",
+      "title": "Verify install and documentation surfaces after the cutover",
+      "kind": "verify",
+      "wave": 14,
+      "plan_line": 340,
+      "depends_on": [
+        "T5.2"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "makefile",
+        "readme",
+        "swim_docs_test"
+      ]
+    },
+    {
+      "unit_id": "T6.1",
+      "task_id": "T6",
+      "title": "Run the full Go, shell, and manual verification matrix",
+      "kind": "verify",
+      "wave": 15,
+      "plan_line": 360,
+      "depends_on": [
+        "T5.3"
+      ],
+      "fp_refs": [],
+      "doc_refs": [
+        "plan",
+        "spec",
+        "main_go",
+        "waveplan_cli",
+        "raft_cli",
+        "swim_cli_scaffold_test",
+        "swim_cli_wired_test",
+        "swim_docs_test",
+        "swim_installed_anydir_test",
+        "swim_insert_fix_loop_test",
+        "swim_passthrough_test",
+        "swim_compile_plan_json_test"
+      ]
+    }
+  ]
+}

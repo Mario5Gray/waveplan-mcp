@@ -11,15 +11,17 @@ import (
 
 func main() {
 	schedulePath := flag.String("schedule", "", "path to schedule JSON (swim-schedule-schema-v2)")
+	reviewSchedulePath := flag.String("review-schedule", "", "path to review schedule sidecar JSON")
 	journalPath := flag.String("journal", "", "path to journal JSON sidecar")
 	workDir := flag.String("workdir", "", "optional working directory for invoke.argv")
 	expectCursor := flag.Int("expect-cursor", -1, "optional CAS guard: expected current cursor")
 	flag.Parse()
 
 	opts := swim.ExecNextOptions{
-		SchedulePath: *schedulePath,
-		JournalPath:  *journalPath,
-		WorkDir:      *workDir,
+		SchedulePath:       *schedulePath,
+		ReviewSchedulePath: *reviewSchedulePath,
+		JournalPath:        *journalPath,
+		WorkDir:            *workDir,
 	}
 	if *expectCursor >= 0 {
 		opts.ExpectCursor = expectCursor

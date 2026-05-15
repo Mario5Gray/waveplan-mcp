@@ -25,6 +25,7 @@ type waveplanTask struct {
 type waveplanUnit struct {
 	Task      string   `json:"task"`
 	Title     string   `json:"title"`
+	Kind      string   `json:"kind"`
 	DependsOn []string `json:"depends_on"`
 	DocRefs   []string `json:"doc_refs"`
 }
@@ -68,10 +69,20 @@ func FromWaveplanTask(planPath string, taskID string) (contextsize.ContextCandid
 	// Collapse external dependencies from unit-level edges.
 	dependsOn := collapseTaskDeps(plan, taskID)
 
+	// Derive kind from the first unit of this task.
+	var kind string
+	for _, unit := range plan.Units {
+		if unit.Task == taskID {
+			kind = unit.Kind
+			break
+		}
+	}
+
 	return contextsize.ContextCandidate{
 		ID:                 taskID,
 		Title:              task.Title,
 		Description:        "",
+		Kind:               kind,
 		ReferencedFiles:    files,
 		ReferencedSections: []contextsize.SectionRef{},
 		DependsOn:          dependsOn,
@@ -101,6 +112,7 @@ func FromWaveplanUnit(planPath string, unitID string) (contextsize.ContextCandid
 		ID:                 unitID,
 		Title:              unit.Title,
 		Description:        "",
+		Kind:               unit.Kind,
 		ReferencedFiles:    resolvedRefs,
 		ReferencedSections: []contextsize.SectionRef{},
 		DependsOn:          unit.DependsOn,
