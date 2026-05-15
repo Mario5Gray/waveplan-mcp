@@ -84,9 +84,13 @@ func ExecuteNextStep(opts ExecNextOptions) (*ExecNextResult, error) {
 	}
 	stdoutPath, stderrPath := deriveLogPaths(opts.SchedulePath, opts.ArtifactRoot, row.StepID, attempt)
 	stdoutAbsPath, stderrAbsPath := deriveLogAbsPaths(opts.SchedulePath, opts.ArtifactRoot, row.StepID, attempt)
+	argv, err := BuildInvokeArgv(row, opts.SchedulePath)
+	if err != nil {
+		return nil, err
+	}
 
 	started := time.Now().UTC().Format(time.RFC3339)
-	runErr := invokeArgv(row.Invoke.Argv, opts.WorkDir, stdoutAbsPath, stderrAbsPath, nil, opts.InvokeFn)
+	runErr := invokeArgv(argv, opts.WorkDir, stdoutAbsPath, stderrAbsPath, nil, opts.InvokeFn)
 	completed := time.Now().UTC().Format(time.RFC3339)
 
 	exitCode := 0

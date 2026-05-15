@@ -21,19 +21,9 @@ import sys
 
 args = sys.argv[1:]
 if "peek" in args:
-    print(json.dumps({
-        "task_id": "T1.1",
-        "title": "stub task",
-        "status": "available"
-    }))
-elif "get" in args:
-    print(json.dumps({"tasks": []}))
+    print(json.dumps({"task_id": "T1.1", "title": "stub task", "status": "available"}))
 elif "pop" in args:
-    print(json.dumps({
-        "task_id": "T1.1",
-        "title": "stub task",
-        "status": "taken"
-    }))
+    print(json.dumps({"task_id": "T1.1", "title": "stub task", "status": "taken"}))
 else:
     print(json.dumps({"ok": True}))
 PY
@@ -52,9 +42,11 @@ export SWIM_DISPATCH_RECEIPT_PATH="$RECEIPT_OUT"
 export PATH="$TMP:$PATH"
 export WAVEPLAN_CLI_BIN="$CLI_STUB"
 
-"$ROOT/wp-task-to-agent.sh" \
+"$ROOT/wp-plan-step.sh" \
+  --action implement \
   --target codex \
   --plan "$PLAN" \
+  --task-id T1.1 \
   --agent sigma
 
 if [[ ! -f "$ARGS_OUT" ]]; then
@@ -69,7 +61,7 @@ if [[ "$first_arg" != "exec" ]]; then
 fi
 
 grep -q "new task for implementation" "$STDIN_OUT" || {
-  echo "FAIL: codex exec did not receive prompt on stdin"
+  echo "FAIL: codex exec did not receive implementation prompt on stdin"
   exit 1
 }
 
@@ -83,4 +75,4 @@ grep -q '"ok": true' "$RECEIPT_OUT" || {
   exit 1
 }
 
-echo "PASS: wp-task-to-agent uses codex exec for non-interactive implement handoff"
+echo "PASS: wp-plan-step implement dispatches via codex after task precheck"

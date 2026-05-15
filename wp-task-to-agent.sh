@@ -3,47 +3,31 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WAVEPLAN_CLI_BIN="${WAVEPLAN_CLI_BIN:-}"
+WP_PLAN_STEP_BIN="${WP_PLAN_STEP_BIN:-}"
+WP_AGENT_DISPATCH_BIN="${WP_AGENT_DISPATCH_BIN:-}"
 
 usage() {
   cat <<'USAGE'
 Usage:
-  wp-task-to-agent.sh \
-    --target <codex|claude|opencode> \
-    --plan <plan.json> \
-    --agent <agent-name> \
-    [--mode implement|review|fix] \
-    [--reviewer <name>] \
-    [--dry-run]
+  wp-task-to-agent.sh --target <codex|claude|opencode> --plan <plan.json> --agent <agent-name>
+                      [--mode implement|review|fix] [--reviewer <name>] [--dry-run]
 
 Description:
+  Compatibility wrapper for legacy direct agent-dispatch flows.
+
   implement mode:
-    1) pops next task from waveplan for given agent (write action)
-    2) builds implementation prompt and sends to target CLI
+    - resumes the agent's currently taken task when one exists
+    - otherwise derives the next task_id from waveplan peek and delegates to wp-plan-step.sh
 
   review mode:
-    1) finds current taken task for agent
-    2) runs start_review <task_id> <reviewer> (write action)
-    3) builds review prompt and sends to target CLI
+    - derives the agent's current taken task_id and delegates to wp-plan-step.sh
 
-Options:
-  --target <name>        codex | claude | opencode
-  --plan <path>          Path to *-execution-waves.json
-  --agent <name>         Agent name
-  --mode <mode>          implement (default) | review | fix
-  --reviewer <name>      Reviewer for review mode (default: --agent)
-  --dry-run              Print generated prompt; no waveplan writes
-  -h, --help             Show this help
+  fix mode:
+    - uses SWIM_TASK_ID when injected by SWIM
+    - otherwise derives the agent's current review_taken task_id and delegates to wp-plan-step.sh
 
-Environment (opencode target):
-  OPENCODE_ATTACH_URL    Server URL to attach to (default: http://127.0.0.1:4096)
-  OPENCODE_AUTO_SERVE    If set to 1, auto-start `opencode serve` when unreachable
-  OPENCODE_SERVER_HOST   Host for auto-serve (default: 127.0.0.1)
-  OPENCODE_SERVER_PORT   Port for auto-serve (default: 4096)
-  OPENCODE_SERVER_USERNAME / OPENCODE_SERVER_PASSWORD
-                         Optional basic-auth credentials for attach requests
-
-Environment:
-  WAVEPLAN_CLI_BIN        Path to waveplan-cli (default: PATH lookup, then sibling file)
+Notes:
+  - --task-id is not accepted here. Use wp-plan-step.sh for exact task execution.
 USAGE
 }
 
@@ -53,44 +37,26 @@ AGENT=""
 MODE="implement"
 REVIEWER=""
 DRY_RUN="0"
+TASK_ID_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --target)
-      TARGET="${2:-}"
-      shift 2
-      ;;
-    --plan)
-      PLAN="${2:-}"
-      shift 2
-      ;;
-    --agent)
-      AGENT="${2:-}"
-      shift 2
-      ;;
-    --mode)
-      MODE="${2:-}"
-      shift 2
-      ;;
-    --reviewer)
-      REVIEWER="${2:-}"
-      shift 2
-      ;;
-    --dry-run)
-      DRY_RUN="1"
-      shift
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      usage
-      exit 2
-      ;;
+    --target) TARGET="${2:-}"; shift 2 ;;
+    --plan) PLAN="${2:-}"; shift 2 ;;
+    --agent) AGENT="${2:-}"; shift 2 ;;
+    --mode) MODE="${2:-}"; shift 2 ;;
+    --reviewer) REVIEWER="${2:-}"; shift 2 ;;
+    --task-id) TASK_ID_ARG="${2:-}"; shift 2 ;;
+    --dry-run) DRY_RUN="1"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
   esac
 done
+
+if [[ -n "$TASK_ID_ARG" ]]; then
+  echo "--task-id is not supported by wp-task-to-agent.sh. Use wp-plan-step.sh --action ... --task-id $TASK_ID_ARG instead." >&2
+  exit 2
+fi
 
 resolve_runtime_plan() {
   local requested="$1"
@@ -101,6 +67,38 @@ resolve_runtime_plan() {
   fi
   if [[ -n "$env_plan" && -f "$env_plan" ]]; then
     printf '%s\n' "$env_plan"
+    return 0
+  fi
+  return 1
+}
+
+resolve_plan_step_bin() {
+  if [[ -n "$WP_PLAN_STEP_BIN" ]]; then
+    printf '%s\n' "$WP_PLAN_STEP_BIN"
+    return 0
+  fi
+  if command -v wp-plan-step.sh >/dev/null 2>&1; then
+    command -v wp-plan-step.sh
+    return 0
+  fi
+  if [[ -x "$SCRIPT_DIR/wp-plan-step.sh" ]]; then
+    printf '%s\n' "$SCRIPT_DIR/wp-plan-step.sh"
+    return 0
+  fi
+  return 1
+}
+
+resolve_dispatch_bin() {
+  if [[ -n "$WP_AGENT_DISPATCH_BIN" ]]; then
+    printf '%s\n' "$WP_AGENT_DISPATCH_BIN"
+    return 0
+  fi
+  if command -v wp-agent-dispatch.sh >/dev/null 2>&1; then
+    command -v wp-agent-dispatch.sh
+    return 0
+  fi
+  if [[ -x "$SCRIPT_DIR/wp-agent-dispatch.sh" ]]; then
+    printf '%s\n' "$SCRIPT_DIR/wp-agent-dispatch.sh"
     return 0
   fi
   return 1
@@ -120,19 +118,26 @@ case "$TARGET" in
     ;;
 esac
 
-if [[ "$MODE" != "implement" && "$MODE" != "review" && "$MODE" != "fix" ]]; then
-  echo "Invalid --mode: $MODE (must be implement, review, or fix)" >&2
-  exit 2
-fi
+case "$MODE" in
+  implement|review|fix) ;;
+  *)
+    echo "Invalid --mode: $MODE (must be implement, review, or fix)" >&2
+    exit 2
+    ;;
+esac
 
-if ! RESOLVED_PLAN="$(resolve_runtime_plan "$PLAN")"; then
+if ! PLAN="$(resolve_runtime_plan "$PLAN")"; then
   echo "Plan file not found: $PLAN" >&2
   if [[ -n "${WAVEPLAN_PLAN:-}" ]]; then
     echo "WAVEPLAN_PLAN fallback also missing: $WAVEPLAN_PLAN" >&2
   fi
   exit 2
 fi
-PLAN="$RESOLVED_PLAN"
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 not found" >&2
+  exit 2
+fi
 
 if [[ -z "$WAVEPLAN_CLI_BIN" ]]; then
   if command -v waveplan-cli >/dev/null 2>&1; then
@@ -155,12 +160,10 @@ if [[ -z "$WAVEPLAN_CLI_BIN" || ! -f "$WAVEPLAN_CLI_BIN" ]]; then
   exit 2
 fi
 
-for bin in python3 "$TARGET"; do
-  if ! command -v "$bin" >/dev/null 2>&1; then
-    echo "Required command not found: $bin" >&2
-    exit 2
-  fi
-done
+PLAN_STEP_BIN="$(resolve_plan_step_bin)" || {
+  echo "wp-plan-step.sh not found. Set WP_PLAN_STEP_BIN or install in PATH." >&2
+  exit 2
+}
 
 waveplan_cli() {
   python3 "$WAVEPLAN_CLI_BIN" "$@"
@@ -177,57 +180,20 @@ sys.exit(0 if isinstance(obj, dict) and obj.get("error") else 1)
 ' "$payload"
 }
 
-json_error_message() {
+json_task_id() {
   local payload="$1"
-  python3 -c 'import json,sys
-try:
-  obj=json.loads(sys.argv[1] or "{}")
-except Exception:
-  print("")
-  sys.exit(0)
-if isinstance(obj, dict):
-  print(obj.get("error",""))
-else:
-  print("")
-' "$payload"
+  python3 -c 'import json,sys; print(json.loads(sys.argv[1] or "{}").get("task_id",""))' "$payload"
 }
 
-write_dispatch_receipt() {
-  local task_id="$1"
-  local task_source="$2"
-  local receipt_path="${SWIM_DISPATCH_RECEIPT_PATH:-}"
-  if [[ -z "$receipt_path" ]]; then
-    return 0
-  fi
-  mkdir -p "$(dirname "$receipt_path")"
-  python3 - "$receipt_path" "$task_id" "$task_source" "$TARGET" "$AGENT" "$MODE" <<'PY'
-import json
-import os
-import sys
-from datetime import datetime, timezone
-
-receipt_path, task_id, task_source, target, agent, mode = sys.argv[1:7]
-payload = {
-    "ok": True,
-    "step_id": os.environ.get("SWIM_STEP_ID", ""),
-    "task_id": task_id,
-    "action": mode,
-    "target": target,
-    "agent": agent,
-    "mode": mode,
-    "task_source": task_source,
-    "tool": target,
-    "delivered_on": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-}
-with open(receipt_path, "w", encoding="utf-8") as f:
-    json.dump(payload, f, indent=2)
-    f.write("\n")
-PY
+task_status() {
+  local payload="$1"
+  python3 -c 'import json,sys; print(json.loads(sys.argv[1] or "{}").get("status",""))' "$payload"
 }
 
-select_taken_task_for_agent() {
+select_task_for_agent_status() {
   local plan="$1"
   local agent="$2"
+  local wanted_status="$3"
   local agent_tasks_json
   agent_tasks_json="$(waveplan_cli --plan "$plan" get "$agent")"
   if json_has_error "$agent_tasks_json"; then
@@ -235,349 +201,113 @@ select_taken_task_for_agent() {
   fi
   python3 -c 'import json,sys
 obj=json.loads(sys.argv[1] or "{}")
-tasks=obj.get("tasks", [])
-taken=[t for t in tasks if t.get("status")=="taken"]
-if not taken:
+wanted=sys.argv[2]
+tasks=[t for t in obj.get("tasks", []) if t.get("status")==wanted]
+if not tasks:
   print("")
   sys.exit(0)
-taken.sort(key=lambda t: ((t.get("started_at") or ""), (t.get("task_id") or "")), reverse=True)
-sel=taken[0]
+tasks.sort(key=lambda t: ((t.get("started_at") or ""), (t.get("task_id") or "")), reverse=True)
+sel=tasks[0]
 print(sel.get("task_id", ""))
 print(json.dumps(sel))
-' "$agent_tasks_json"
+' "$agent_tasks_json" "$wanted_status"
 }
 
-select_review_taken_task_for_agent() {
-  local plan="$1"
-  local agent="$2"
-  local agent_tasks_json
-  agent_tasks_json="$(waveplan_cli --plan "$plan" get "$agent")"
-  if json_has_error "$agent_tasks_json"; then
-    return 1
-  fi
-  python3 -c 'import json,sys
-obj=json.loads(sys.argv[1] or "{}")
-tasks=obj.get("tasks", [])
-review=[t for t in tasks if t.get("status")=="review_taken"]
-if not review:
-  print("")
-  sys.exit(0)
-review.sort(key=lambda t: ((t.get("started_at") or ""), (t.get("task_id") or "")), reverse=True)
-sel=review[0]
-print(sel.get("task_id", ""))
-print(json.dumps(sel))
-' "$agent_tasks_json"
+write_temp_file() {
+  local content="$1"
+  local path
+  path="$(mktemp)"
+  printf '%s\n' "$content" >"$path"
+  printf '%s\n' "$path"
 }
 
-send_prompt() {
-  local prompt="$1"
-  if [[ "$DRY_RUN" == "1" ]]; then
-    printf '%s\n' "$prompt"
-    return 0
-  fi
-
-  if [[ "$TARGET" == "opencode" ]]; then
-    send_prompt_opencode "$prompt"
-    return 0
-  fi
-
-  if [[ "$TARGET" == "codex" ]]; then
-    printf '%s\n' "$prompt" | codex exec -
-    return 0
-  fi
-
-  if ! printf '%s\n' "$prompt" | "$TARGET"; then
-    "$TARGET" "$prompt"
-  fi
-}
-
-opencode_server_healthy() {
-  local base_url="$1"
-  local user="${OPENCODE_SERVER_USERNAME:-}"
-  local pass="${OPENCODE_SERVER_PASSWORD:-}"
-  python3 - "$base_url" "$user" "$pass" <<'PY'
-import base64
-import json
-import sys
-import urllib.request
-
-base = sys.argv[1].rstrip("/")
-user = sys.argv[2]
-pwd = sys.argv[3]
-url = f"{base}/global/health"
-req = urllib.request.Request(url, method="GET")
-if pwd:
-    token = base64.b64encode(f"{(user or 'opencode')}:{pwd}".encode("utf-8")).decode("ascii")
-    req.add_header("Authorization", f"Basic {token}")
-try:
-    with urllib.request.urlopen(req, timeout=2.0) as r:
-        body = r.read().decode("utf-8", "replace")
-    data = json.loads(body)
-    ok = bool(data.get("healthy")) if isinstance(data, dict) else False
-    sys.exit(0 if ok else 1)
-except Exception:
-    sys.exit(1)
-PY
-}
-
-maybe_start_opencode_server() {
-  if [[ "${OPENCODE_AUTO_SERVE:-0}" != "1" ]]; then
-    return 1
-  fi
-  local host="${OPENCODE_SERVER_HOST:-127.0.0.1}"
-  local port="${OPENCODE_SERVER_PORT:-4096}"
-  nohup opencode serve --hostname "$host" --port "$port" >/tmp/opencode-serve.log 2>&1 &
-  for _ in $(seq 1 20); do
-    sleep 0.25
-    if opencode_server_healthy "${OPENCODE_ATTACH_URL:-http://127.0.0.1:4096}"; then
-      return 0
-    fi
+cleanup() {
+  for f in "${TMP_FILES[@]:-}"; do
+    [[ -n "$f" ]] && rm -f "$f"
   done
-  return 1
 }
-
-send_prompt_opencode() {
-  local prompt="$1"
-  local attach_url="${OPENCODE_ATTACH_URL:-http://127.0.0.1:4096}"
-  local user="${OPENCODE_SERVER_USERNAME:-}"
-  local pass="${OPENCODE_SERVER_PASSWORD:-}"
-  local -a cmd
-
-  if ! opencode_server_healthy "$attach_url"; then
-    maybe_start_opencode_server || true
-  fi
-
-  cmd=(opencode run --format json)
-  if opencode_server_healthy "$attach_url"; then
-    cmd+=(--attach "$attach_url")
-    if [[ -n "$user" ]]; then
-      cmd+=(--username "$user")
-    fi
-    if [[ -n "$pass" ]]; then
-      cmd+=(--password "$pass")
-    fi
-  fi
-  cmd+=("$prompt")
-
-  "${cmd[@]}"
-}
+TMP_FILES=()
+trap cleanup EXIT
 
 if [[ "$MODE" == "implement" ]]; then
-  RESUME_SELECTED="$(select_taken_task_for_agent "$PLAN" "$AGENT" || true)"
+  RESUME_SELECTED="$(select_task_for_agent_status "$PLAN" "$AGENT" "taken" || true)"
   RESUME_TASK_ID="$(printf '%s\n' "$RESUME_SELECTED" | sed -n '1p')"
   RESUME_TASK_JSON="$(printf '%s\n' "$RESUME_SELECTED" | sed -n '2,$p')"
 
   if [[ -n "$RESUME_TASK_ID" && -n "$RESUME_TASK_JSON" ]]; then
-    TASK_JSON="$RESUME_TASK_JSON"
-    TASK_SOURCE="resume_taken"
-  else
+    DISPATCH_BIN="$(resolve_dispatch_bin)" || {
+      echo "wp-agent-dispatch.sh not found. Set WP_AGENT_DISPATCH_BIN or install in PATH." >&2
+      exit 2
+    }
+    TASK_JSON_FILE="$(write_temp_file "$RESUME_TASK_JSON")"
+    TMP_FILES+=("$TASK_JSON_FILE")
+    DISPATCH_ARGS=(--target "$TARGET" --plan "$PLAN" --agent "$AGENT" --mode implement --task-json-file "$TASK_JSON_FILE")
     if [[ "$DRY_RUN" == "1" ]]; then
-      TASK_JSON="$(waveplan_cli --plan "$PLAN" peek)"
-      TASK_SOURCE="peek"
-    else
-      TASK_JSON="$(waveplan_cli --plan "$PLAN" pop "$AGENT")"
-      TASK_SOURCE="pop"
-      if json_has_error "$TASK_JSON"; then
-        ERR_MSG="$(json_error_message "$TASK_JSON")"
-        if [[ "$ERR_MSG" == *"already taken"* || "$ERR_MSG" == *"No available tasks"* ]]; then
-          RESUME_SELECTED="$(select_taken_task_for_agent "$PLAN" "$AGENT" || true)"
-          RESUME_TASK_ID="$(printf '%s\n' "$RESUME_SELECTED" | sed -n '1p')"
-          RESUME_TASK_JSON="$(printf '%s\n' "$RESUME_SELECTED" | sed -n '2,$p')"
-          if [[ -n "$RESUME_TASK_ID" && -n "$RESUME_TASK_JSON" ]]; then
-            TASK_JSON="$RESUME_TASK_JSON"
-            TASK_SOURCE="resume_taken_after_pop_error"
-          fi
-        fi
-      fi
+      DISPATCH_ARGS+=(--dry-run)
     fi
+    exec env SWIM_TASK_SOURCE="resume_taken" "$DISPATCH_BIN" "${DISPATCH_ARGS[@]}"
   fi
 
-  if json_has_error "$TASK_JSON"; then
-    echo "waveplan $TASK_SOURCE returned error payload:" >&2
-    echo "$TASK_JSON" >&2
+  PEEK_JSON="$(waveplan_cli --plan "$PLAN" peek)"
+  if json_has_error "$PEEK_JSON"; then
+    echo "waveplan peek returned error payload:" >&2
+    echo "$PEEK_JSON" >&2
     exit 1
   fi
-
-  read -r -d '' PREAMBLE <<'TXT' || true
-new task for implementation.
-
-hard requirements:
-- use superpowers skill workflow while implementing.
-- waveplan-cli / waveplan-mcp usage in this task is read-only only.
-- do not execute waveplan write actions: no pop, no fin, no start_review, no end_review, no plan mutations.
-- allowed waveplan reads: peek, get, deptree, list_plans.
-
-execute implementation directly in repository.
-run tests relevant to changes.
-return concrete file changes + verification commands/results.
-TXT
-
-  PROMPT="$PREAMBLE
-
-plan: $PLAN
-claimed_by: $AGENT
-mode: implement
-task_source: $TASK_SOURCE
-
-task_json:
-$TASK_JSON
-"
-
-  send_prompt "$PROMPT"
-  TASK_ID="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1] or "{}").get("task_id",""))' "$TASK_JSON")"
-  write_dispatch_receipt "$TASK_ID" "$TASK_SOURCE"
-  exit 0
-fi
-
-# fix mode
-if [[ "$MODE" == "fix" ]]; then
-  # SWIM_TASK_ID is injected by safe_runner.go for all dispatch steps.
-  # When present use it directly; otherwise fall back to finding a review_taken task.
-  TASK_ID="${SWIM_TASK_ID:-}"
-  CURRENT_TASK_JSON=""
-
-  if [[ -n "$TASK_ID" ]]; then
-    CURRENT_TASK_JSON="$(waveplan_cli --plan "$PLAN" get "task-$TASK_ID")"
-    if json_has_error "$CURRENT_TASK_JSON"; then
-      echo "waveplan get task returned error payload:" >&2
-      echo "$CURRENT_TASK_JSON" >&2
-      exit 1
-    fi
-  else
-    SELECTED="$(select_review_taken_task_for_agent "$PLAN" "$AGENT" || true)"
-    TASK_ID="$(printf '%s\n' "$SELECTED" | sed -n '1p')"
-    CURRENT_TASK_JSON="$(printf '%s\n' "$SELECTED" | sed -n '2,$p')"
-  fi
-
-  if [[ -z "$TASK_ID" || -z "$CURRENT_TASK_JSON" ]]; then
-    echo "No review_taken task found for agent '$AGENT'" >&2
+  TASK_ID="$(json_task_id "$PEEK_JSON")"
+  if [[ -z "$TASK_ID" ]]; then
+    echo "waveplan peek did not return a task_id" >&2
     exit 1
   fi
-
+  ARGS=(--action implement --plan "$PLAN" --task-id "$TASK_ID" --target "$TARGET" --agent "$AGENT")
   if [[ "$DRY_RUN" == "1" ]]; then
-    FIX_RESULT_JSON="{\"dry_run\":true,\"would_run\":\"python3 $WAVEPLAN_CLI_BIN --plan $PLAN start_fix $TASK_ID\"}"
-  else
-    FIX_RESULT_JSON="$(waveplan_cli --plan "$PLAN" start_fix "$TASK_ID")"
-    if json_has_error "$FIX_RESULT_JSON"; then
-      echo "waveplan start_fix returned error payload:" >&2
-      echo "$FIX_RESULT_JSON" >&2
-      exit 1
-    fi
+    ARGS+=(--dry-run)
   fi
+  exec "$PLAN_STEP_BIN" "${ARGS[@]}"
+fi
 
-  PRIOR_REVIEW_CONTENT=""
-  PRIOR_STDOUT_PATH="${SWIM_PRIOR_STDOUT_PATH:-}"
-  if [[ -n "$PRIOR_STDOUT_PATH" && -f "$PRIOR_STDOUT_PATH" ]]; then
-    PRIOR_REVIEW_CONTENT="$(cat "$PRIOR_STDOUT_PATH")"
+if [[ "$MODE" == "review" ]]; then
+  if [[ -z "$REVIEWER" ]]; then
+    REVIEWER="$AGENT"
   fi
-
-  read -r -d '' PREAMBLE <<'TXT' || true
-fix cycle: address reviewer findings.
-
-hard requirements:
-- use superpowers skill workflow while implementing fixes.
-- waveplan-cli / waveplan-mcp usage in this task is read-only only.
-- do not execute waveplan write actions: no pop, no fin, no start_review, no end_review, no plan mutations.
-- allowed waveplan reads: peek, get, deptree, list_plans.
-
-apply all required fixes from the reviewer findings below.
-run tests relevant to changes.
-return concrete file changes + verification commands/results.
-TXT
-
-  PROMPT="$PREAMBLE
-
-plan: $PLAN
-claimed_by: $AGENT
-mode: fix
-
-task_json:
-$CURRENT_TASK_JSON
-
-reviewer_findings:
-${PRIOR_REVIEW_CONTENT:-<no prior review stdout available>}
-"
-
-  send_prompt "$PROMPT"
-  write_dispatch_receipt "$TASK_ID" "fix_taken"
-  exit 0
-fi
-
-# review mode
-if [[ -z "$REVIEWER" ]]; then
-  REVIEWER="$AGENT"
-fi
-
-AGENT_TASKS_JSON="$(waveplan_cli --plan "$PLAN" get "$AGENT")"
-if json_has_error "$AGENT_TASKS_JSON"; then
-  echo "waveplan get returned error payload:" >&2
-  echo "$AGENT_TASKS_JSON" >&2
-  exit 1
-fi
-
-SELECTED="$(python3 -c 'import json,sys
-obj=json.loads(sys.argv[1] or "{}")
-tasks=obj.get("tasks", [])
-taken=[t for t in tasks if t.get("status")=="taken"]
-if not taken:
-  print("")
-  sys.exit(0)
-taken.sort(key=lambda t: ((t.get("started_at") or ""), (t.get("task_id") or "")), reverse=True)
-sel=taken[0]
-print(sel.get("task_id", ""))
-print(json.dumps(sel))
-' "$AGENT_TASKS_JSON")"
-
-TASK_ID="$(printf '%s\n' "$SELECTED" | sed -n '1p')"
-CURRENT_TASK_JSON="$(printf '%s\n' "$SELECTED" | sed -n '2,$p')"
-
-if [[ -z "$TASK_ID" || -z "$CURRENT_TASK_JSON" ]]; then
-  echo "No currently taken task found for agent '$AGENT'" >&2
-  exit 1
-fi
-
-if [[ "$DRY_RUN" == "1" ]]; then
-  REVIEW_RESULT_JSON="{\"dry_run\":true,\"would_run\":\"python3 $WAVEPLAN_CLI_BIN --plan $PLAN start_review $TASK_ID $REVIEWER\"}"
-  TASK_AFTER_JSON="{\"dry_run\":true,\"task_id\":\"$TASK_ID\"}"
-else
-  REVIEW_RESULT_JSON="$(waveplan_cli --plan "$PLAN" start_review "$TASK_ID" "$REVIEWER")"
-  if json_has_error "$REVIEW_RESULT_JSON"; then
-    echo "waveplan start_review returned error payload:" >&2
-    echo "$REVIEW_RESULT_JSON" >&2
+  SELECTED="$(select_task_for_agent_status "$PLAN" "$AGENT" "taken" || true)"
+  TASK_ID="$(printf '%s\n' "$SELECTED" | sed -n '1p')"
+  if [[ -z "$TASK_ID" ]]; then
+    echo "No currently taken task found for agent '$AGENT'" >&2
     exit 1
   fi
-  TASK_AFTER_JSON="$(waveplan_cli --plan "$PLAN" get "task-$TASK_ID")"
+  ARGS=(--action review --plan "$PLAN" --task-id "$TASK_ID" --target "$TARGET" --agent "$AGENT" --reviewer "$REVIEWER")
+  if [[ "$DRY_RUN" == "1" ]]; then
+    ARGS+=(--dry-run)
+  fi
+  exec "$PLAN_STEP_BIN" "${ARGS[@]}"
 fi
 
-read -r -d '' PREAMBLE <<'TXT' || true
-new task for review.
+TASK_ID="${SWIM_TASK_ID:-}"
+if [[ -n "$TASK_ID" ]]; then
+  CURRENT_TASK_JSON="$(waveplan_cli --plan "$PLAN" get "task-$TASK_ID")"
+  if json_has_error "$CURRENT_TASK_JSON"; then
+    echo "waveplan get task returned error payload:" >&2
+    echo "$CURRENT_TASK_JSON" >&2
+    exit 1
+  fi
+  STATUS="$(task_status "$CURRENT_TASK_JSON")"
+  if [[ "$STATUS" != "review_taken" && "$STATUS" != "taken" ]]; then
+    echo "task $TASK_ID is not in a fixable state" >&2
+    exit 1
+  fi
+else
+  SELECTED="$(select_task_for_agent_status "$PLAN" "$AGENT" "review_taken" || true)"
+  TASK_ID="$(printf '%s\n' "$SELECTED" | sed -n '1p')"
+fi
 
-hard requirements:
-- use superpowers skill workflow while reviewing.
-- waveplan-cli / waveplan-mcp usage in this task is read-only only.
-- do not execute waveplan write actions: no pop, no fin, no start_review, no end_review, no plan mutations.
-- allowed waveplan reads: peek, get, deptree, list_plans.
-- this turn is review-focused; verify correctness, regressions, tests, and contract adherence.
-- return concrete findings first (ordered by severity), then required fixes.
-TXT
+if [[ -z "$TASK_ID" ]]; then
+  echo "No review_taken task found for agent '$AGENT'" >&2
+  exit 1
+fi
 
-PROMPT="$PREAMBLE
-
-plan: $PLAN
-claimed_by: $AGENT
-reviewer: $REVIEWER
-mode: review
-task_source: taken_by_agent
-
-selected_task_json:
-$CURRENT_TASK_JSON
-
-start_review_result_json:
-$REVIEW_RESULT_JSON
-
-task_snapshot_after_start_review_json:
-$TASK_AFTER_JSON
-"
-
-send_prompt "$PROMPT"
-write_dispatch_receipt "$TASK_ID" "taken_by_agent"
+ARGS=(--action fix --plan "$PLAN" --task-id "$TASK_ID" --target "$TARGET" --agent "$AGENT")
+if [[ "$DRY_RUN" == "1" ]]; then
+  ARGS+=(--dry-run)
+fi
+exec "$PLAN_STEP_BIN" "${ARGS[@]}"

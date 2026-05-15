@@ -79,7 +79,7 @@ func TestValidateSchedule_Cases(t *testing.T) {
 			mutate: func(t *testing.T, m map[string]any) {
 				m["schema_version"] = 1
 			},
-			wantErr: "schema validation failed",
+			wantErr: "unsupported schedule schema_version",
 		},
 		{
 			name: "invalid step_id pattern",
@@ -274,6 +274,81 @@ func TestValidateSchedule_FixRequiresProducesCheck(t *testing.T) {
 	}
 }
 
+func TestValidateScheduleV3OperationContract(t *testing.T) {
+	raw := []byte(`{
+	  "schema_version": 3,
+	  "execution": [{
+	    "seq": 1,
+	    "step_id": "S1_T1.1_implement",
+	    "task_id": "T1.1",
+	    "action": "implement",
+	    "requires": {"task_status": "available"},
+	    "produces": {"task_status": "taken"},
+	    "operation": {
+	      "kind": "agent_dispatch",
+	      "target": "opencode",
+	      "agent": "phi"
+	    },
+	    "invoke": {"argv": ["wp-plan-step.sh", "--action", "implement", "--plan", "/tmp/plan.json", "--task-id", "T1.1", "--target", "opencode", "--agent", "phi"]}
+	  }]
+	}`)
+	if err := ValidateSchedule(raw); err != nil {
+		t.Fatalf("ValidateSchedule(v3) unexpected error: %v", err)
+	}
+}
+
+func TestValidateScheduleRejectsInvalidV3OperationPair(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "implement cannot be state transition",
+			raw: `{"schema_version":3,"execution":[{"seq":1,"step_id":"S1_T1.1_implement","task_id":"T1.1","action":"implement","requires":{"task_status":"available"},"produces":{"task_status":"taken"},"operation":{"kind":"state_transition"},"invoke":{"argv":["wp-plan-step.sh","--action","implement","--plan","/tmp/plan.json","--task-id","T1.1"]}}]}`,
+			want: "implement requires agent_dispatch",
+		},
+		{
+			name: "finish cannot be agent dispatch",
+			raw: `{"schema_version":3,"execution":[{"seq":1,"step_id":"S1_T1.1_finish","task_id":"T1.1","action":"finish","requires":{"task_status":"review_ended"},"produces":{"task_status":"completed"},"operation":{"kind":"agent_dispatch","target":"opencode","agent":"phi"},"invoke":{"argv":["wp-plan-step.sh","--action","finish","--plan","/tmp/plan.json","--task-id","T1.1","--target","opencode","--agent","phi"]}}]}`,
+			want: "finish requires state_transition",
+		},
+		{
+			name: "review requires reviewer",
+			raw: `{"schema_version":3,"execution":[{"seq":1,"step_id":"S1_T1.1_review","task_id":"T1.1","action":"review","requires":{"task_status":"taken"},"produces":{"task_status":"review_taken"},"operation":{"kind":"agent_dispatch","target":"claude","agent":"phi"},"invoke":{"argv":["wp-plan-step.sh","--action","review","--plan","/tmp/plan.json","--task-id","T1.1","--target","claude","--agent","phi"]}}]}`,
+			want: "review requires agent, target, and reviewer",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateSchedule([]byte(tc.raw))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("ValidateSchedule() error=%v, want contains %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateScheduleV3RejectsContradictoryInvoke(t *testing.T) {
+	raw := []byte(`{
+	  "schema_version": 3,
+	  "execution": [{
+	    "seq": 1,
+	    "step_id": "S1_T1.1_finish",
+	    "task_id": "T1.1",
+	    "action": "finish",
+	    "requires": {"task_status": "review_ended"},
+	    "produces": {"task_status": "completed"},
+	    "operation": {"kind": "state_transition"},
+	    "invoke": {"argv": ["wp-agent-dispatch.sh", "--task-id", "T1.1"]}
+	  }]
+	}`)
+	err := ValidateSchedule(raw)
+	if err == nil || !strings.Contains(err.Error(), "invoke.argv contradicts operation") {
+		t.Fatalf("ValidateSchedule() error=%v, want contradiction", err)
+	}
+}
+
 func TestValidateReviewScheduleSidecar_Cases(t *testing.T) {
 	baseRaw := loadExpectedScheduleFixture(t)
 	var base Schedule
@@ -451,7 +526,7 @@ func validReviewScheduleSidecarFixture(t *testing.T, base Schedule) ReviewSchedu
 	t.Helper()
 	anchor := base.Execution[1]
 	return ReviewScheduleSidecar{
-		SchemaVersion:    1,
+		SchemaVersion:    2,
 		BaseSchedulePath: emitPlanPath,
 		Insertions: []ReviewScheduleInsertion{
 			{
@@ -463,7 +538,8 @@ func validReviewScheduleSidecarFixture(t *testing.T, base Schedule) ReviewSchedu
 				Action:        "fix",
 				Requires:      StatusWrapper{TaskStatus: "review_taken"},
 				Produces:      StatusWrapper{TaskStatus: "taken"},
-				Invoke:        InvokeSpec{Argv: []string{"bash", "-lc", "true"}},
+				Operation:     OperationSpec{Kind: "agent_dispatch", Target: "codex", Agent: "phi"},
+				Invoke:        InvokeSpec{Argv: []string{"wp-plan-step.sh", "--action", "fix", "--plan", emitPlanPath, "--task-id", "T1.1", "--target", "codex", "--agent", "phi"}},
 				Reason:        "review findings require rework",
 				SourceEventID: "E0001",
 			},
@@ -476,7 +552,8 @@ func validReviewScheduleSidecarFixture(t *testing.T, base Schedule) ReviewSchedu
 				Action:        "review",
 				Requires:      StatusWrapper{TaskStatus: "taken"},
 				Produces:      StatusWrapper{TaskStatus: "review_taken"},
-				Invoke:        InvokeSpec{Argv: []string{"bash", "-lc", "true"}},
+				Operation:     OperationSpec{Kind: "agent_dispatch", Target: "claude", Agent: "phi", Reviewer: "sigma"},
+				Invoke:        InvokeSpec{Argv: []string{"wp-plan-step.sh", "--action", "review", "--plan", emitPlanPath, "--task-id", "T1.1", "--target", "claude", "--agent", "phi", "--reviewer", "sigma"}},
 				Reason:        "follow-up review after fix",
 				SourceEventID: "E0002",
 			},

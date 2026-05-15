@@ -15,23 +15,33 @@ import (
 )
 
 const (
-	scheduleSchemaRelPath      = "docs/specs/swim-schedule-schema-v2.json"
-	journalSchemaRelPath       = "docs/specs/swim-journal-schema-v1.json"
-	reviewSidecarSchemaRelPath = "docs/specs/swim-review-schedule-schema-v1.json"
+	scheduleSchemaV2RelPath      = "docs/specs/swim-schedule-schema-v2.json"
+	scheduleSchemaV3RelPath      = "docs/specs/swim-schedule-schema-v3.json"
+	journalSchemaRelPath         = "docs/specs/swim-journal-schema-v1.json"
+	reviewSidecarSchemaV1RelPath = "docs/specs/swim-review-schedule-schema-v1.json"
+	reviewSidecarSchemaV2RelPath = "docs/specs/swim-review-schedule-schema-v2.json"
 )
 
 var (
-	scheduleSchemaOnce sync.Once
-	scheduleSchema     *jsonschema.Schema
-	scheduleSchemaErr  error
+	scheduleSchemaV2Once sync.Once
+	scheduleSchemaV2     *jsonschema.Schema
+	scheduleSchemaV2Err  error
+
+	scheduleSchemaV3Once sync.Once
+	scheduleSchemaV3     *jsonschema.Schema
+	scheduleSchemaV3Err  error
 
 	journalSchemaOnce sync.Once
 	journalSchema     *jsonschema.Schema
 	journalSchemaErr  error
 
-	reviewSidecarSchemaOnce sync.Once
-	reviewSidecarSchema     *jsonschema.Schema
-	reviewSidecarSchemaErr  error
+	reviewSidecarSchemaV1Once sync.Once
+	reviewSidecarSchemaV1     *jsonschema.Schema
+	reviewSidecarSchemaV1Err  error
+
+	reviewSidecarSchemaV2Once sync.Once
+	reviewSidecarSchemaV2     *jsonschema.Schema
+	reviewSidecarSchemaV2Err  error
 )
 
 var statusByAction = map[string]struct {
@@ -59,6 +69,7 @@ type ScheduleRow struct {
 	Action   string        `json:"action"`
 	Requires StatusWrapper `json:"requires"`
 	Produces StatusWrapper `json:"produces"`
+	Operation OperationSpec `json:"operation,omitempty"`
 	Invoke   InvokeSpec    `json:"invoke"`
 	Source   string        `json:"-"`
 }
@@ -75,6 +86,18 @@ type StatusWrapper struct {
 // InvokeSpec is the canonical invocation payload.
 type InvokeSpec struct {
 	Argv []string `json:"argv"`
+}
+
+// OperationSpec is the typed execution contract for schema v3 schedule rows.
+type OperationSpec struct {
+	Kind     string `json:"kind"`
+	Target   string `json:"target,omitempty"`
+	Agent    string `json:"agent,omitempty"`
+	Reviewer string `json:"reviewer,omitempty"`
+}
+
+func (o OperationSpec) IsZero() bool {
+	return o.Kind == "" && o.Target == "" && o.Agent == "" && o.Reviewer == ""
 }
 
 // Journal is the SWIM execution journal sidecar contract.
@@ -124,17 +147,112 @@ type ReviewScheduleInsertion struct {
 	Action        string        `json:"action"`
 	Requires      StatusWrapper `json:"requires"`
 	Produces      StatusWrapper `json:"produces"`
+	Operation     OperationSpec `json:"operation,omitempty"`
 	Invoke        InvokeSpec    `json:"invoke"`
 	Reason        string        `json:"reason"`
 	SourceEventID string        `json:"source_event_id"`
 }
 
-// LoadScheduleSchema compiles and caches docs/specs/swim-schedule-schema-v2.json.
-func LoadScheduleSchema() (*jsonschema.Schema, error) {
-	scheduleSchemaOnce.Do(func() {
-		scheduleSchema, scheduleSchemaErr = compileSchemaFromResolvedPath(scheduleSchemaRelPath, "mem://swim-schedule-schema-v2.json")
-	})
-	return scheduleSchema, scheduleSchemaErr
+func (r ScheduleRow) MarshalJSON() ([]byte, error) {
+	type alias ScheduleRow
+	if r.Operation.IsZero() {
+		return json.Marshal(struct {
+			Seq      int           `json:"seq"`
+			StepID   string        `json:"step_id"`
+			TaskID   string        `json:"task_id"`
+			Action   string        `json:"action"`
+			Requires StatusWrapper `json:"requires"`
+			Produces StatusWrapper `json:"produces"`
+			Invoke   InvokeSpec    `json:"invoke"`
+		}{
+			Seq:      r.Seq,
+			StepID:   r.StepID,
+			TaskID:   r.TaskID,
+			Action:   r.Action,
+			Requires: r.Requires,
+			Produces: r.Produces,
+			Invoke:   r.Invoke,
+		})
+	}
+	return json.Marshal(alias(r))
+}
+
+func (r ReviewScheduleInsertion) MarshalJSON() ([]byte, error) {
+	type alias ReviewScheduleInsertion
+	if r.Operation.IsZero() {
+		return json.Marshal(struct {
+			ID            string        `json:"id"`
+			AfterStepID   string        `json:"after_step_id"`
+			StepID        string        `json:"step_id"`
+			SeqHint       int           `json:"seq_hint"`
+			TaskID        string        `json:"task_id"`
+			Action        string        `json:"action"`
+			Requires      StatusWrapper `json:"requires"`
+			Produces      StatusWrapper `json:"produces"`
+			Invoke        InvokeSpec    `json:"invoke"`
+			Reason        string        `json:"reason"`
+			SourceEventID string        `json:"source_event_id"`
+		}{
+			ID:            r.ID,
+			AfterStepID:   r.AfterStepID,
+			StepID:        r.StepID,
+			SeqHint:       r.SeqHint,
+			TaskID:        r.TaskID,
+			Action:        r.Action,
+			Requires:      r.Requires,
+			Produces:      r.Produces,
+			Invoke:        r.Invoke,
+			Reason:        r.Reason,
+			SourceEventID: r.SourceEventID,
+		})
+	}
+	return json.Marshal(alias(r))
+}
+
+// LoadScheduleSchema compiles and caches the requested schedule schema version.
+func LoadScheduleSchema(version int) (*jsonschema.Schema, error) {
+	switch version {
+	case 2:
+		scheduleSchemaV2Once.Do(func() {
+			scheduleSchemaV2, scheduleSchemaV2Err = compileSchemaFromResolvedPath(scheduleSchemaV2RelPath, "mem://swim-schedule-schema-v2.json")
+		})
+		return scheduleSchemaV2, scheduleSchemaV2Err
+	case 3:
+		scheduleSchemaV3Once.Do(func() {
+			scheduleSchemaV3, scheduleSchemaV3Err = compileSchemaFromResolvedPath(scheduleSchemaV3RelPath, "mem://swim-schedule-schema-v3.json")
+		})
+		return scheduleSchemaV3, scheduleSchemaV3Err
+	default:
+		return nil, fmt.Errorf("unsupported schedule schema_version: %d", version)
+	}
+}
+
+// LoadScheduleSchemaV2 is retained for call sites that need the legacy schema.
+func LoadScheduleSchemaV2() (*jsonschema.Schema, error) {
+	return LoadScheduleSchema(2)
+}
+
+// LoadScheduleSchemaV3 is retained for call sites that need the new schema.
+func LoadScheduleSchemaV3() (*jsonschema.Schema, error) {
+	return LoadScheduleSchema(3)
+}
+
+// LoadReviewSidecarSchema compiles and caches the requested review sidecar schema version.
+func LoadReviewSidecarSchema(version int) (*jsonschema.Schema, error) {
+	switch version {
+	case 1:
+		reviewSidecarSchemaV1Once.Do(func() {
+			reviewSidecarSchemaV1, reviewSidecarSchemaV1Err = compileSchemaFromResolvedPath(reviewSidecarSchemaV1RelPath, "mem://swim-review-schedule-schema-v1.json")
+		})
+		return reviewSidecarSchemaV1, reviewSidecarSchemaV1Err
+	case 2:
+		reviewSidecarSchemaV2Once.Do(func() {
+			reviewSidecarSchemaV2, reviewSidecarSchemaV2Err = compileSchemaFromResolvedPath(reviewSidecarSchemaV2RelPath, "mem://swim-review-schedule-schema-v2.json")
+		})
+		return reviewSidecarSchemaV2, reviewSidecarSchemaV2Err
+	default:
+		return nil, fmt.Errorf("unsupported review schedule schema_version: %d", version)
+	}
 }
 
 // LoadJournalSchema compiles and caches docs/specs/swim-journal-schema-v1.json.
@@ -145,17 +263,24 @@ func LoadJournalSchema() (*jsonschema.Schema, error) {
 	return journalSchema, journalSchemaErr
 }
 
-// LoadReviewSidecarSchema compiles and caches docs/specs/swim-review-schedule-schema-v1.json.
-func LoadReviewSidecarSchema() (*jsonschema.Schema, error) {
-	reviewSidecarSchemaOnce.Do(func() {
-		reviewSidecarSchema, reviewSidecarSchemaErr = compileSchemaFromResolvedPath(reviewSidecarSchemaRelPath, "mem://swim-review-schedule-schema-v1.json")
-	})
-	return reviewSidecarSchema, reviewSidecarSchemaErr
+func LoadReviewSidecarSchemaV1() (*jsonschema.Schema, error) {
+	return LoadReviewSidecarSchema(1)
+}
+
+func LoadReviewSidecarSchemaV2() (*jsonschema.Schema, error) {
+	return LoadReviewSidecarSchema(2)
 }
 
 // ValidateSchedule validates schedule JSON using schema + strict structural invariants.
 func ValidateSchedule(data []byte) error {
-	sch, err := LoadScheduleSchema()
+	var header struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(data, &header); err != nil {
+		return fmt.Errorf("schedule decode failed: %w", err)
+	}
+
+	sch, err := LoadScheduleSchema(header.SchemaVersion)
 	if err != nil {
 		return err
 	}
@@ -202,6 +327,14 @@ func ValidateSchedule(data []byte) error {
 				expected.produces,
 			)
 		}
+		if sched.SchemaVersion >= 3 {
+			if err := validateOperationForAction(row); err != nil {
+				return err
+			}
+			if err := validateInvokeAgainstOperation(row); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -245,7 +378,14 @@ func ValidateReviewScheduleSidecar(data []byte, base *Schedule) error {
 		return fmt.Errorf("base schedule required for review sidecar validation")
 	}
 
-	sch, err := LoadReviewSidecarSchema()
+	var header struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(data, &header); err != nil {
+		return fmt.Errorf("review schedule sidecar decode failed: %w", err)
+	}
+
+	sch, err := LoadReviewSidecarSchema(header.SchemaVersion)
 	if err != nil {
 		return err
 	}
@@ -304,6 +444,24 @@ func ValidateReviewScheduleSidecar(data []byte, base *Schedule) error {
 				expected.produces,
 			)
 		}
+		if sidecar.SchemaVersion >= 2 {
+			row := ScheduleRow{
+				Seq:       ins.SeqHint,
+				StepID:    ins.StepID,
+				TaskID:    ins.TaskID,
+				Action:    ins.Action,
+				Requires:  ins.Requires,
+				Produces:  ins.Produces,
+				Operation: ins.Operation,
+				Invoke:    ins.Invoke,
+			}
+			if err := validateOperationForAction(row); err != nil {
+				return err
+			}
+			if err := validateInvokeAgainstOperation(row); err != nil {
+				return err
+			}
+		}
 	}
 
 	for i, ins := range sidecar.Insertions {
@@ -351,6 +509,116 @@ func findSidecarStepIDDuplicate(existing []ReviewScheduleInsertion, stepID strin
 		}
 	}
 	return 0, false
+}
+
+func validateOperationForAction(row ScheduleRow) error {
+	switch row.Action {
+	case "implement", "fix":
+		if row.Operation.Kind != "agent_dispatch" {
+			return fmt.Errorf("%s requires agent_dispatch operation", row.Action)
+		}
+		if row.Operation.Agent == "" || row.Operation.Target == "" {
+			return fmt.Errorf("%s requires agent and target", row.Action)
+		}
+	case "review":
+		if row.Operation.Kind != "agent_dispatch" {
+			return fmt.Errorf("review requires agent_dispatch operation")
+		}
+		if row.Operation.Agent == "" || row.Operation.Target == "" || row.Operation.Reviewer == "" {
+			return fmt.Errorf("review requires agent, target, and reviewer")
+		}
+	case "end_review", "finish":
+		if row.Operation.Kind != "state_transition" {
+			return fmt.Errorf("%s requires state_transition operation", row.Action)
+		}
+	default:
+		return fmt.Errorf("invalid action: %q", row.Action)
+	}
+	return nil
+}
+
+func validateInvokeAgainstOperation(row ScheduleRow) error {
+	argv := row.Invoke.Argv
+	if len(argv) == 0 {
+		return fmt.Errorf("malformed argv: row has empty argv")
+	}
+	if strings.TrimSpace(argv[0]) == "" {
+		return fmt.Errorf("malformed argv: row has empty argv[0]")
+	}
+	if filepath.Base(argv[0]) != "wp-plan-step.sh" {
+		return fmt.Errorf("invoke.argv contradicts operation: argv[0]=%q want wp-plan-step.sh", argv[0])
+	}
+	if value, ok := lookupFlagValue(argv, "--action"); !ok || value != row.Action {
+		return fmt.Errorf("invoke.argv contradicts operation: --action mismatch for %s", row.Action)
+	}
+	if value, ok := lookupFlagValue(argv, "--task-id"); !ok || value != row.TaskID {
+		return fmt.Errorf("invoke.argv contradicts operation: --task-id mismatch for %s", row.TaskID)
+	}
+
+	switch row.Operation.Kind {
+	case "agent_dispatch":
+		if value, ok := lookupFlagValue(argv, "--target"); !ok || value != row.Operation.Target {
+			return fmt.Errorf("invoke.argv contradicts operation: --target mismatch for %s", row.TaskID)
+		}
+		if value, ok := lookupFlagValue(argv, "--agent"); !ok || value != row.Operation.Agent {
+			return fmt.Errorf("invoke.argv contradicts operation: --agent mismatch for %s", row.TaskID)
+		}
+		if row.Action == "review" {
+			if value, ok := lookupFlagValue(argv, "--reviewer"); !ok || value != row.Operation.Reviewer {
+				return fmt.Errorf("invoke.argv contradicts operation: --reviewer mismatch for %s", row.TaskID)
+			}
+		} else if hasFlag(argv, "--reviewer") {
+			return fmt.Errorf("invoke.argv contradicts operation: unexpected --reviewer for %s", row.Action)
+		}
+	case "state_transition":
+		if hasFlag(argv, "--target") || hasFlag(argv, "--agent") || hasFlag(argv, "--reviewer") {
+			return fmt.Errorf("invoke.argv contradicts operation: state_transition cannot carry dispatch flags")
+		}
+	default:
+		return fmt.Errorf("invoke.argv contradicts operation: unsupported operation kind %q", row.Operation.Kind)
+	}
+
+	return nil
+}
+
+// BuildInvokeArgv derives the runtime argv for schema v3 rows and falls back to
+// the stored invoke payload for legacy rows.
+func BuildInvokeArgv(row ScheduleRow, planPath string) ([]string, error) {
+	if row.Operation.Kind == "" {
+		return append([]string(nil), row.Invoke.Argv...), nil
+	}
+
+	argv := []string{"wp-plan-step.sh", "--action", row.Action, "--plan", planPath, "--task-id", row.TaskID}
+	switch row.Operation.Kind {
+	case "agent_dispatch":
+		argv = append(argv, "--target", row.Operation.Target, "--agent", row.Operation.Agent)
+		if row.Action == "review" {
+			argv = append(argv, "--reviewer", row.Operation.Reviewer)
+		}
+	case "state_transition":
+		// No extra flags.
+	default:
+		return nil, fmt.Errorf("unsupported operation kind: %s", row.Operation.Kind)
+	}
+	return argv, nil
+}
+
+func hasFlag(argv []string, flag string) bool {
+	_, ok := lookupFlagValue(argv, flag)
+	return ok
+}
+
+func lookupFlagValue(argv []string, flag string) (string, bool) {
+	for i := 0; i < len(argv); i++ {
+		if argv[i] != flag {
+			continue
+		}
+		if i+1 >= len(argv) {
+			return "", false
+		}
+		return argv[i+1], true
+	}
+	return "", false
 }
 
 func validateJSONAgainstSchema(kind string, data []byte, sch *jsonschema.Schema) error {

@@ -155,11 +155,12 @@ Configure the server binary path via `--mcp-bin`, `WAVEPLAN_MCP_BIN` env var, or
 
 ```json
 {
+  "schema_version": 3,
   "execution": [
-    { "task_id": "T1.1", "wp_invoke": "wp-plan-to-agent.sh ...", "status": "available" },
-    { "task_id": "T1.1", "wp_invoke": "wp-plan-to-agent.sh ...", "status": "taken" },
-    { "task_id": "T1.1", "wp_invoke": "wp-plan-to-agent.sh ...", "status": "taken" },
-    { "task_id": "T1.1", "wp_invoke": "wp-plan-to-agent.sh ...", "status": "completed" }
+    { "task_id": "T1.1", "operation": { "kind": "agent_dispatch" }, "wp_invoke": "wp-plan-step.sh ...", "status": "available" },
+    { "task_id": "T1.1", "operation": { "kind": "agent_dispatch" }, "wp_invoke": "wp-plan-step.sh ...", "status": "taken" },
+    { "task_id": "T1.1", "operation": { "kind": "state_transition" }, "wp_invoke": "wp-plan-step.sh ...", "status": "taken" },
+    { "task_id": "T1.1", "operation": { "kind": "state_transition" }, "wp_invoke": "wp-plan-step.sh ...", "status": "completed" }
   ]
 }
 ```
@@ -175,7 +176,7 @@ wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json --task-sco
 wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json --out tmp.json
 
 # override emitted command path (optional)
-wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json --invoker /opt/tools/wp-plan-to-agent.sh
+wp-emit-wave-execution.sh --plan <plan.json> --agents waveagents.json --invoker /opt/tools/wp-plan-step.sh
 ```
 
 `waveagents.json` supports:
@@ -186,32 +187,42 @@ Task scope:
 - `all` (default): includes every unit/task in `(wave, task_id)` order
 - `open`: includes only claimable tasks from `waveplan-cli get open`
 
-### Helper: `wp-plan-to-agent.sh`
+### Helpers: `wp-plan-step.sh` and `wp-agent-dispatch.sh`
 
-`wp-plan-to-agent.sh` is a unified wrapper for agent-dispatch + lifecycle commands.
+`wp-plan-step.sh` is the canonical scheduled-step executor. It owns waveplan
+state transitions for a specific `task_id` and delegates prompt delivery to
+`wp-agent-dispatch.sh`.
 
 ```bash
 # 1) Dispatch implementation task to an agent target
-wp-plan-to-agent.sh --mode implement --target codex --plan <plan.json> --agent sigma
+wp-plan-step.sh --action implement --target codex --plan <plan.json> --task-id T1.1 --agent sigma
 
 # 2) Dispatch review task (owner agent + reviewer agent)
-wp-plan-to-agent.sh --mode review --target claude --plan <plan.json> --agent sigma --reviewer psi
+wp-plan-step.sh --action review --target claude --plan <plan.json> --task-id T1.1 --agent sigma --reviewer psi
 
 # 3) End review with optional note
-wp-plan-to-agent.sh --mode review_end --plan <plan.json> --task-id T1.1 --review-note "looks good"
+wp-plan-step.sh --action end_review --plan <plan.json> --task-id T1.1 --review-note "looks good"
 
 # 4) Mark complete with optional git sha (or DEFERRED)
-wp-plan-to-agent.sh --mode fin --plan <plan.json> --task-id T1.1 --git-sha DEFERRED
+wp-plan-step.sh --action finish --plan <plan.json> --task-id T1.1 --git-sha DEFERRED
 ```
 
 Supported targets for `--target`: `codex`, `claude`, `opencode`.
 
 Use `--dry-run` to print the generated command/prompt without mutating waveplan state.
 
+Compatibility wrappers:
+- `wp-plan-to-agent.sh` resolves a task id from the legacy mode-based interface and then delegates to `wp-plan-step.sh`.
+- `wp-task-to-agent.sh` is now a guarded legacy wrapper:
+  - rejects `--task-id` and points callers to `wp-plan-step.sh`
+  - `implement`: resumes an already-taken task via `wp-agent-dispatch.sh`, otherwise derives the next `task_id` from `peek` and delegates to `wp-plan-step.sh`
+  - `review`: derives the currently taken task for the owner agent and delegates to `wp-plan-step.sh`
+  - `fix`: uses `SWIM_TASK_ID` when injected by SWIM, otherwise derives the current `review_taken` task and delegates to `wp-plan-step.sh`
+
 Portability overrides:
 - `WAVEPLAN_CLI_BIN`: path to `waveplan-cli` if not installed in PATH
-- `WP_TASK_TO_AGENT_BIN`: path to `wp-task-to-agent.sh`
-- `WP_PLAN_TO_AGENT_BIN`: command/path used by `wp-emit-wave-execution.sh`
+- `WP_AGENT_DISPATCH_BIN`: path to `wp-agent-dispatch.sh`
+- `WP_PLAN_STEP_BIN`: path to `wp-plan-step.sh` for wrappers and emitted schedule rows
 
 ## SWIM
 
@@ -325,7 +336,7 @@ waveplan-cli swim validate --kind journal --in "${SCHEDULE%.json}.journal.json"
 
 | Term | Meaning |
 |------|---------|
-| `schedule` | v2 JSON list of execution rows. Each row has `seq`, `step_id`, `task_id`, `action`, `requires`, `produces`, and `invoke.argv`. |
+| `schedule` | v3 JSON list of execution rows. Each row has `seq`, `step_id`, `task_id`, `action`, `requires`, `produces`, `operation`, and derived `invoke.argv`. |
 | `journal` | append-only v1 JSON event log. The `cursor` points at the next schedule row to execute. |
 | `state` | waveplan `<plan>.state.json`; task status is derived as `available`, `taken`, `review_taken`, `review_ended`, or `completed`. |
 | `dispatch action` | an action that hands work to an external agent CLI and must produce a dispatch receipt: `implement`, `review`, `fix`. |
@@ -357,8 +368,8 @@ finish      review_ended -> completed
 ```
 
 Current `wp-emit-wave-execution.sh` emits the standard lifecycle. If a schedule
-contains `fix` rows, SWIM validates and executes them, and `wp-task-to-agent.sh
---mode fix` attaches the prior review stdout via `SWIM_PRIOR_STDOUT_PATH`.
+contains `fix` rows, SWIM validates and executes them, and `wp-plan-step.sh
+--action fix` attaches the prior review stdout via `SWIM_PRIOR_STDOUT_PATH`.
 That launcher path depends on a configured waveplan CLI/MCP that supports
 `start_fix <task_id>`.
 

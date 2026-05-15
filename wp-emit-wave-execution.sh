@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WAVEPLAN_CLI_BIN="${WAVEPLAN_CLI_BIN:-}"
-INVOKER="${WP_PLAN_TO_AGENT_BIN:-wp-plan-to-agent.sh}"
+INVOKER="${WP_PLAN_STEP_BIN:-wp-plan-step.sh}"
 
 usage() {
   cat <<'USAGE'
@@ -12,13 +12,13 @@ Usage:
 
 Description:
   Emits a JSON execution plan (no execution) with rows:
-    { "seq", "step_id", "task_id", "action", "requires", "produces", "wp_invoke", "status" }
+    { "seq", "step_id", "task_id", "action", "requires", "produces", "operation", "invoke", "wp_invoke", "status" }
 
   Workflow per emitted task:
-    1) implement/pop dispatch via wp-plan-to-agent.sh
-    2) review dispatch via wp-plan-to-agent.sh
-    3) end_review via wp-plan-to-agent.sh
-    4) fin via wp-plan-to-agent.sh
+    1) implement/pop dispatch via wp-plan-step.sh
+    2) review dispatch via wp-plan-step.sh
+    3) end_review via wp-plan-step.sh
+    4) finish via wp-plan-step.sh
 
 Agent rotation:
   - Uses schedule from waveagents.json if provided.
@@ -32,7 +32,7 @@ Task scope:
 
 Environment:
   WAVEPLAN_CLI_BIN        Path to waveplan-cli (default: PATH, then sibling file)
-  WP_PLAN_TO_AGENT_BIN    Command/path used in emitted wp_invoke strings (default: wp-plan-to-agent.sh)
+  WP_PLAN_STEP_BIN        Command/path used in emitted wp_invoke strings (default: wp-plan-step.sh)
 USAGE
 }
 
@@ -232,7 +232,7 @@ for t in tasks:
     review_provider = agent_map[review_agent]
     wave = int(t.get("wave", 0) or 0)
 
-    def add_row(action, argv, status):
+    def add_row(action, argv, status, operation):
         # argv is the canonical execution payload; wp_invoke is derived from it
         # so the two cannot drift. Runner consumption (T2.1+) reads argv only;
         # wp_invoke is debug-only.
@@ -253,6 +253,7 @@ for t in tasks:
             "action": action,
             "requires": {"task_status": req},
             "produces": {"task_status": prod},
+            "operation": operation,
             "invoke": {"argv": list(argv)},
             "wp_invoke": wp_invoke_cmd,
             "status": status,
@@ -261,42 +262,48 @@ for t in tasks:
 
     # 1) Implement / pop dispatch
     argv1 = [
-        invoker, "--mode", "implement",
+        invoker, "--action", "implement",
         "--target", pop_provider,
         "--plan", plan_path,
+        "--task-id", tid,
         "--agent", pop_agent,
     ]
-    add_row("implement", argv1, "available")
+    op1 = {"kind": "agent_dispatch", "target": pop_provider, "agent": pop_agent}
+    add_row("implement", argv1, "available", op1)
 
     # 2) Review dispatch (owner=pop agent; reviewer=review agent)
     argv2 = [
-        invoker, "--mode", "review",
+        invoker, "--action", "review",
         "--target", review_provider,
         "--plan", plan_path,
+        "--task-id", tid,
         "--agent", pop_agent,
         "--reviewer", review_agent,
     ]
-    add_row("review", argv2, "taken")
+    op2 = {"kind": "agent_dispatch", "target": review_provider, "agent": pop_agent, "reviewer": review_agent}
+    add_row("review", argv2, "taken", op2)
 
     # 3) End review
     argv3 = [
-        invoker, "--mode", "review_end",
+        invoker, "--action", "end_review",
         "--plan", plan_path,
         "--task-id", tid,
         "--review-note", "${WP_COMMENT:-}",
     ]
-    add_row("end_review", argv3, "taken")
+    op3 = {"kind": "state_transition"}
+    add_row("end_review", argv3, "taken", op3)
 
     # 4) Complete
     argv4 = [
-        invoker, "--mode", "fin",
+        invoker, "--action", "finish",
         "--plan", plan_path,
         "--task-id", tid,
         "--git-sha", "${GIT_SHA:-DEFERRED}",
     ]
-    add_row("finish", argv4, "completed")
+    op4 = {"kind": "state_transition"}
+    add_row("finish", argv4, "completed", op4)
 
-print(json.dumps({"schema_version": 2, "execution": execution}, indent=2))
+print(json.dumps({"schema_version": 3, "execution": execution}, indent=2))
 PY
 )"
 

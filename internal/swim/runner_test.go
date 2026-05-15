@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"reflect"
 	"testing"
 )
 
@@ -103,6 +104,50 @@ func TestExecuteNextStep_FailureKeepsCursorAndAppendsEvent(t *testing.T) {
 	}
 	if j.Events[1].Attempt != 2 {
 		t.Fatalf("attempt after retry = %d, want 2", j.Events[1].Attempt)
+	}
+}
+
+func TestExecuteNextStep_UsesDerivedInvokeArgvForV3Rows(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "schedule.json")
+	journalPath := filepath.Join(dir, "journal.json")
+
+	writeScheduleVersion(t, schedulePath, 3, []ScheduleRow{
+		{
+			Seq:      1,
+			StepID:   "S1_T1.1_review",
+			TaskID:   "T1.1",
+			Action:   "review",
+			Requires: StatusWrapper{TaskStatus: string(StatusTaken)},
+			Produces: StatusWrapper{TaskStatus: string(StatusReviewTaken)},
+			Operation: OperationSpec{
+				Kind:     "agent_dispatch",
+				Target:   "claude",
+				Agent:    "phi",
+				Reviewer: "theta",
+			},
+			Invoke: InvokeSpec{Argv: []string{"wp-plan-step.sh", "--action", "review", "--plan", "/tmp/stale-plan.json", "--task-id", "T1.1", "--target", "claude", "--agent", "phi", "--reviewer", "theta"}},
+		},
+	})
+
+	var got []string
+	res, err := ExecuteNextStep(ExecNextOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		InvokeFn: func(argv []string, workDir string) error {
+			got = append([]string(nil), argv...)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteNextStep: %v", err)
+	}
+	if res.Outcome != "applied" {
+		t.Fatalf("outcome = %q, want applied", res.Outcome)
+	}
+	want := []string{"wp-plan-step.sh", "--action", "review", "--plan", schedulePath, "--task-id", "T1.1", "--target", "claude", "--agent", "phi", "--reviewer", "theta"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("derived argv mismatch\ngot:  %#v\nwant: %#v", got, want)
 	}
 }
 
@@ -373,8 +418,13 @@ func TestExecuteNextStep_RetryUsesAttemptInLogFileNames(t *testing.T) {
 
 func writeSchedule(t *testing.T, path string, rows []ScheduleRow) {
 	t.Helper()
+	writeScheduleVersion(t, path, 2, rows)
+}
+
+func writeScheduleVersion(t *testing.T, path string, version int, rows []ScheduleRow) {
+	t.Helper()
 	body, err := json.MarshalIndent(map[string]any{
-		"schema_version": 2,
+		"schema_version": version,
 		"execution":      rows,
 	}, "", "  ")
 	if err != nil {

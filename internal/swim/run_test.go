@@ -72,6 +72,47 @@ func TestRun_DefaultStopsOnFirstNonApplied(t *testing.T) {
 	}
 }
 
+func TestRun_DryRun_UsesDerivedInvokeArgvForV3Rows(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join(dir, "schedule.json")
+	journalPath := filepath.Join(dir, "journal.json")
+	statePath := filepath.Join(dir, "state.json")
+
+	writeScheduleVersion(t, schedulePath, 3, []ScheduleRow{
+		{
+			Seq:      1,
+			StepID:   "S1_T1.1_end_review",
+			TaskID:   "T1.1",
+			Action:   "end_review",
+			Requires: StatusWrapper{TaskStatus: "review_taken"},
+			Produces: StatusWrapper{TaskStatus: "review_ended"},
+			Operation: OperationSpec{
+				Kind: "state_transition",
+			},
+			Invoke: InvokeSpec{Argv: []string{"wp-plan-step.sh", "--action", "end_review", "--plan", "/tmp/stale-plan.json", "--task-id", "T1.1"}},
+		},
+	})
+	writeStateSnapshot(t, statePath, StatusReviewTaken)
+
+	report, err := Run(RunOptions{
+		SchedulePath: schedulePath,
+		JournalPath:  journalPath,
+		StatePath:    statePath,
+		Until:        "end_review",
+		DryRun:       true,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Steps) != 1 {
+		t.Fatalf("steps len = %d, want 1", len(report.Steps))
+	}
+	want := "wp-plan-step.sh --action end_review --plan " + schedulePath + " --task-id T1.1"
+	if report.Steps[0].Reason != want {
+		t.Fatalf("reason = %q, want %q", report.Steps[0].Reason, want)
+	}
+}
+
 func TestRun_UntilActionFinish(t *testing.T) {
 	dir := t.TempDir()
 	schedulePath := filepath.Join(dir, "schedule.json")

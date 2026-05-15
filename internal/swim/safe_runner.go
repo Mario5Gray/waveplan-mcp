@@ -184,7 +184,11 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 		return nil, err
 	}
 
-	runErr := invokeArgv(decision.Row.Invoke.Argv, opts.WorkDir, stdoutAbsPath, stderrAbsPath, extraEnv, opts.InvokeFn)
+	argv, err := BuildInvokeArgv(decision.Row, opts.SchedulePath)
+	if err != nil {
+		return nil, err
+	}
+	runErr := invokeArgv(argv, opts.WorkDir, stdoutAbsPath, stderrAbsPath, extraEnv, opts.InvokeFn)
 	exitCode := 0
 	outcome := "applied"
 	reason := ""
@@ -386,6 +390,7 @@ func scheduleRowFromInsertion(ins ReviewScheduleInsertion) ScheduleRow {
 		Action:   ins.Action,
 		Requires: ins.Requires,
 		Produces: ins.Produces,
+		Operation: ins.Operation,
 		Source:   scheduleRowSourceReviewSidecar,
 		Invoke: InvokeSpec{
 			Argv: append([]string(nil), ins.Invoke.Argv...),

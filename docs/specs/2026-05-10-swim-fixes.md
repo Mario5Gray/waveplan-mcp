@@ -30,8 +30,9 @@ under the schedule artifact tree:
 
 `.waveplan/swim/<schedule-basename>/receipts/<step_id>.<attempt>.dispatch.json`
 
-The launcher (`wp-task-to-agent.sh`) will write this file only after the target
-CLI accepts the prompt successfully.
+The prompt-delivery helper (`wp-agent-dispatch.sh`) writes this file only after
+the target CLI accepts the prompt successfully. Legacy direct flows through
+`wp-task-to-agent.sh` still end at the same helper.
 
 Receipt payload v1:
 
@@ -132,18 +133,26 @@ is not expected to edit the schedule by hand.
 Step IDs must be unique per row even when the same action appears multiple times,
 e.g. `S2_T1.1_review_r1`, `S4_T1.1_review_r2`.
 
-### Launcher (`wp-task-to-agent.sh`)
+### Dispatch Path
+
+Canonical scheduled execution uses:
+
+```text
+wp-plan-step.sh -> wp-agent-dispatch.sh
+```
+
+`wp-task-to-agent.sh` remains as a compatibility wrapper for older direct
+implement/review/fix entrypoints. It is no longer the canonical scheduled-step
+launcher and must not receive `--task-id`.
 
 A `--mode fix` is added alongside `implement` and `review`:
 
-1. Finds the currently `taken` task for the agent (same as `resume_taken` in
-   implement mode — `fix` returns the task to `taken`, so the implementer picks
-   it back up).
+1. `wp-plan-step.sh` validates the selected task and runs `start_fix <task_id>`.
 2. Attaches reviewer findings from the prior `review` step's stdout log path
    (passed via `SWIM_PRIOR_STDOUT_PATH` env var set by the runner).
-3. Builds a fix prompt and delivers it to the target CLI.
-4. Writes a dispatch receipt after confirmed delivery (same path convention as
-   `implement` and `review`).
+3. `wp-agent-dispatch.sh` builds the fix prompt and delivers it to the target CLI.
+4. `wp-agent-dispatch.sh` writes a dispatch receipt after confirmed delivery
+   (same path convention as `implement` and `review`).
 
 ### Runner Changes
 

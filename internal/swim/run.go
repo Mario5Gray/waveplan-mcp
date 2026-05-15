@@ -148,12 +148,16 @@ func runDry(opts RunOptions, cond untilCond, report *RunReport) (*RunReport, err
 			report.Boundary = "done"
 			return report, nil
 		case ActionReady:
+			argv, err := BuildInvokeArgv(decision.Row, opts.SchedulePath)
+			if err != nil {
+				return nil, err
+			}
 			step = ApplyReport{
 				Status: "would_apply",
 				StepID: decision.Row.StepID,
 				TaskID: decision.Row.TaskID,
 				Seq:    decision.Row.Seq,
-				Reason: strings.Join(decision.Row.Invoke.Argv, " "),
+				Reason: strings.Join(argv, " "),
 			}
 			report.Steps = append(report.Steps, step)
 			applyShadow(shadowJournal, shadowSnap, decision.Row)

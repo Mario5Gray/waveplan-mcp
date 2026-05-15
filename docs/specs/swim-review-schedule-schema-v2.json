@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/darkbit1001/waveplan-mcp/main/docs/specs/swim-review-schedule-schema-v2.json",
+  "title": "SWIM Review Schedule Sidecar v2",
+  "description": "Schema for anchored review-loop supplemental schedule rows with typed operations.",
+  "type": "object",
+  "required": ["schema_version", "base_schedule_path", "insertions"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 2
+    },
+    "base_schedule_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "insertions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/insertion"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "task_status": {
+      "type": "string",
+      "enum": ["available", "taken", "review_taken", "review_ended", "completed"]
+    },
+    "status_wrapper": {
+      "type": "object",
+      "required": ["task_status"],
+      "properties": {
+        "task_status": {
+          "$ref": "#/$defs/task_status"
+        }
+      },
+      "additionalProperties": false
+    },
+    "invoke": {
+      "type": "object",
+      "required": ["argv"],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "agent_dispatch_operation": {
+      "type": "object",
+      "required": ["kind", "target", "agent"],
+      "properties": {
+        "kind": {
+          "const": "agent_dispatch"
+        },
+        "target": {
+          "type": "string",
+          "enum": ["codex", "claude", "opencode"]
+        },
+        "agent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "state_transition_operation": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "const": "state_transition"
+        }
+      },
+      "additionalProperties": false
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/agent_dispatch_operation"
+        },
+        {
+          "$ref": "#/$defs/state_transition_operation"
+        }
+      ]
+    },
+    "insertion": {
+      "type": "object",
+      "required": [
+        "id",
+        "after_step_id",
+        "step_id",
+        "seq_hint",
+        "task_id",
+        "action",
+        "requires",
+        "produces",
+        "operation",
+        "invoke",
+        "reason",
+        "source_event_id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^X[0-9]+$"
+        },
+        "after_step_id": {
+          "type": "string",
+          "pattern": "^(S[0-9]+_[A-Za-z0-9.\\-]+_(implement|end_review|finish|review(_r[0-9]+)?|fix(_r[0-9]+)?)|X[0-9]+)$"
+        },
+        "step_id": {
+          "type": "string",
+          "pattern": "^S[0-9]+_[A-Za-z0-9.\\-]+_(implement|end_review|finish|review(_r[0-9]+)?|fix(_r[0-9]+)?)$"
+        },
+        "seq_hint": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "enum": ["implement", "review", "end_review", "finish", "fix"]
+        },
+        "requires": {
+          "$ref": "#/$defs/status_wrapper"
+        },
+        "produces": {
+          "$ref": "#/$defs/status_wrapper"
+        },
+        "operation": {
+          "$ref": "#/$defs/operation"
+        },
+        "invoke": {
+          "$ref": "#/$defs/invoke"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_event_id": {
+          "type": "string",
+          "pattern": "^E[0-9]{4,}$"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

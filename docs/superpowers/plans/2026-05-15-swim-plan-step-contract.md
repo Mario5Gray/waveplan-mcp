@@ -602,8 +602,10 @@ Replace `wp-task-to-agent.sh` with a guarded wrapper:
 
 ```text
 - If --task-id is present: fail with a message pointing to wp-plan-step.sh.
-- If legacy mode needs task selection, delegate to wp-plan-step.sh after deriving task_id from current state.
-- Otherwise call wp-agent-dispatch.sh only when task JSON input is available.
+- If a legacy implement call already has a taken task for the same agent, call wp-agent-dispatch.sh directly with that task JSON and mark task_source=resume_taken.
+- Otherwise, if legacy mode needs task selection, derive task_id from current state and delegate to wp-plan-step.sh.
+- review and fix derive a task_id from current state and then delegate to wp-plan-step.sh.
+- Call wp-agent-dispatch.sh directly only when task JSON input is already available.
 ```
 
 - [ ] **Step 6: Verify script contract**

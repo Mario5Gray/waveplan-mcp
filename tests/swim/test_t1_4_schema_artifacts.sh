@@ -5,31 +5,57 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO"
 
-# Both schema files must exist and parse as JSON.
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+OUT="$TMP_DIR/schedule.json"
+JOURNAL="$TMP_DIR/journal.json"
+
 python3 -c "import json; json.load(open('docs/specs/swim-schedule-schema-v2.json', encoding='utf-8'))"
 python3 -c "import json; json.load(open('docs/specs/swim-journal-schema-v1.json', encoding='utf-8'))"
-
-if ! python3 -c "import jsonschema" >/dev/null 2>&1; then
-  echo "SKIP: jsonschema not installed (pip install jsonschema)"
-  exit 0
-fi
-
-OUT="$(mktemp)"
-trap 'rm -f "$OUT"' EXIT
 
 bash wp-emit-wave-execution.sh \
   --plan docs/plans/2026-05-05-swim-execution-waves.json \
   --agents tests/swim/fixtures/waveagents.json \
   --task-scope all > "$OUT"
 
-python3 - "$OUT" <<'PY'
-import json
-import sys
-import jsonschema
+go run ./cmd/swim-validate --kind schedule --in "$OUT" >/dev/null
 
-schema = json.load(open("docs/specs/swim-schedule-schema-v2.json", encoding="utf-8"))
-data = json.load(open(sys.argv[1], encoding="utf-8"))
-jsonschema.validate(instance=data, schema=schema)
-PY
+cat > "$JOURNAL" <<'JSON'
+{
+  "schema_version": 1,
+  "schedule_path": "docs/plans/2026-05-05-swim-execution-waves.json",
+  "cursor": 1,
+  "last_event": {
+    "event_id": "E0001",
+    "step_id": "S1_T1.1_implement",
+    "seq": 1,
+    "task_id": "T1.1",
+    "action": "implement",
+    "attempt": 1,
+    "started_on": "2026-05-05T12:00:00Z",
+    "completed_on": "2026-05-05T12:00:01Z",
+    "outcome": "applied",
+    "state_before": {"task_status": "available"},
+    "state_after": {"task_status": "taken"}
+  },
+  "events": [
+    {
+      "event_id": "E0001",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 1,
+      "started_on": "2026-05-05T12:00:00Z",
+      "completed_on": "2026-05-05T12:00:01Z",
+      "outcome": "applied",
+      "state_before": {"task_status": "available"},
+      "state_after": {"task_status": "taken"}
+    }
+  ]
+}
+JSON
+
+go run ./cmd/swim-validate --kind journal --in "$JOURNAL" >/dev/null
 
 echo "PASS: T1.4 schema artifacts"
