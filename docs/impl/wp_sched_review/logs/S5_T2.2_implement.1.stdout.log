@@ -1,0 +1,24 @@
+Implemented `T2.2` with a superpowers-style TDD flow (RED -> GREEN -> verify), and kept waveplan usage read-only (no write actions invoked).
+
+**File Changes**
+- Added sidecar-source metadata on runtime rows in [contracts.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/contracts.go:55):
+  - `ScheduleRow.Source` (non-serialized) and `scheduleRowSourceReviewSidecar`.
+- Marked merged sidecar rows with that source in [safe_runner.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/safe_runner.go:382).
+- Added resolver guard in [resolver.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/resolver.go:18):
+  - New `ResolutionBlockedPendingSidecar`.
+  - `ResolveNext` now blocks `end_review`/`finish` when future sidecar rows for the same task are still pending.
+  - Added helper `pendingSidecarStepForTask`.
+- Added regression tests in [review_schedule_runtime_test.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/review_schedule_runtime_test.go:159):
+  - `TestRun_DryRun_BlocksEndReviewWhilePendingSidecarRowsExist`
+  - `TestRun_DryRun_BlocksFinishWhilePendingSidecarRowsExist`
+
+**Verification**
+- RED (before impl):
+  - `GOCACHE=/private/tmp/go-build-cache GOTMPDIR=/private/tmp go test ./internal/swim -run 'TestRun_DryRun_Blocks(EndReview|Finish)WhilePendingSidecarRowsExist' -count=1`
+  - Result: failed as expected (`steps len` mismatches).
+- GREEN (after impl):
+  - Same command as above.
+  - Result: `ok .../internal/swim`.
+- Relevant suite:
+  - `GOCACHE=/private/tmp/go-build-cache GOTMPDIR=/private/tmp go test ./internal/swim -count=1`
+  - Result: `ok .../internal/swim`.

@@ -6,21 +6,23 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
 // SafeExecOptions wraps one-step execution with lock ownership and
 // snapshot-based race closure.
 type SafeExecOptions struct {
-	SchedulePath   string
-	JournalPath    string
-	StatePath      string
-	ArtifactRoot   string
-	LockPath       string
-	WorkDir        string
-	ExpectCursor   *int
-	InvokeFn       func(argv []string, workDir string) error
-	ReadSnapshotFn func(path string) (*StateSnapshot, error)
+	SchedulePath       string
+	ReviewSchedulePath string
+	JournalPath        string
+	StatePath          string
+	ArtifactRoot       string
+	LockPath           string
+	WorkDir            string
+	ExpectCursor       *int
+	InvokeFn           func(argv []string, workDir string) error
+	ReadSnapshotFn     func(path string) (*StateSnapshot, error)
 }
 
 // ExecuteNextStepSafe runs one schedule step under the T2.5 A/B/C protocol.
@@ -51,7 +53,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 		return nil, err
 	}
 
-	schedule, err := loadSchedule(opts.SchedulePath)
+	schedule, err := loadSchedule(opts.SchedulePath, opts.ReviewSchedulePath)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +288,7 @@ func ExecuteNextStepSafe(opts SafeExecOptions) (*ExecNextResult, error) {
 	}, nil
 }
 
-func loadSchedule(schedulePath string) (*Schedule, error) {
+func loadSchedule(schedulePath, reviewSchedulePath string) (*Schedule, error) {
 	scheduleRaw, err := os.ReadFile(schedulePath)
 	if err != nil {
 		return nil, fmt.Errorf("read schedule: %w", err)
@@ -298,7 +300,97 @@ func loadSchedule(schedulePath string) (*Schedule, error) {
 	if err := json.Unmarshal(scheduleRaw, &schedule); err != nil {
 		return nil, fmt.Errorf("decode schedule: %w", err)
 	}
+	if reviewSchedulePath == "" {
+		return &schedule, nil
+	}
+
+	reviewRaw, err := os.ReadFile(reviewSchedulePath)
+	if err != nil {
+		return nil, fmt.Errorf("read review schedule sidecar: %w", err)
+	}
+	if err := ValidateReviewScheduleSidecar(reviewRaw, &schedule); err != nil {
+		return nil, fmt.Errorf("invalid review schedule sidecar: %w", err)
+	}
+	var reviewSidecar ReviewScheduleSidecar
+	if err := json.Unmarshal(reviewRaw, &reviewSidecar); err != nil {
+		return nil, fmt.Errorf("decode review schedule sidecar: %w", err)
+	}
+	merged, err := mergeExecutionWithReviewInsertions(schedule.Execution, reviewSidecar.Insertions)
+	if err != nil {
+		return nil, err
+	}
+	schedule.Execution = merged
 	return &schedule, nil
+}
+
+func mergeExecutionWithReviewInsertions(base []ScheduleRow, insertions []ReviewScheduleInsertion) ([]ScheduleRow, error) {
+	if len(insertions) == 0 {
+		out := append([]ScheduleRow(nil), base...)
+		for i := range out {
+			out[i].Seq = i + 1
+		}
+		return out, nil
+	}
+
+	children := make(map[string][]ReviewScheduleInsertion)
+	for _, ins := range insertions {
+		children[ins.AfterStepID] = append(children[ins.AfterStepID], ins)
+	}
+	for anchor := range children {
+		rows := children[anchor]
+		sort.Slice(rows, func(i, j int) bool {
+			if rows[i].SeqHint == rows[j].SeqHint {
+				return rows[i].ID < rows[j].ID
+			}
+			return rows[i].SeqHint < rows[j].SeqHint
+		})
+		children[anchor] = rows
+	}
+
+	merged := make([]ScheduleRow, 0, len(base)+len(insertions))
+	emitted := make(map[string]struct{}, len(insertions))
+	var appendChildren func(anchor string) error
+	appendChildren = func(anchor string) error {
+		for _, ins := range children[anchor] {
+			if _, ok := emitted[ins.ID]; ok {
+				return fmt.Errorf("duplicate insertion id during merge: %s", ins.ID)
+			}
+			emitted[ins.ID] = struct{}{}
+			merged = append(merged, scheduleRowFromInsertion(ins))
+			if err := appendChildren(ins.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	for _, row := range base {
+		merged = append(merged, row)
+		if err := appendChildren(row.StepID); err != nil {
+			return nil, err
+		}
+	}
+	if len(emitted) != len(insertions) {
+		return nil, fmt.Errorf("failed to merge all review insertions: merged=%d insertions=%d", len(emitted), len(insertions))
+	}
+	for i := range merged {
+		merged[i].Seq = i + 1
+	}
+	return merged, nil
+}
+
+func scheduleRowFromInsertion(ins ReviewScheduleInsertion) ScheduleRow {
+	return ScheduleRow{
+		StepID:   ins.StepID,
+		TaskID:   ins.TaskID,
+		Action:   ins.Action,
+		Requires: ins.Requires,
+		Produces: ins.Produces,
+		Source:   scheduleRowSourceReviewSidecar,
+		Invoke: InvokeSpec{
+			Argv: append([]string(nil), ins.Invoke.Argv...),
+		},
+	}
 }
 
 func appendBlockedResult(opts SafeExecOptions, journal *Journal, row ScheduleRow, reason string, actual Status) (*ExecNextResult, error) {

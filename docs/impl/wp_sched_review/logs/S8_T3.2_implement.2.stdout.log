@@ -1,0 +1,48 @@
+Implemented `T3.2` end-to-end: review-sidecar path is now threaded through SWIM execution commands and into `waveplan-ps` observation inputs.
+
+**Concrete file changes**
+- SWIM CLI passthrough:
+- [waveplan-cli](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-cli)
+  - `swim next|step|run|journal` now resolve and pass `--review-schedule` to Go subprocesses.
+- Go SWIM command flags + wiring:
+- [cmd/swim-next-resolve/main.go](/Users/darkbit1001/workspace/waveplan-mcp/cmd/swim-next-resolve/main.go)
+- [cmd/swim-next/main.go](/Users/darkbit1001/workspace/waveplan-mcp/cmd/swim-next/main.go)
+- [cmd/swim-step/main.go](/Users/darkbit1001/workspace/waveplan-mcp/cmd/swim-step/main.go)
+- [cmd/swim-run/main.go](/Users/darkbit1001/workspace/waveplan-mcp/cmd/swim-run/main.go)
+- [cmd/swim-journal/main.go](/Users/darkbit1001/workspace/waveplan-mcp/cmd/swim-journal/main.go)
+  - Added `--review-schedule` support and passed into `internal/swim` where applicable.
+- SWIM runner sidecar support for `swim-next`:
+- [internal/swim/runner.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/runner.go)
+  - `ExecNextOptions` now includes `ReviewSchedulePath`.
+  - `ExecuteNextStep` now loads merged base+review schedule via `loadSchedule(...)`.
+- T7.3 fixture/test corrections:
+- [tests/swim/test_t7_3_review_schedule_passthrough.sh](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/test_t7_3_review_schedule_passthrough.sh)
+  - Fixed `journal.schedule_path` to actual schedule path.
+  - Set journal cursor to review-phase position (`2`) so `fix_r1` is the expected next step.
+- `waveplan-ps` review-sidecar observation input threading:
+- [waveplan-ps/cmd/waveplan-ps/main.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/cmd/waveplan-ps/main.go)
+- [waveplan-ps/internal/config/config.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/config/config.go)
+- [waveplan-ps/internal/watch/watcher.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/watch/watcher.go)
+- [waveplan-ps/internal/model/review_schedule.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/model/review_schedule.go)
+- [waveplan-ps/internal/ui/tui.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/ui/tui.go)
+  - Added `--review-schedule` / `WAVEPLAN_SCHED_REVIEW` support in observer inputs.
+  - Added review sidecar loader/model and watcher snapshot loading.
+  - Added text render section for loaded review schedules.
+- Added/updated tests:
+- [waveplan-ps/cmd/waveplan-ps/main_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/cmd/waveplan-ps/main_test.go)
+- [waveplan-ps/internal/config/config_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/config/config_test.go)
+- [waveplan-ps/internal/watch/watcher_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/watch/watcher_test.go)
+- [waveplan-ps/internal/model/model_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/model/model_test.go)
+- [waveplan-ps/internal/ui/tui_test.go](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/internal/ui/tui_test.go)
+
+**Verification commands + results**
+- `GOCACHE=/private/tmp/waveplan-gocache bash tests/swim/test_t7_2_insert_fix_loop.sh`
+  - `PASS: T7.2 insert-fix-loop`
+- `GOCACHE=/private/tmp/waveplan-gocache bash tests/swim/test_t7_3_review_schedule_passthrough.sh`
+  - `PASS: T7.3 review-schedule passthrough`
+- `GOCACHE=/private/tmp/waveplan-gocache go test ./cmd/swim-next-resolve ./cmd/swim-next ./cmd/swim-step ./cmd/swim-run ./cmd/swim-journal ./internal/swim`
+  - All passed (`internal/swim` ok; command packages compile with no test files)
+- `cd waveplan-ps && GOCACHE=/private/tmp/waveplan-gocache go test ./cmd/waveplan-ps ./internal/config ./internal/model ./internal/watch ./internal/ui ./tests/integration -run TestCompiledBinaryOnceRendersSnapshotOutput`
+  - All passed, including integration test
+
+No waveplan write actions were executed (`pop`, `fin`, `start_review`, `end_review`, plan mutation were not used).

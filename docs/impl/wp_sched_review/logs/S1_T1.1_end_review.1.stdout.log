@@ -1,0 +1,8 @@
+{
+  "review_ended_at": "2026-05-14 14:03",
+  "review_note": "${WP_COMMENT:-}",
+  "reviewer": "sigma",
+  "success": true,
+  "task_id": "T1.1",
+  "title": "Define review sidecar schema and anchor validation rules"
+}

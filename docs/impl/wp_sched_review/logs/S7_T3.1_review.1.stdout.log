@@ -1,0 +1,55 @@
+# Review — T3.1 insert-fix-loop sidecar writer
+
+Read-only review. No waveplan write actions used. Test execution declined by sandbox (`bash tests/swim/test_t7_2_insert_fix_loop.sh`) — analysis is static.
+
+## Verdict
+Implementation matches spec on the happy path. Output is deterministic, append-only, schema-aligned. Two **Important** gaps in fail-fast semantics and test coverage. Several **Minor** hygiene issues.
+
+## Findings (severity-ordered)
+
+### Important
+
+**I1. Writer accepts semantically-invalid anchors.**
+`waveplan-cli:914-936` validates anchor task_id matches `--task`, but never validates anchor *action*. User can pass `--after-step S1_T1.1_implement` (or `_finish`), and writer emits a fix row whose `requires.task_status=review_taken` can never fire — anchor produces `taken`/`completed`. The spec fail-fast rule "the sidecar contains rows whose preconditions conflict with the base/overlay merged state" applies here. Runtime may catch this at merge, but the writer is the right place to fail fast: cheaper, deterministic, doesn't leave a poisoned sidecar on disk.
+→ Reject when `anchor.produces.task_status != "review_taken"` (for base anchors) or when anchor sidecar row's `produces.task_status != "review_taken"` (for chained X anchors).
+
+**I2. Test coverage is too thin for a fail-fast contract.**
+`tests/swim/test_t7_2_insert_fix_loop.sh` exercises only two negative cases (missing review-schedule, base_schedule_path mismatch). Spec lists more rules; none of these are covered:
+- `--review-schedule` resolves to the same path as `--schedule` (rule 2 in spec)
+- `--after-step` is absent from both base and sidecar
+- `--after-step` belongs to a different task than `--task`
+- `--task` rejected by `_TASK_ID_RE`
+- `--round` ≤ 0
+- duplicate step_id detection (re-run with same `--round`, or run after a manual sidecar edit)
+- missing implement/review template in base for the task
+- existing sidecar JSON malformed / wrong `schema_version`
+
+These are the failure modes that determine whether the contract holds under operator error. A green test today doesn't prove the writer is fail-fast tomorrow.
+
+### Minor
+
+**M1. Dead validation.** `waveplan-cli:906-907` re-checks `isinstance(insertions, list)` after `_load_or_init_review_sidecar` already validated it on line 782. Drop.
+
+**M2. Non-atomic write.** `waveplan-cli:1039` writes via `Path.write_text` directly. A crash mid-write leaves a truncated sidecar that fails schema validation on next load. Use temp-file + `os.replace` for atomic publish.
+
+**M3. `base_schedule_path` stored unresolved.** `_abs_user_path` (line 86-92) returns absolute-but-unresolved for inputs that are already absolute; the value persisted into the sidecar therefore may contain symlinks (e.g. macOS `/var/...` not collapsed to `/private/var/...`). Comparison at load (`_load_or_init_review_sidecar:769-780`) resolves both sides, so this is benign today, but the on-disk value is portable in name only. Consider storing `Path(schedule_path).resolve()` so the file is self-describing.
+
+**M4. No post-write schema validation.** Writer never round-trips the sidecar through `ValidateReviewScheduleSidecar` (Go) or the v1 schema before claiming success. Cheap belt-and-braces given the schema exists and the runtime depends on it.
+
+**M5. Canonicalizer tolerates fields the schema forbids.** `_canonicalize_review_sidecar` (line 632-646) appends unknown top-level/insertion keys alphabetically, but the v1 schema is `additionalProperties: false`. Today the writer never adds extras, so harmless; if it ever did, the file would silently fail validation. Either match the schema (drop unknown keys) or document the divergence.
+
+**M6. Naming.** `tests/swim/test_t7_2_insert_fix_loop.sh` uses wave-number style (`t7_2`) while the unit it covers is `T3.1`. Pre-existing tests in this dir (`test_t3_1_runner_logging.sh`) already use the wave-7-style numbering for a different prior plan, so the name collides on visual scan even though it doesn't shadow a real file. Rename to `test_T3_1_insert_fix_loop.sh` (matching the unit ID) would prevent confusion.
+
+## Required Fixes (before T3.1 can pass review)
+
+1. **I1** — Reject anchors whose action does not produce `review_taken`. Add unit-level test that confirms `--after-step S1_T1.1_implement` returns `ok:false`.
+2. **I2** — Extend `tests/swim/test_t7_2_insert_fix_loop.sh` (or rename per M6) with the seven listed negative cases. At minimum: same-path collision, unknown anchor, task mismatch, invalid task, non-positive round, duplicate step_id on rerun.
+
+## Recommended Followups (non-blocking)
+
+- M1 (drop dead code), M2 (atomic write), M4 (post-write validate).
+
+## Notes for the merge reviewer
+- Writer's happy-path determinism (X-id, E-id, seq_hint, field ordering) is solid and matches the test script's assertions.
+- The Python writer's `requires`/`produces` choices align with `internal/swim/contracts.go:37-46` `statusByAction`, so generated rows pass Go-side `ValidateReviewScheduleSidecar`.
+- The v1 schema at `docs/specs/swim-review-schedule-schema-v1.json` accepts the writer's output (step_id, after_step_id, event_id patterns all match).

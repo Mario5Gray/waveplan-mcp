@@ -186,6 +186,7 @@ These changes appear to have no dedicated FP issue set yet and should be picked 
 
 - `waveplan-ps` explicit observer input policy
 - `waveplan-ps` TUI and reviewer-status improvements
+- `waveplan-ps` active panel header highlighting
 - `waveplan-ps` execution-bundle naming support
 - SWIM task-level `--until Tn`
 
@@ -224,3 +225,17 @@ Verification:
 - `go test ./cmd/swim-run ./cmd/swim-step`
 - `python3 ./waveplan-cli swim run --help`
 - `python3 ./waveplan-cli swim step --help`
+
+## 12. waveplan-ps active panel header highlighting
+
+**NEEDS FP PLAN**
+
+What changed:
+- The active panel header (table header row) is now highlighted with dark blue background and white text.
+- Pressing Tab switches focus between the top table and bottom details pane.
+- When focus switches, the previously active panel's header returns to the default style, and the newly focused panel's header gets the dark blue highlight.
+- By default, the table (top panel) starts focused, so its header is dark blue on launch.
+
+Code:
+- `waveplan-ps/internal/ui/tui.go` — added `tableFocused` field to `Root`, exported `SetTableFocus` method, updated `fillTable` to apply `tcell.ColorDarkBlue` background to header cells when focused
+- `waveplan-ps/cmd/waveplan-ps/main.go` — Tab key handler now calls `root.SetTableFocus(focused)` before switching focus

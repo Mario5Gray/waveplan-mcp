@@ -13,12 +13,13 @@ import (
 
 // ExecNextOptions controls one-step schedule execution.
 type ExecNextOptions struct {
-	SchedulePath string
-	JournalPath  string
-	ArtifactRoot string
-	WorkDir      string
-	ExpectCursor *int
-	InvokeFn     func(argv []string, workDir string) error
+	SchedulePath       string
+	ReviewSchedulePath string
+	JournalPath        string
+	ArtifactRoot       string
+	WorkDir            string
+	ExpectCursor       *int
+	InvokeFn           func(argv []string, workDir string) error
 }
 
 // ExecNextResult is the outcome of executing one cursor step.
@@ -45,16 +46,9 @@ func ExecuteNextStep(opts ExecNextOptions) (*ExecNextResult, error) {
 		return nil, errors.New("missing journal path")
 	}
 
-	scheduleRaw, err := os.ReadFile(opts.SchedulePath)
+	schedule, err := loadSchedule(opts.SchedulePath, opts.ReviewSchedulePath)
 	if err != nil {
-		return nil, fmt.Errorf("read schedule: %w", err)
-	}
-	if err := ValidateSchedule(scheduleRaw); err != nil {
-		return nil, fmt.Errorf("invalid schedule: %w", err)
-	}
-	var schedule Schedule
-	if err := json.Unmarshal(scheduleRaw, &schedule); err != nil {
-		return nil, fmt.Errorf("decode schedule: %w", err)
+		return nil, err
 	}
 
 	journal, err := loadOrInitJournal(opts.JournalPath, opts.SchedulePath)

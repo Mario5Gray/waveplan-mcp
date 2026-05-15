@@ -1,0 +1,75 @@
+# Review T1.3 — fail-fast review-schedule paths
+
+scope check: T1.2 impl + T1.3 verify. read-only. tests not executed (denied) — review based on diff + source inspection.
+
+## Findings (severity desc)
+
+### HIGH
+
+**H1. Verification gap: step/run/journal subcommands untested for fail-fast.**
+- Resolver wired into `next`, `step`, `run`, `journal` (waveplan-cli:902, 927, 960, 981).
+- `tests/swim/test_t4_1_cli_scaffold.sh:101-149` only exercises three fail-fast cases (missing / unreadable / equal-to-schedule) against **`swim next`**.
+- T1.3 title is "verify fail-fast behavior … paths." Verification must prove each subcommand actually fails — argument parsing is plumbed but unit-tested behavior is not. Risk: a future regression silently skips the resolver in step/run/journal.
+
+**H2. MCP swim handlers bypass the contract entirely.**
+- `handleSwimNext`/`handleSwimStep`/`handleSwimRun`/`handleSwimJournal` in `main.go:1032-1150` never call any review-schedule resolver. Schema declarations in `main.go:316-358` do not declare a `review_schedule` parameter.
+- Spec "Operator / Tooling Surface" names exactly these commands. CLI fail-fast holds; MCP surface does not. Either T1's contract is CLI-only and must be stated, or MCP handlers must also resolve+fail-fast. Currently inconsistent.
+
+### MEDIUM
+
+**M1. Untested validator branches in `ValidateReviewScheduleSidecar`.**
+- Within-sidecar duplicate `step_id` path (`contracts.go:293-295` via `findSidecarStepIDDuplicate`) — no test. Existing test only covers base-vs-sidecar collision.
+- `base == nil` guard (`contracts.go:238-240`) — no test.
+- Schema-level rejections (e.g. `schema_version: 2`, missing `source_event_id`, bad `id` pattern) — no test exercises the JSON-schema layer; only the Go-side invariants.
+- Self-loop / 3+ node cycle — cycle test in `contracts_test.go:316-322` only covers a 2-cycle.
+
+**M2. Resolver return value discarded.**
+- `_ = _resolve_review_schedule_path(...)` at four call sites (waveplan-cli:902, 927, 960, 981). Resolved path never threaded into downstream `tool_args`. Acceptable for T1.3 scope (T2.1 consumes), but flagging — the wiring is half-built and easy to forget.
+
+### LOW
+
+**L1. Dead branch in resolver** — waveplan-cli:368-376. `_abs_user_path` only returns falsy for falsy input; `candidate` is non-empty here. The `if not resolved:` branch is unreachable.
+
+**L2. "Not readable" message fires for directories or missing paths** — waveplan-cli:385. Functionally correct, message slightly imprecise; minor.
+
+**L3. Out-of-scope diff hunks in the changeset.**
+- `waveps.yml`: log_dirs path swapped to a new `docs/impl/wp_sched_review/logs` and the old plan path commented. Looks like local dev config bleed; unrelated to T1.3.
+- `waveplan-ps/waveplan-ps` binary updated. Unrelated to T1.3.
+- Confirm both are intentional before this lands in main, or strip them.
+
+**L4. Test ordering check.**
+- `tests/swim/test_t4_1_cli_scaffold.sh:9` correctly `unset WAVEPLAN_SCHED_REVIEW`. Good. But it does not also unset `WAVEPLAN_SCHED` etc., harmless here.
+
+## Contract adherence (spec §Fail-Fast Rules)
+
+| Rule | Covered |
+|---|---|
+| neither flag nor env set | yes (CLI), no (MCP) |
+| resolved path equals `--schedule` | yes (CLI), no (MCP) |
+| unreadable sidecar path | yes (CLI), no (MCP) |
+| anchor not in base | yes (`ValidateReviewScheduleSidecar`) |
+| preconditions conflict w/ merge | partial: action↔status invariant only; full merge-state check is T2 territory — OK to defer |
+
+## Required Fixes
+
+1. **(H1)** Extend `tests/swim/test_t4_1_cli_scaffold.sh` to repeat the three fail-fast assertions for `swim step`, `swim run`, `swim journal`. Reuse the existing schedule fixture. Without this, T1.3 verify is not actually verifying the resolver contract — only the `next` slice of it.
+
+2. **(H2)** Resolve the MCP/CLI divergence:
+   - If MCP must enforce: add a `review_schedule` parameter to all four `waveplan_swim_*` tool definitions, resolve via same env fallback, fail with `swimErrorResult(2, ...)` on missing / equal / unreadable, and add unit tests in `main_test.go`.
+   - If MCP is intentionally exempt: state it in `docs/specs/2026-05-14-swim-review-schedule-sidecar.md` under "CLI and Environment Contract" and add a note to the plan so it isn't picked up as a defect later.
+
+3. **(M1)** Add test cases to `TestValidateReviewScheduleSidecar_Cases`:
+   - within-sidecar duplicate `step_id`
+   - `base == nil` returns explicit error
+   - schema-level rejection (set `SchemaVersion = 2` or drop `source_event_id`)
+   - self-loop cycle (X1.AfterStepID = "X1")
+
+4. **(L1)** Drop the dead `if not resolved:` branch in `_resolve_review_schedule_path` (waveplan-cli:369-376), or replace with a single-line comment explaining the invariant.
+
+5. **(L3)** Confirm intent of `waveps.yml` and `waveplan-ps/waveplan-ps` changes. If accidental, revert before merging T1.3.
+
+## Recommendation
+
+Do not advance past T1.3 until **H1** is addressed — verification scope must match the resolver's wiring, otherwise the verify task is misnamed. **H2** can land as a follow-up task in T3 if scoped explicitly; otherwise close in this wave. M-class items are test debt that's cheap to retire now.
+
+Next: reviewer (sigma) writes review note via `end_review` — outside read-only mandate. Hand back to phi with this finding list.

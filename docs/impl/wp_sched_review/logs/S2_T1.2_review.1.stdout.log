@@ -1,0 +1,56 @@
+Review of T1.2 — "Add explicit review-schedule flag and env resolution contract" (claimed by phi).
+
+Note: read-only review per session rules. No waveplan write actions taken. Could not run tests (sandbox permission). Static analysis only.
+
+## Findings (ordered by severity)
+
+### Critical
+
+**C1. Missing fail-fast for unreadable sidecar path** — `waveplan-cli:350-383`
+Spec lists four fail-fast rules:
+1. neither flag nor env set ✓
+2. resolved path equals `--schedule` ✓
+3. **sidecar path unreadable for commands that require existing content ✗**
+4. anchor mismatch / precondition conflict (deferred to T2.x — OK)
+
+`_resolve_review_schedule_path` never stats the resolved path. T1.3 ("Verify fail-fast behavior for missing or invalid review-schedule paths") will likely flunk against this impl. Add a `must_exist=True` check that emits `{ok:false, error:"review schedule path not readable: <path>", subcommand:...}` exit 2 when `Path(resolved).is_file()` is false.
+
+**C2. Schema file is untracked** — `docs/specs/swim-review-schedule-schema-v1.json`
+File present on disk but not in git. `internal/swim/contracts.go:144` opens it via `LoadReviewSidecarSchema`; `contracts_test.go:277` (TestValidateReviewScheduleSidecar_Cases) exercises it. Merging this branch as-is breaks the Go test suite on a clean clone.
+
+Strictly this is T1.1 (sidecar schema/contract) territory, but it ships alongside the T1.2 diff. Must `git add` before merge.
+
+**C3. Unrelated noise in the working tree**
+- `waveps.yml`: log_dirs flipped from `docs/plans/context-sizer-adapter/.waveplan` to a personal `docs/impl/wp_sched_review/logs` path. Not part of T1.2.
+- `waveplan-ps/waveplan-ps`: binary changed, no source diff. Looks like a local rebuild.
+
+Both must be reverted before commit; otherwise they pollute the contract change.
+
+### Important
+
+**I1. Resolved path is discarded** — `waveplan-cli:894,919,952,973`
+Every call site is `_ = _resolve_review_schedule_path(...)`. Acceptable for T1.2 scope (T3.2 is "thread review-schedule through swim execution"), but at minimum capture the result into a named local (`review_schedule_path`) and either pass it as `--review-schedule` to the Go subprocess or add a `# T3.2: thread this` placeholder. As written, a follow-up developer has to rewire four call sites and re-test.
+
+**I2. No test covers the missing-flag-and-env error path** — `tests/swim/test_t4_1_cli_scaffold.sh:120-127`
+Only the path-equality case is asserted. The "missing review schedule" branch (the more common operator failure) is unverified. Since the test suite for T1.2 lives here, add a case that unsets `WAVEPLAN_SCHED_REVIEW`, omits `--review-schedule`, and asserts the deterministic error JSON + nonzero exit.
+
+**I3. `test_t4_2_cli_wired.sh` couples to the new env contract via a stub file with `base_schedule_path:"stub"`**
+Works as a green-bar workaround, but the stub schema instance won't validate once schema enforcement turns on downstream. Either (a) point it at a fixture that satisfies the actual schema, or (b) keep T4.2's pre-T1.2 behavior unaffected by gating review-schedule only in commands that need it.
+
+### Minor
+
+**M1. Dead `return resolved` after `_emit_json` in the path-equality branch** — `waveplan-cli:378-383`. `_emit_json` always `sys.exit`s, so the return is unreachable. Either drop or add an explicit `return None` for symmetry.
+
+**M2. `Path(resolved) == Path(schedule_path)` doesn't normalize case/symlinks consistently** — `_abs_user_path` already calls `.resolve()`, so this is mostly fine, but if `schedule_path` ever arrives un-normalized (e.g. unresolved symlink), the equality check silently passes. Cheap hardening: `Path(resolved).resolve() == Path(schedule_path).resolve()`.
+
+**M3. `--ack-unknown` step bypasses review-schedule resolution** — `waveplan-cli:905-915`. Likely intentional (ack only touches the journal). Worth a one-line comment so the next reader doesn't "fix" it.
+
+## Required fixes before approval
+
+1. (C1) Add unreadable-path fail-fast inside `_resolve_review_schedule_path`.
+2. (C2) `git add docs/specs/swim-review-schedule-schema-v1.json` (and confirm `docs/impl/` is intentionally untracked or gitignored).
+3. (C3) Revert `waveps.yml` and `waveplan-ps/waveplan-ps` from this change set.
+4. (I2) Add a missing-flag/env negative test in `tests/swim/test_t4_1_cli_scaffold.sh`.
+5. (I1) Bind resolved path to a named local even if unused this wave, with a comment pointing at T3.2.
+
+Recommendation: **changes requested**. C1, C2, C3 are blockers; I1, I2 should land in the same PR to keep T1.3 verifiable. After fixes, T1.3 should be able to assert all four fail-fast cases against this contract.

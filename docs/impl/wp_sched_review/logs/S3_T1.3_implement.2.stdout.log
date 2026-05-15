@@ -1,0 +1,27 @@
+Implemented `T1.3` with a TDD-style flow (RED → GREEN) and kept waveplan usage read-only.
+
+**Concrete file changes (this turn)**
+1. Added explicit unreadable-path fail-fast in review sidecar resolver:
+- [waveplan-cli](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-cli:350)
+- New behavior in `_resolve_review_schedule_path`:
+  - Normalizes both paths before comparison.
+  - Fails with deterministic JSON error when sidecar path is missing/unreadable:
+    - `review schedule path not readable: <abs_path>`
+
+2. Added verification coverage for missing/invalid review-schedule paths:
+- [test_t4_1_cli_scaffold.sh](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/test_t4_1_cli_scaffold.sh:9)
+- Added/updated cases:
+  - Unset `WAVEPLAN_SCHED_REVIEW` for deterministic behavior.
+  - Assert fail-fast error when neither flag nor env is set.
+  - Assert fail-fast error when `--review-schedule` points to a non-readable path.
+  - Kept/asserted fail-fast when review schedule equals base schedule.
+
+**Verification commands and results**
+1. `bash tests/swim/test_t4_1_cli_scaffold.sh`
+- Result: `PASS: T4.1 cli scaffold`
+
+2. `bash tests/swim/test_t4_2_cli_wired.sh`
+- Result: `PASS: T4.2 cli wired`
+
+3. `bash tests/swim/test_installed_anydir.sh`
+- Result: failed in this sandbox due blocked network dependency fetch (`proxy.golang.org` DNS resolution), not due the changed fail-fast logic.

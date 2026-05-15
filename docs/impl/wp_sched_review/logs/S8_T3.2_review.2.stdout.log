@@ -1,0 +1,66 @@
+# T3.2 Review — sigma
+
+Scope: thread `--review-schedule` through swim execution (next/step/run/journal) and waveplan-ps observation. Static review (build/test execution denied).
+
+## Findings (severity-ordered)
+
+### MAJOR
+
+**M1. `swim journal` accepts `--review-schedule` but silently drops it.**
+`cmd/swim-journal/main.go:13` declares the flag then `_ = reviewSchedulePath` (line 21). Journal view never merges sidecar rows, so observers running `waveplan-cli swim journal --review-schedule ...` get a base-only view that ignores supplemental rows. Spec "Recovery": *cursor resolution uses merged order*. Either:
+- pass `reviewSchedulePath` into `ReadJournalView` and merge there, or
+- drop the flag from the Go binary + Python wrapper (`waveplan-cli:1316-1325`) and stop passing it through.
+
+**M2. `--review-schedule` is hard-required for `next/step/run/journal` (regression).**
+`_resolve_review_schedule_path` defaults `required=True` (`waveplan-cli:371`). All four callers (`waveplan-cli:1399, 1427, 1462, 1485`) accept the default. Pre-T3.2 schedules without a sidecar now fail with `missing review schedule: set --review-schedule or WAVEPLAN_SCHED_REVIEW`. Spec: *required for any command that inserts or executes supplemental review-loop rows* — `journal` reads, never executes, so requiring it for journal contradicts spec. The patched tests (`tests/swim/test_installed_anydir.sh:30-34`, `tests/swim/test_t4_2_cli_wired.sh:10-15`) confirm the regression by injecting a stub `WAVEPLAN_SCHED_REVIEW` purely to keep existing flows running. Fix: pass `required=False` for `next/step/run/journal`, keep `required=True` only for `insert-fix-loop`.
+
+**M3. Journal `cursor` semantics undefined after sidecar merge.**
+`Journal.Cursor` is an integer index. Pre-T3.2 it indexed base `schedule.execution`. Post-T3.2 it indexes merged execution (base + sidecar). When a new sidecar row is appended after the cursor has already advanced past its anchor (e.g. anchor `S1_T1.1_review` already applied, cursor=3 → `end_review`), inserting `X1 after S1_T1.1_review` shifts the merged index for `end_review` from 3 to 4 — journal cursor now points at the inserted fix row. No code in `internal/swim/resolver.go` or `safe_runner.go` translates persisted cursor across merges. No test exercises "insert sidecar after cursor advance". Spec "Recovery": *sidecar rows participate in drift adoption and replay checks* — this needs an explicit invariant or test, otherwise replay/recovery silently mis-points.
+
+### MEDIUM
+
+**M4. `pendingSidecarStepForTask` only consults forward execution.**
+`internal/swim/resolver.go:127-138` scans `cur+1..len(execution)` for unresolved sidecar rows with same `task_id`. If the merged ordering places a sidecar row *before* `end_review`, the resolver normal-flow already executes it. But if the journal cursor was bumped past an inserted fix anchor (M3) or if an `after_step` anchors *after* `finish` (test_t7_3 doesn't cover this; tests T3.x do), this still blocks. No issue here in isolation — the scan is correct given the cursor invariant, but reinforces M3.
+
+**M5. `swim-journal` flag advertised in `--help` but inert.**
+`tests/swim/test_t4_1_cli_scaffold.sh:54` greps for `--review-schedule` in journal help. The help text says "Review schedule sidecar path" — implies functionality. The Go binary discards it. False advertising surface. Couple with M1 fix.
+
+**M6. `waveplan-ps` model misses `Invoke` on insertions.**
+`waveplan-ps/internal/model/review_schedule.go:18-29` defines `ReviewScheduleInsertion` *without* an `Invoke` field. The runtime sidecar contract carries `invoke` (see `internal/swim/contracts.go:120` and JSON schema). Observer cannot show argv of inserted rows. Renderer (`tui.go:538-555`) only prints insertion count + base path, so this is currently unused — but the asymmetry will bite the next consumer.
+
+**M7. Renderer surfaces sidecar separately, never merged into the unit table.**
+`renderReviewSchedules` (`tui.go:538-557`) prints a separate "Review Schedules" section showing only counts. Spec "waveplan-ps": *UI should distinguish base rows from supplemental review rows*. Minimal compliance (you can tell sidecars are present). But the unit-detail pane (`renderUnitDetails`) doesn't tag rows or show inserted steps inline against the unit; observation/execution will not visibly match when inserts are present. May be deferred to T3.3 ("Refresh docs and fixture-backed verification"), but worth calling out before close.
+
+### MINOR
+
+**m8. `ScheduleRow.Source` uses `json:"-"`.**
+`internal/swim/contracts.go:63`. Correct — base-schedule serializers don't see the field. But if anything ever re-marshals merged `Execution` to JSON (e.g. debug dumps), provenance is lost. No reader currently does, so non-blocking.
+
+**m9. `Run` re-loads schedule per loop iteration.**
+`internal/swim/run.go:81` calls `Apply` → `ExecuteNextStepSafe` → `loadSchedule` on every iteration. With a sidecar this now re-reads + re-validates the sidecar every step. Pre-T3.2 the cost was schedule-only; now it's schedule + sidecar + merge sort. For long `--max-steps` this is O(steps × |base+sidecar|). Not a correctness bug, watch perf.
+
+**m10. `_resolve_review_schedule_path` does not unset env after error.**
+`waveplan-cli:376` — if `WAVEPLAN_SCHED_REVIEW` is set in operator env, every `swim journal/next/step/run` invocation auto-picks it up. Combined with M2 over-strictness, an operator with the env exported can run against schedules that have no sidecar and silently get a fail-fast. Cosmetic given M2 is the right fix.
+
+**m11. Missing test: `--review-schedule` present-but-empty insertions array on `next/step/run`.**
+`test_installed_anydir.sh:30-34` does cover empty `[]` for `next`, good. No analogous test for `run`/`step`. Add coverage to prevent zero-insertion regression in merge.
+
+**m12. `_handle_swim_insert_fix_loop` error path bug (out of scope but adjacent).**
+Lines 887-888: if `_resolve_review_schedule_path` already emitted JSON + `sys.exit`'d for required failure, the follow-up `if not review_schedule_path` is dead. If a future refactor switches `_emit_json` to non-exit, this becomes a double-emit. Defensive only.
+
+## Required fixes (T3.2 must not ship without)
+
+1. **Fix M1**: either implement `ReadJournalView` merging or remove `--review-schedule` from `cmd/swim-journal/main.go` + `waveplan-cli` journal subparser + scaffold test grep. Currently dishonest.
+2. **Fix M2**: change `_resolve_review_schedule_path` callers for `next`, `step`, `run`, `journal` to `required=False` so absent sidecar is allowed. Keep deterministic failure for malformed/non-readable paths and for sidecar==schedule. Update or revert `tests/swim/test_installed_anydir.sh` and `tests/swim/test_t4_2_cli_wired.sh` stubs.
+3. **Address M3**: add an explicit test that asserts journal cursor semantics across a `swim insert-fix-loop` invocation mid-run (insert after the current cursor; insert before; verify replay/`next` lands on the right step). If cursor must be `step_id`-keyed for stability, file as T3.3 work and document the constraint in the spec.
+
+## Suggested follow-ups (can ship as T3.3)
+
+- M6 add `Invoke` to observer model.
+- M7 either inline sidecar rows in unit table or surface a `[sidecar]` annotation in the unit detail pane.
+- m9 cache loaded merged schedule across `runWet` iterations.
+- m11 add zero-insertion `run`/`step` test.
+
+## Recommendation
+
+**Do not advance T3.2 to finished.** M1 and M2 are functional regressions visible to operators; M3 is a latent correctness risk in the recovery contract. Reviewer (sigma) leaves T3.2 in review state. Implementer (phi) should address M1, M2, M3 before re-requesting review.

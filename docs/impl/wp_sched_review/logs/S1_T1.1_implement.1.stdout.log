@@ -1,0 +1,35 @@
+Implemented `T1.1` directly in repo using the superpowers workflow (`executing-plans` + TDD red/green + verification-before-completion), with no waveplan write actions.
+
+**Concrete file changes**
+- Added review sidecar schema/contract support and anchor validation in [internal/swim/contracts.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/contracts.go:17).
+- Added sidecar contract tests (valid + anchor/dup/cycle/status/argv failures) in [internal/swim/contracts_test.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/contracts_test.go:277).
+- Added new JSON schema file [docs/specs/swim-review-schedule-schema-v1.json](/Users/darkbit1001/workspace/waveplan-mcp/docs/specs/swim-review-schedule-schema-v1.json:1).
+
+**What was implemented**
+- New types:
+  - `ReviewScheduleSidecar`
+  - `ReviewScheduleInsertion`
+- New schema loader:
+  - `LoadReviewSidecarSchema()`
+- New validator:
+  - `ValidateReviewScheduleSidecar(data []byte, base *Schedule) error`
+- Validation rules now enforced:
+  - JSON schema conformance for sidecar shape.
+  - Base schedule required for validation.
+  - Duplicate insertion IDs rejected.
+  - Duplicate sidecar `step_id` and collisions with base schedule `step_id` rejected.
+  - `invoke.argv` non-empty and non-blank first token.
+  - `requires/produces` must match action transition contract.
+  - `after_step_id` must anchor to a base step or sidecar insertion ID.
+  - Anchor cycles across sidecar insertions rejected.
+
+**Verification commands and results**
+- `GOCACHE=/private/tmp/go-build go test ./internal/swim -run ReviewScheduleSidecar -count=1`
+  - Initial red run failed as expected before implementation (`undefined: ValidateReviewScheduleSidecar` etc.).
+  - Final run: `ok`.
+- `GOCACHE=/private/tmp/go-build go test ./internal/swim -count=1`
+  - Result: `ok`.
+- `GOCACHE=/private/tmp/go-build go test ./cmd/swim-validate -count=1`
+  - Result: `? ... [no test files]`.
+
+

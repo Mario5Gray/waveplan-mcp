@@ -8,15 +8,16 @@ import (
 
 // ApplyOptions exposes one operator-facing apply invocation.
 type ApplyOptions struct {
-	SchedulePath   string
-	JournalPath    string
-	StatePath      string
-	ArtifactRoot   string
-	LockPath       string
-	WorkDir        string
-	ExpectCursor   *int
-	InvokeFn       func(argv []string, workDir string) error
-	ReadSnapshotFn func(path string) (*StateSnapshot, error)
+	SchedulePath       string
+	ReviewSchedulePath string
+	JournalPath        string
+	StatePath          string
+	ArtifactRoot       string
+	LockPath           string
+	WorkDir            string
+	ExpectCursor       *int
+	InvokeFn           func(argv []string, workDir string) error
+	ReadSnapshotFn     func(path string) (*StateSnapshot, error)
 }
 
 // ApplyReport is the stable JSON-friendly report for CLI and MCP callers.
@@ -44,15 +45,16 @@ func Apply(opts ApplyOptions) (*ApplyReport, error) {
 	}
 
 	res, err := ExecuteNextStepSafe(SafeExecOptions{
-		SchedulePath:   opts.SchedulePath,
-		JournalPath:    opts.JournalPath,
-		StatePath:      opts.StatePath,
-		ArtifactRoot:   opts.ArtifactRoot,
-		LockPath:       opts.LockPath,
-		WorkDir:        opts.WorkDir,
-		ExpectCursor:   opts.ExpectCursor,
-		InvokeFn:       opts.InvokeFn,
-		ReadSnapshotFn: opts.ReadSnapshotFn,
+		SchedulePath:       opts.SchedulePath,
+		ReviewSchedulePath: opts.ReviewSchedulePath,
+		JournalPath:        opts.JournalPath,
+		StatePath:          opts.StatePath,
+		ArtifactRoot:       opts.ArtifactRoot,
+		LockPath:           opts.LockPath,
+		WorkDir:            opts.WorkDir,
+		ExpectCursor:       opts.ExpectCursor,
+		InvokeFn:           opts.InvokeFn,
+		ReadSnapshotFn:     opts.ReadSnapshotFn,
 	})
 	if err != nil {
 		if errors.Is(err, ErrLockBusy) {

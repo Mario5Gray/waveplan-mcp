@@ -1,0 +1,48 @@
+# T2.2 Review — Block end_review/finish on pending sidecar rows
+
+Scope verified: `internal/swim/resolver.go`, `internal/swim/safe_runner.go`, `internal/swim/run.go`, `internal/swim/contracts.go`, `internal/swim/review_schedule_runtime_test.go`. Spec at `docs/specs/2026-05-14-swim-review-schedule-sidecar.md`.
+
+## Findings (ordered by severity)
+
+### HIGH-1 — End-to-end wiring dead, runtime block unreachable from CLI
+`waveplan-cli` resolves `--review-schedule` then discards it (`_ = _resolve_review_schedule_path(...)`) for `next`, `step`, `run`, `journal`. Subprocess `tool_args` never include `--review-schedule`. The Go binaries `cmd/swim-next/main.go`, `cmd/swim-step/main.go`, `cmd/swim-run/main.go`, `cmd/swim-journal/main.go` define no `--review-schedule` flag and never read `WAVEPLAN_SCHED_REVIEW`. Result: `ResolveNext` always sees `ReviewSchedulePath=""`, sidecar never merged, block never fires outside Go tests.
+- Plan splits CLI threading to T3.2, but spec explicitly requires the block to apply across `next/step/run`. T2.2's "executable contract" is satisfied by unit tests only; the runtime guarantee is not reachable. Either:
+  - call out as known-incomplete deliverable handed to T3.2 (acceptable if sequenced), or
+  - add flag+env plumbing now in `cmd/swim-{next,step,run,journal}/main.go` and pipe through Python.
+
+### HIGH-2 — `ResolveNextFromPaths` not threaded
+`query.go` added `ReviewSchedulePath` field, but `cmd/swim-step/main.go:47` calls `swim.ResolveNextFromPaths(swim.NextOptions{SchedulePath, JournalPath, StatePath})` without it. `swim step` (non-`--apply`) path therefore evaluates against the base-only schedule even when sidecar exists — bypasses the pending block. Same plumbing fix as HIGH-1.
+
+### MED-1 — Pending-sidecar check precedes precondition check
+`resolver.go:71-85` short-circuits to `ResolutionBlockedPendingSidecar` before `Evaluate(row, snap)`. When the operator runs `end_review` while state is still `taken` (precondition unmet) and a pending sidecar exists, the reason will be `pending_sidecar:...` masking the precondition error. Spec line 141 implies both must hold. Acceptable if intentional (pending-block is more useful guidance), but the ordering deserves a comment so future readers do not "fix" it.
+
+### MED-2 — Sidecar action allowlist not enforced
+`ValidateReviewScheduleSidecar` (`contracts.go:239+`) accepts any action present in `statusByAction` (which includes `implement`, `end_review`, `finish`). Spec §"Review Loop Semantics" only sanctions `fix`/`review` insertions. A misuse case: an insertion with `action="end_review"` would land in `merged.Execution` with `Source=review_sidecar`, and `pendingSidecarStepForTask` could then keep the original base `end_review` blocked indefinitely (its own would-be-completing row is marked as a pending sidecar). Restrict allowed actions in insertions to `{fix, review}`.
+
+### MED-3 — `Status` ordering for cursor-drift adoption interacts with new block
+`safe_runner.go:99-119`: `ActionBlocked` returned for pending-sidecar uses `appendBlockedResult` correctly. `ActionDrift` still flows through receipt/adopt logic. With pending-sidecar check ahead of `Evaluate`, drift on `end_review`/`finish` is now *always* converted to `Blocked` when a sidecar row pends — i.e., we will no longer idempotent-adopt a base `end_review` whose state already moved to `review_ended`. Spec lines 173-175 say this is desired ("stale attempts must return blocked"). Confirm with author: drift-adoption suppression for end_review/finish when pending sidecar exists is intentional. Add a test for the "state already review_ended, sidecar pending, base end_review row" scenario to lock the behavior in.
+
+### LOW-1 — `Source` field is in-memory only
+`ScheduleRow.Source` uses `json:"-"`. If a schedule is ever round-tripped (cache, snapshot, journal echo), source is lost. Currently no such path, but document the invariant or move to a typed wrapper.
+
+### LOW-2 — Reason omits `cursor`
+`pending_sidecar: action=... task=... pending_step_id=... pending_action=...` is good, but does not include the seq of the pending row — useful when debugging which sidecar insertion is blocking. Optional polish.
+
+### LOW-3 — Test 4 (`BlocksFinishWhilePendingSidecarRowsExist`) covers a synthetic case
+Sidecar anchored after `finish` is not a realistic flow; the spec intent is anchored to base review rows. The test passes by virtue of merged order placing X1 after finish. Test is correct but does not exercise the realistic case "fix anchored after review, state advanced to review_ended via operator, base finish about to fire". Add a test where the sidecar X is anchored to the *review* row but has not yet been executed (e.g. cursor drift skipped it) and base finish is the current row — confirms the block fires for the "skipped sidecar" recovery scenario.
+
+### LOW-4 — `pendingSidecarStepForTask` is O(remaining)
+Linear scan from `cursor+1` per `ResolveNext` call. Per-step O(n). Not a perf issue at current scale; revisit if schedules grow. No fix needed now.
+
+## Required fixes (must-do before T2.2 closes)
+
+1. **MED-2**: tighten `ValidateReviewScheduleSidecar` to reject insertions where `action ∉ {fix, review}` and add a negative test in `contracts_test.go`.
+2. **MED-3**: add an explicit drift-vs-pending-sidecar test asserting `ResolutionBlockedPendingSidecar` wins over drift-adoption for both `end_review` and `finish`.
+3. **HIGH-1 / HIGH-2**: explicitly defer to T3.2 with a one-line note in the plan + journal, OR add `--review-schedule` flag + `WAVEPLAN_SCHED_REVIEW` env read to the four Go binaries and the four Python subprocess `tool_args` lists, plus an installed-CLI test that proves the block reaches `swim run` end-to-end. Reviewer recommendation: at minimum, document deferral in the implementer's handoff to T3.2 so T2.2's block is not silently dead.
+
+## Nice-to-have
+- LOW-2 reason enrichment with sidecar row seq.
+- LOW-3 additional realistic test for skipped sidecar before finish.
+- Comment in `resolver.go:71` explaining intentional ordering (pending-block before precondition).
+
+Verification skipped: I did not run `go test ./...` (build/test commands blocked in this sandbox). Recommend the implementer attach `go test ./internal/swim/...` output to the handoff before T2.3 picks up.

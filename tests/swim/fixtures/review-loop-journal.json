@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "schedule_path": "tests/swim/fixtures/review-loop-schedule.json",
+  "cursor": 2,
+  "events": []
+}

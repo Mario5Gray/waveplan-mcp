@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	scheduleSchemaRelPath = "docs/specs/swim-schedule-schema-v2.json"
-	journalSchemaRelPath  = "docs/specs/swim-journal-schema-v1.json"
+	scheduleSchemaRelPath      = "docs/specs/swim-schedule-schema-v2.json"
+	journalSchemaRelPath       = "docs/specs/swim-journal-schema-v1.json"
+	reviewSidecarSchemaRelPath = "docs/specs/swim-review-schedule-schema-v1.json"
 )
 
 var (
@@ -27,6 +28,10 @@ var (
 	journalSchemaOnce sync.Once
 	journalSchema     *jsonschema.Schema
 	journalSchemaErr  error
+
+	reviewSidecarSchemaOnce sync.Once
+	reviewSidecarSchema     *jsonschema.Schema
+	reviewSidecarSchemaErr  error
 )
 
 var statusByAction = map[string]struct {
@@ -55,7 +60,12 @@ type ScheduleRow struct {
 	Requires StatusWrapper `json:"requires"`
 	Produces StatusWrapper `json:"produces"`
 	Invoke   InvokeSpec    `json:"invoke"`
+	Source   string        `json:"-"`
 }
+
+const (
+	scheduleRowSourceReviewSidecar = "review_sidecar"
+)
 
 // StatusWrapper holds task_status state transitions.
 type StatusWrapper struct {
@@ -97,6 +107,28 @@ type JournalEvent struct {
 	WaivedOn    string        `json:"waived_on,omitempty"`
 }
 
+// ReviewScheduleSidecar is the supplemental review-loop insertion contract.
+type ReviewScheduleSidecar struct {
+	SchemaVersion    int                       `json:"schema_version"`
+	BaseSchedulePath string                    `json:"base_schedule_path"`
+	Insertions       []ReviewScheduleInsertion `json:"insertions"`
+}
+
+// ReviewScheduleInsertion is one anchored supplemental row.
+type ReviewScheduleInsertion struct {
+	ID            string        `json:"id"`
+	AfterStepID   string        `json:"after_step_id"`
+	StepID        string        `json:"step_id"`
+	SeqHint       int           `json:"seq_hint"`
+	TaskID        string        `json:"task_id"`
+	Action        string        `json:"action"`
+	Requires      StatusWrapper `json:"requires"`
+	Produces      StatusWrapper `json:"produces"`
+	Invoke        InvokeSpec    `json:"invoke"`
+	Reason        string        `json:"reason"`
+	SourceEventID string        `json:"source_event_id"`
+}
+
 // LoadScheduleSchema compiles and caches docs/specs/swim-schedule-schema-v2.json.
 func LoadScheduleSchema() (*jsonschema.Schema, error) {
 	scheduleSchemaOnce.Do(func() {
@@ -111,6 +143,14 @@ func LoadJournalSchema() (*jsonschema.Schema, error) {
 		journalSchema, journalSchemaErr = compileSchemaFromResolvedPath(journalSchemaRelPath, "mem://swim-journal-schema-v1.json")
 	})
 	return journalSchema, journalSchemaErr
+}
+
+// LoadReviewSidecarSchema compiles and caches docs/specs/swim-review-schedule-schema-v1.json.
+func LoadReviewSidecarSchema() (*jsonschema.Schema, error) {
+	reviewSidecarSchemaOnce.Do(func() {
+		reviewSidecarSchema, reviewSidecarSchemaErr = compileSchemaFromResolvedPath(reviewSidecarSchemaRelPath, "mem://swim-review-schedule-schema-v1.json")
+	})
+	return reviewSidecarSchema, reviewSidecarSchemaErr
 }
 
 // ValidateSchedule validates schedule JSON using schema + strict structural invariants.
@@ -197,6 +237,120 @@ func ValidateJournal(data []byte) error {
 	}
 
 	return nil
+}
+
+// ValidateReviewScheduleSidecar validates review sidecar JSON and anchor invariants against base.
+func ValidateReviewScheduleSidecar(data []byte, base *Schedule) error {
+	if base == nil {
+		return fmt.Errorf("base schedule required for review sidecar validation")
+	}
+
+	sch, err := LoadReviewSidecarSchema()
+	if err != nil {
+		return err
+	}
+	if err := validateJSONAgainstSchema("review schedule sidecar", data, sch); err != nil {
+		return err
+	}
+
+	var sidecar ReviewScheduleSidecar
+	if err := json.Unmarshal(data, &sidecar); err != nil {
+		return fmt.Errorf("review schedule sidecar decode failed: %w", err)
+	}
+
+	baseStepIDs := make(map[string]struct{}, len(base.Execution))
+	seenStepIDs := make(map[string]int, len(base.Execution)+len(sidecar.Insertions))
+	for i, row := range base.Execution {
+		baseStepIDs[row.StepID] = struct{}{}
+		seenStepIDs[row.StepID] = i
+	}
+
+	insByID := make(map[string]ReviewScheduleInsertion, len(sidecar.Insertions))
+	insOrder := make([]string, 0, len(sidecar.Insertions))
+	insIndex := make(map[string]int, len(sidecar.Insertions))
+	for i, ins := range sidecar.Insertions {
+		if prev, ok := insIndex[ins.ID]; ok {
+			return fmt.Errorf("duplicate insertion id: %s (rows %d and %d)", ins.ID, prev, i)
+		}
+		insIndex[ins.ID] = i
+		insByID[ins.ID] = ins
+		insOrder = append(insOrder, ins.ID)
+
+		if prev, ok := seenStepIDs[ins.StepID]; ok {
+			return fmt.Errorf("duplicate step_id with base schedule: %s (base row=%d sidecar row=%d)", ins.StepID, prev, i)
+		}
+		if prev, ok := findSidecarStepIDDuplicate(sidecar.Insertions[:i], ins.StepID); ok {
+			return fmt.Errorf("duplicate sidecar step_id: %s (rows %d and %d)", ins.StepID, prev, i)
+		}
+
+		if len(ins.Invoke.Argv) == 0 {
+			return fmt.Errorf("malformed argv: row=%d has empty argv", i)
+		}
+		if strings.TrimSpace(ins.Invoke.Argv[0]) == "" {
+			return fmt.Errorf("malformed argv: row=%d has empty argv[0]", i)
+		}
+
+		expected, ok := statusByAction[ins.Action]
+		if !ok {
+			return fmt.Errorf("invalid action: %q", ins.Action)
+		}
+		if ins.Requires.TaskStatus != expected.requires || ins.Produces.TaskStatus != expected.produces {
+			return fmt.Errorf(
+				"requires/produces mismatch for action %s: requires=%s produces=%s want requires=%s produces=%s",
+				ins.Action,
+				ins.Requires.TaskStatus,
+				ins.Produces.TaskStatus,
+				expected.requires,
+				expected.produces,
+			)
+		}
+	}
+
+	for i, ins := range sidecar.Insertions {
+		if _, ok := baseStepIDs[ins.AfterStepID]; ok {
+			continue
+		}
+		if _, ok := insByID[ins.AfterStepID]; ok {
+			continue
+		}
+		return fmt.Errorf("unknown after_step_id %q at sidecar row=%d", ins.AfterStepID, i)
+	}
+
+	state := make(map[string]int, len(insByID)) // 0=unseen,1=visiting,2=done
+	var dfs func(id string) error
+	dfs = func(id string) error {
+		switch state[id] {
+		case 1:
+			return fmt.Errorf("anchor cycle detected at insertion id %q", id)
+		case 2:
+			return nil
+		}
+		state[id] = 1
+		anchor := insByID[id].AfterStepID
+		if _, ok := insByID[anchor]; ok {
+			if err := dfs(anchor); err != nil {
+				return err
+			}
+		}
+		state[id] = 2
+		return nil
+	}
+	for _, id := range insOrder {
+		if err := dfs(id); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func findSidecarStepIDDuplicate(existing []ReviewScheduleInsertion, stepID string) (int, bool) {
+	for i, row := range existing {
+		if row.StepID == stepID {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 func validateJSONAgainstSchema(kind string, data []byte, sch *jsonschema.Schema) error {

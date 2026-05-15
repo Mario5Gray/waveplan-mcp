@@ -16,12 +16,13 @@ const (
 type ResolutionCode string
 
 const (
-	ResolutionReady               ResolutionCode = "ready"
-	ResolutionBlockedPrecondition ResolutionCode = "blocked_precondition"
-	ResolutionCursorDrift         ResolutionCode = "cursor_drift"
-	ResolutionUnknownPending      ResolutionCode = "unknown_pending"
-	ResolutionDone                ResolutionCode = "done"
-	ResolutionBadCursor           ResolutionCode = "bad_cursor"
+	ResolutionReady                 ResolutionCode = "ready"
+	ResolutionBlockedPrecondition   ResolutionCode = "blocked_precondition"
+	ResolutionBlockedPendingSidecar ResolutionCode = "blocked_pending_sidecar"
+	ResolutionCursorDrift           ResolutionCode = "cursor_drift"
+	ResolutionUnknownPending        ResolutionCode = "unknown_pending"
+	ResolutionDone                  ResolutionCode = "done"
+	ResolutionBadCursor             ResolutionCode = "bad_cursor"
 )
 
 // Decision is the read-only resolver result for current cursor row.
@@ -67,6 +68,21 @@ func ResolveNext(sched *Schedule, journal *Journal, snap *StateSnapshot) Decisio
 	}
 
 	row := sched.Execution[cur]
+	if pendingStepID, pendingAction, ok := pendingSidecarStepForTask(sched, cur, row); ok {
+		return Decision{
+			Action: ActionBlocked,
+			Row:    row,
+			Code:   ResolutionBlockedPendingSidecar,
+			Cursor: cur,
+			Reason: fmt.Sprintf(
+				"pending_sidecar: action=%s task=%s pending_step_id=%s pending_action=%s",
+				row.Action,
+				row.TaskID,
+				pendingStepID,
+				pendingAction,
+			),
+		}
+	}
 	e := Evaluate(row, snap)
 	if e.Allowed {
 		return Decision{Action: ActionReady, Row: row, Code: ResolutionReady, Cursor: cur}
@@ -106,4 +122,18 @@ func firstUnknownPending(journal *Journal, cursor int) (JournalEvent, bool) {
 		}
 	}
 	return JournalEvent{}, false
+}
+
+func pendingSidecarStepForTask(sched *Schedule, cursor int, current ScheduleRow) (string, string, bool) {
+	if sched == nil || (current.Action != "end_review" && current.Action != "finish") {
+		return "", "", false
+	}
+	for i := cursor + 1; i < len(sched.Execution); i++ {
+		row := sched.Execution[i]
+		if row.TaskID != current.TaskID || row.Source != scheduleRowSourceReviewSidecar {
+			continue
+		}
+		return row.StepID, row.Action, true
+	}
+	return "", "", false
 }

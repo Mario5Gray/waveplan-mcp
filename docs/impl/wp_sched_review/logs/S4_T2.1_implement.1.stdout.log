@@ -1,0 +1,40 @@
+Implemented `T2.1` directly in-repo using a superpowers workflow (`executing-plans` + TDD red/green + verification-before-completion), with no waveplan write actions.
+
+**Concrete file changes**
+- Added runtime-side sidecar threading fields:
+  - [internal/swim/run.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/run.go):9
+  - [internal/swim/apply.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/apply.go):10
+  - [internal/swim/query.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/query.go):6
+  - [internal/swim/safe_runner.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/safe_runner.go):15
+- Wired runtime loaders to use `ReviewSchedulePath` across `Run`, `Apply`, `ResolveNextFromPaths`, and `ExecuteNextStepSafe`:
+  - [internal/swim/run.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/run.go):61
+  - [internal/swim/run.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/run.go):81
+  - [internal/swim/run.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/run.go):120
+  - [internal/swim/query.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/query.go):32
+  - [internal/swim/apply.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/apply.go):47
+  - [internal/swim/safe_runner.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/safe_runner.go):56
+- Implemented deterministic merge in the schedule loader:
+  - validates sidecar against base
+  - inserts rows after anchors
+  - orders siblings by `seq_hint`, then `id`
+  - recursively handles sidecar-to-sidecar anchors
+  - resequences merged runtime rows to contiguous `seq`
+  - [internal/swim/safe_runner.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/safe_runner.go):291
+  - [internal/swim/safe_runner.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/safe_runner.go):326
+- Added RED/GREEN tests for merged runtime frame behavior:
+  - [internal/swim/review_schedule_runtime_test.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/review_schedule_runtime_test.go):10
+  - [internal/swim/review_schedule_runtime_test.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/review_schedule_runtime_test.go):99
+
+**Verification commands and results**
+- RED (expected fail before implementation):
+  - `GOCACHE=/private/tmp/go-build GOTMPDIR=/private/tmp/go-tmp go test ./internal/swim -run 'TestLoadSchedule_MergesReviewSidecarIntoRuntimeOrder|TestRun_DryRun_UsesMergedReviewScheduleRuntimeFrame'`
+  - Result: build failed (`loadSchedule` arity mismatch, missing `RunOptions.ReviewSchedulePath`).
+- GREEN targeted:
+  - `GOCACHE=/private/tmp/go-build GOTMPDIR=/private/tmp/go-tmp go test ./internal/swim -run 'TestLoadSchedule_MergesReviewSidecarIntoRuntimeOrder|TestRun_DryRun_UsesMergedReviewScheduleRuntimeFrame'`
+  - Result: `ok .../internal/swim`
+- Relevant package regression:
+  - `GOCACHE=/private/tmp/go-build GOTMPDIR=/private/tmp/go-tmp go test ./internal/swim`
+  - Result: `ok .../internal/swim`
+- Command package compile check:
+  - `GOCACHE=/private/tmp/go-build GOTMPDIR=/private/tmp/go-tmp go test ./cmd/swim-run ./cmd/swim-next-resolve ./cmd/swim-step ./cmd/swim-journal`
+  - Result: all packages built (`[no test files]` where applicable).

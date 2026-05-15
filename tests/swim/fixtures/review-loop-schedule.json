@@ -1,0 +1,73 @@
+{
+  "schema_version": 2,
+  "execution": [
+    {
+      "seq": 1,
+      "step_id": "S1_T1.1_implement",
+      "task_id": "T1.1",
+      "action": "implement",
+      "requires": {
+        "task_status": "available"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "/bin/true"
+        ]
+      }
+    },
+    {
+      "seq": 2,
+      "step_id": "S1_T1.1_review",
+      "task_id": "T1.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "/bin/true"
+        ]
+      }
+    },
+    {
+      "seq": 3,
+      "step_id": "S1_T1.1_end_review",
+      "task_id": "T1.1",
+      "action": "end_review",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "review_ended"
+      },
+      "invoke": {
+        "argv": [
+          "/bin/true"
+        ]
+      }
+    },
+    {
+      "seq": 4,
+      "step_id": "S1_T1.1_finish",
+      "task_id": "T1.1",
+      "action": "finish",
+      "requires": {
+        "task_status": "review_ended"
+      },
+      "produces": {
+        "task_status": "completed"
+      },
+      "invoke": {
+        "argv": [
+          "/bin/true"
+        ]
+      }
+    }
+  ]
+}

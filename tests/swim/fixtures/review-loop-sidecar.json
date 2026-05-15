@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "base_schedule_path": "tests/swim/fixtures/review-loop-schedule.json",
+  "insertions": [
+    {
+      "id": "X1",
+      "after_step_id": "S1_T1.1_review",
+      "step_id": "S1_T1.1_fix_r1",
+      "seq_hint": 1,
+      "task_id": "T1.1",
+      "action": "fix",
+      "requires": {
+        "task_status": "review_taken"
+      },
+      "produces": {
+        "task_status": "taken"
+      },
+      "invoke": {
+        "argv": [
+          "/bin/true"
+        ]
+      },
+      "reason": "review finding requires fix",
+      "source_event_id": "E0001"
+    },
+    {
+      "id": "X2",
+      "after_step_id": "X1",
+      "step_id": "S1_T1.1_review_r2",
+      "seq_hint": 1,
+      "task_id": "T1.1",
+      "action": "review",
+      "requires": {
+        "task_status": "taken"
+      },
+      "produces": {
+        "task_status": "review_taken"
+      },
+      "invoke": {
+        "argv": [
+          "/bin/true"
+        ]
+      },
+      "reason": "follow-up review",
+      "source_event_id": "E0002"
+    }
+  ]
+}

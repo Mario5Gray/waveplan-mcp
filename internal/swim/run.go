@@ -7,17 +7,18 @@ import (
 
 // RunOptions controls repeated safe apply or dry-run sequencing.
 type RunOptions struct {
-	SchedulePath   string
-	JournalPath    string
-	StatePath      string
-	ArtifactRoot   string
-	LockPath       string
-	WorkDir        string
-	Until          string
-	DryRun         bool
-	MaxSteps       int
-	InvokeFn       func(argv []string, workDir string) error
-	ReadSnapshotFn func(path string) (*StateSnapshot, error)
+	SchedulePath       string
+	ReviewSchedulePath string
+	JournalPath        string
+	StatePath          string
+	ArtifactRoot       string
+	LockPath           string
+	WorkDir            string
+	Until              string
+	DryRun             bool
+	MaxSteps           int
+	InvokeFn           func(argv []string, workDir string) error
+	ReadSnapshotFn     func(path string) (*StateSnapshot, error)
 }
 
 // RunReport captures a multi-step wet or dry run.
@@ -57,7 +58,7 @@ func Run(opts RunOptions) (*RunReport, error) {
 		return nil, err
 	}
 	if cond.kind == untilTask {
-		schedule, err := loadSchedule(opts.SchedulePath)
+		schedule, err := loadSchedule(opts.SchedulePath, opts.ReviewSchedulePath)
 		if err != nil {
 			return nil, err
 		}
@@ -78,14 +79,15 @@ func Run(opts RunOptions) (*RunReport, error) {
 func runWet(opts RunOptions, cond untilCond, report *RunReport) (*RunReport, error) {
 	for opts.MaxSteps == 0 || len(report.Steps) < opts.MaxSteps {
 		step, err := Apply(ApplyOptions{
-			SchedulePath:   opts.SchedulePath,
-			JournalPath:    opts.JournalPath,
-			StatePath:      opts.StatePath,
-			ArtifactRoot:   opts.ArtifactRoot,
-			LockPath:       opts.LockPath,
-			WorkDir:        opts.WorkDir,
-			InvokeFn:       opts.InvokeFn,
-			ReadSnapshotFn: opts.ReadSnapshotFn,
+			SchedulePath:       opts.SchedulePath,
+			ReviewSchedulePath: opts.ReviewSchedulePath,
+			JournalPath:        opts.JournalPath,
+			StatePath:          opts.StatePath,
+			ArtifactRoot:       opts.ArtifactRoot,
+			LockPath:           opts.LockPath,
+			WorkDir:            opts.WorkDir,
+			InvokeFn:           opts.InvokeFn,
+			ReadSnapshotFn:     opts.ReadSnapshotFn,
 		})
 		if err != nil {
 			return nil, err
@@ -115,7 +117,7 @@ func runWet(opts RunOptions, cond untilCond, report *RunReport) (*RunReport, err
 }
 
 func runDry(opts RunOptions, cond untilCond, report *RunReport) (*RunReport, error) {
-	schedule, err := loadSchedule(opts.SchedulePath)
+	schedule, err := loadSchedule(opts.SchedulePath, opts.ReviewSchedulePath)
 	if err != nil {
 		return nil, err
 	}

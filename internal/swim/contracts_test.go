@@ -274,6 +274,87 @@ func TestValidateSchedule_FixRequiresProducesCheck(t *testing.T) {
 	}
 }
 
+func TestValidateReviewScheduleSidecar_Cases(t *testing.T) {
+	baseRaw := loadExpectedScheduleFixture(t)
+	var base Schedule
+	if err := json.Unmarshal(baseRaw, &base); err != nil {
+		t.Fatalf("decode schedule fixture: %v", err)
+	}
+	if len(base.Execution) < 2 {
+		t.Fatalf("expected at least two rows in base schedule fixture")
+	}
+	valid := validReviewScheduleSidecarFixture(t, base)
+	validRaw := marshalJSON(t, valid)
+	if err := ValidateReviewScheduleSidecar(validRaw, &base); err != nil {
+		t.Fatalf("ValidateReviewScheduleSidecar(valid) unexpected error: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		mutate  func(*ReviewScheduleSidecar)
+		wantErr string
+	}{
+		{
+			name: "unknown anchor",
+			mutate: func(s *ReviewScheduleSidecar) {
+				s.Insertions[0].AfterStepID = "S999_T9.9_review"
+			},
+			wantErr: "unknown after_step_id",
+		},
+		{
+			name: "duplicate insertion id",
+			mutate: func(s *ReviewScheduleSidecar) {
+				s.Insertions[1].ID = s.Insertions[0].ID
+			},
+			wantErr: "duplicate insertion id",
+		},
+		{
+			name: "duplicate insertion step_id against base",
+			mutate: func(s *ReviewScheduleSidecar) {
+				s.Insertions[0].StepID = base.Execution[0].StepID
+			},
+			wantErr: "duplicate step_id with base schedule",
+		},
+		{
+			name: "anchor cycle",
+			mutate: func(s *ReviewScheduleSidecar) {
+				s.Insertions[0].AfterStepID = "X2"
+				s.Insertions[1].AfterStepID = "X1"
+			},
+			wantErr: "anchor cycle detected",
+		},
+		{
+			name: "requires produces mismatch",
+			mutate: func(s *ReviewScheduleSidecar) {
+				s.Insertions[0].Requires.TaskStatus = "taken"
+			},
+			wantErr: "requires/produces mismatch",
+		},
+		{
+			name: "malformed argv",
+			mutate: func(s *ReviewScheduleSidecar) {
+				s.Insertions[1].Invoke.Argv = []string{"   "}
+			},
+			wantErr: "malformed argv",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := cloneReviewScheduleSidecar(valid)
+			tc.mutate(&payload)
+			raw := marshalJSON(t, payload)
+			err := ValidateReviewScheduleSidecar(raw, &base)
+			if err == nil {
+				t.Fatalf("ValidateReviewScheduleSidecar() expected error containing %q, got nil", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("ValidateReviewScheduleSidecar() error mismatch\nwant contains: %q\ngot: %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
 func TestEmitterGoldenSchedule(t *testing.T) {
 	root := mustRepoRoot(t)
 	expectedPath := filepath.Join(root, expectedScheduleFixture)
@@ -364,4 +445,50 @@ func mustRepoRoot(t *testing.T) string {
 func sha256Hex(b []byte) string {
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
+}
+
+func validReviewScheduleSidecarFixture(t *testing.T, base Schedule) ReviewScheduleSidecar {
+	t.Helper()
+	anchor := base.Execution[1]
+	return ReviewScheduleSidecar{
+		SchemaVersion:    1,
+		BaseSchedulePath: emitPlanPath,
+		Insertions: []ReviewScheduleInsertion{
+			{
+				ID:            "X1",
+				AfterStepID:   anchor.StepID,
+				StepID:        "S900_T1.1_fix_r1",
+				SeqHint:       1,
+				TaskID:        "T1.1",
+				Action:        "fix",
+				Requires:      StatusWrapper{TaskStatus: "review_taken"},
+				Produces:      StatusWrapper{TaskStatus: "taken"},
+				Invoke:        InvokeSpec{Argv: []string{"bash", "-lc", "true"}},
+				Reason:        "review findings require rework",
+				SourceEventID: "E0001",
+			},
+			{
+				ID:            "X2",
+				AfterStepID:   "X1",
+				StepID:        "S901_T1.1_review_r2",
+				SeqHint:       2,
+				TaskID:        "T1.1",
+				Action:        "review",
+				Requires:      StatusWrapper{TaskStatus: "taken"},
+				Produces:      StatusWrapper{TaskStatus: "review_taken"},
+				Invoke:        InvokeSpec{Argv: []string{"bash", "-lc", "true"}},
+				Reason:        "follow-up review after fix",
+				SourceEventID: "E0002",
+			},
+		},
+	}
+}
+
+func cloneReviewScheduleSidecar(in ReviewScheduleSidecar) ReviewScheduleSidecar {
+	out := in
+	out.Insertions = append([]ReviewScheduleInsertion(nil), in.Insertions...)
+	for i := range out.Insertions {
+		out.Insertions[i].Invoke.Argv = append([]string(nil), in.Insertions[i].Invoke.Argv...)
+	}
+	return out
 }

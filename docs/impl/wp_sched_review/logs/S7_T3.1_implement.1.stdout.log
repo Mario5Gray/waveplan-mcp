@@ -1,0 +1,24 @@
+Implemented `T3.1` directly: added a deterministic `swim insert-fix-loop` writer command in `waveplan-cli` with TDD (red → green), and added regression coverage.
+
+**Concrete file changes**
+- Added/extended review-sidecar path resolution to support writer flows (`must_exist=False`) and enforce explicit path rules in [waveplan-cli](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-cli:366).
+- Added deterministic sidecar writer logic (`_handle_swim_insert_fix_loop`) including:
+  - required args validation (`--schedule`, `--task`, `--after-step`, review sidecar via flag/env),
+  - base schedule parsing,
+  - sidecar load/init + base path consistency checks,
+  - deterministic `X*` insertion IDs, `E*` source event IDs, round derivation, step IDs, and canonical JSON writing,
+  - fix/review invoke argv derivation with mode rewriting,
+  in [waveplan-cli](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-cli:876).
+- Wired new CLI surface `swim insert-fix-loop` args in [waveplan-cli](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-cli:1328) and dispatch in [waveplan-cli](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-cli:1484).
+- Added new regression script for command contract + deterministic output in [test_t7_2_insert_fix_loop.sh](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/test_t7_2_insert_fix_loop.sh:1).
+
+**Verification commands and results**
+- `tests/swim/test_t7_2_insert_fix_loop.sh`  
+  - Red step before implementation: failed with `invalid choice: 'insert-fix-loop'`.  
+  - After implementation: `PASS: T7.2 insert-fix-loop`.
+- `python3 -m py_compile waveplan-cli` → pass.
+- `tests/swim/test_t4_1_cli_scaffold.sh` → `PASS: T4.1 cli scaffold`.
+- `tests/swim/test_t4_2_cli_wired.sh` → `PASS: T4.2 cli wired`.
+- `bash tests/swim/test_installed_anydir.sh` → failed due restricted network (`proxy.golang.org` lookup failure while downloading Go modules), not due CLI command logic.
+
+No waveplan write actions (`pop/fin/start_review/end_review/plan mutation`) were executed.

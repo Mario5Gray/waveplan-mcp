@@ -1,0 +1,8 @@
+{
+  "review_ended_at": "2026-05-14 20:27",
+  "review_note": "${WP_COMMENT:-}",
+  "reviewer": "sigma",
+  "success": true,
+  "task_id": "T3.3",
+  "title": "Refresh docs and fixture-backed verification for sidecar review loops"
+}

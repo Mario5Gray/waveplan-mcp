@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -116,6 +117,77 @@ func TestResolveNext_LiveSchedule_DoneWhenCursorPastEnd(t *testing.T) {
 	}
 	if d.Code != ResolutionDone {
 		t.Fatalf("Code = %q, want %q", d.Code, ResolutionDone)
+	}
+}
+
+func TestResolveNext_BlocksEndReviewWhenPendingReviewSidecarRowExists(t *testing.T) {
+	sched := &Schedule{SchemaVersion: 2, Execution: []ScheduleRow{
+		{Seq: 1, StepID: "S1_T1.1_implement", TaskID: "T1.1", Action: "implement", Requires: StatusWrapper{TaskStatus: string(StatusAvailable)}, Produces: StatusWrapper{TaskStatus: string(StatusTaken)}},
+		{Seq: 2, StepID: "S1_T1.1_review", TaskID: "T1.1", Action: "review", Requires: StatusWrapper{TaskStatus: string(StatusTaken)}, Produces: StatusWrapper{TaskStatus: string(StatusReviewTaken)}},
+		{Seq: 3, StepID: "S1_T1.1_end_review", TaskID: "T1.1", Action: "end_review", Requires: StatusWrapper{TaskStatus: string(StatusReviewTaken)}, Produces: StatusWrapper{TaskStatus: string(StatusReviewEnded)}},
+		{Seq: 4, StepID: "S1_T1.1_fix_r1", TaskID: "T1.1", Action: "fix", Source: scheduleRowSourceReviewSidecar, Requires: StatusWrapper{TaskStatus: string(StatusReviewTaken)}, Produces: StatusWrapper{TaskStatus: string(StatusTaken)}},
+		{Seq: 5, StepID: "S1_T1.1_finish", TaskID: "T1.1", Action: "finish", Requires: StatusWrapper{TaskStatus: string(StatusReviewEnded)}, Produces: StatusWrapper{TaskStatus: string(StatusCompleted)}},
+	}}
+	j := &Journal{SchemaVersion: 1, Cursor: 2, Events: []JournalEvent{}}
+	snap := snapshotWithTaskStatus("T1.1", StatusReviewTaken)
+
+	d := ResolveNext(sched, j, snap)
+	if d.Action != ActionBlocked {
+		t.Fatalf("Action = %q, want %q", d.Action, ActionBlocked)
+	}
+	if d.Code != ResolutionBlockedPendingSidecar {
+		t.Fatalf("Code = %q, want %q", d.Code, ResolutionBlockedPendingSidecar)
+	}
+	if d.Row.StepID != "S1_T1.1_end_review" {
+		t.Fatalf("Row.StepID = %q, want S1_T1.1_end_review", d.Row.StepID)
+	}
+	if !strings.Contains(d.Reason, "pending_step_id=S1_T1.1_fix_r1") {
+		t.Fatalf("Reason = %q, want pending sidecar step id", d.Reason)
+	}
+}
+
+func TestResolveNext_BlocksFinishWhenPendingReviewSidecarRowExists(t *testing.T) {
+	sched := &Schedule{SchemaVersion: 2, Execution: []ScheduleRow{
+		{Seq: 1, StepID: "S1_T1.1_implement", TaskID: "T1.1", Action: "implement", Requires: StatusWrapper{TaskStatus: string(StatusAvailable)}, Produces: StatusWrapper{TaskStatus: string(StatusTaken)}},
+		{Seq: 2, StepID: "S1_T1.1_review", TaskID: "T1.1", Action: "review", Requires: StatusWrapper{TaskStatus: string(StatusTaken)}, Produces: StatusWrapper{TaskStatus: string(StatusReviewTaken)}},
+		{Seq: 3, StepID: "S1_T1.1_end_review", TaskID: "T1.1", Action: "end_review", Requires: StatusWrapper{TaskStatus: string(StatusReviewTaken)}, Produces: StatusWrapper{TaskStatus: string(StatusReviewEnded)}},
+		{Seq: 4, StepID: "S1_T1.1_finish", TaskID: "T1.1", Action: "finish", Requires: StatusWrapper{TaskStatus: string(StatusReviewEnded)}, Produces: StatusWrapper{TaskStatus: string(StatusCompleted)}},
+		{Seq: 5, StepID: "S1_T1.1_fix_r2", TaskID: "T1.1", Action: "fix", Source: scheduleRowSourceReviewSidecar, Requires: StatusWrapper{TaskStatus: string(StatusReviewTaken)}, Produces: StatusWrapper{TaskStatus: string(StatusTaken)}},
+	}}
+	j := &Journal{SchemaVersion: 1, Cursor: 3, Events: []JournalEvent{}}
+	snap := snapshotWithTaskStatus("T1.1", StatusReviewEnded)
+
+	d := ResolveNext(sched, j, snap)
+	if d.Action != ActionBlocked {
+		t.Fatalf("Action = %q, want %q", d.Action, ActionBlocked)
+	}
+	if d.Code != ResolutionBlockedPendingSidecar {
+		t.Fatalf("Code = %q, want %q", d.Code, ResolutionBlockedPendingSidecar)
+	}
+	if d.Row.StepID != "S1_T1.1_finish" {
+		t.Fatalf("Row.StepID = %q, want S1_T1.1_finish", d.Row.StepID)
+	}
+	if !strings.Contains(d.Reason, "pending_step_id=S1_T1.1_fix_r2") {
+		t.Fatalf("Reason = %q, want pending sidecar step id", d.Reason)
+	}
+}
+
+func TestResolveNext_DoesNotBlockOnOtherTaskPendingReviewSidecarRow(t *testing.T) {
+	sched := &Schedule{SchemaVersion: 2, Execution: []ScheduleRow{
+		{Seq: 1, StepID: "S1_T1.1_implement", TaskID: "T1.1", Action: "implement", Requires: StatusWrapper{TaskStatus: string(StatusAvailable)}, Produces: StatusWrapper{TaskStatus: string(StatusTaken)}},
+		{Seq: 2, StepID: "S1_T1.1_review", TaskID: "T1.1", Action: "review", Requires: StatusWrapper{TaskStatus: string(StatusTaken)}, Produces: StatusWrapper{TaskStatus: string(StatusReviewTaken)}},
+		{Seq: 3, StepID: "S1_T1.1_end_review", TaskID: "T1.1", Action: "end_review", Requires: StatusWrapper{TaskStatus: string(StatusReviewTaken)}, Produces: StatusWrapper{TaskStatus: string(StatusReviewEnded)}},
+		{Seq: 4, StepID: "S1_T2.1_fix_r1", TaskID: "T2.1", Action: "fix", Source: scheduleRowSourceReviewSidecar, Requires: StatusWrapper{TaskStatus: string(StatusReviewTaken)}, Produces: StatusWrapper{TaskStatus: string(StatusTaken)}},
+	}}
+	j := &Journal{SchemaVersion: 1, Cursor: 2, Events: []JournalEvent{}}
+	snap := snapshotWithTaskStatus("T1.1", StatusReviewTaken)
+
+	d := ResolveNext(sched, j, snap)
+	if d.Action != ActionReady {
+		t.Fatalf("Action = %q, want %q", d.Action, ActionReady)
+	}
+	if d.Code != ResolutionReady {
+		t.Fatalf("Code = %q, want %q", d.Code, ResolutionReady)
 	}
 }
 

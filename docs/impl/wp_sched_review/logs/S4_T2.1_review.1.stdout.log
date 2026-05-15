@@ -1,0 +1,57 @@
+# Review: T2.1 — Merge anchored sidecar rows into the executable runtime frame
+
+Static review only (verification commands not run per session policy). Plan, spec, diff, new test file, schema, and Go cmd entrypoints inspected.
+
+## Findings (severity order)
+
+### CRITICAL — merge code is unreachable from production callers
+`internal/swim/safe_runner.go:288` adds `loadSchedule(schedulePath, reviewSchedulePath)` and threads `ReviewSchedulePath` through `RunOptions`/`ApplyOptions`/`SafeExecOptions`/`NextOptions`. But no production caller ever passes a non-empty value:
+
+- `cmd/swim-next-resolve/main.go`, `cmd/swim-step/main.go`, `cmd/swim-run/main.go` define no `--review-schedule` flag. They construct `swim.NextOptions{...}`/`RunOptions{...}` without `ReviewSchedulePath`.
+- `waveplan-cli` adds `--review-schedule` to `next`/`step`/`run`/`journal` argparse but immediately discards the resolved value: `_ = _resolve_review_schedule_path(...)` at lines 902, 927, 960, 981. The path is **never appended** to `tool_args` for the Go subprocess.
+
+Net effect: every code path through `loadSchedule` runs with `reviewSchedulePath == ""` and returns the bare base schedule. The new merge logic (`mergeExecutionWithReviewInsertions`) is exercised only by `internal/swim/review_schedule_runtime_test.go`. The unit's stated outcome — "merge anchored sidecar rows **into the executable runtime frame**" — is not delivered for any operator‑facing surface.
+
+### IMPORTANT — sidecar precondition conflicts not validated
+Spec `docs/specs/2026-05-14-swim-review-schedule-sidecar.md` Fail-Fast Rules require failure when *"the sidecar contains rows whose preconditions conflict with the base/overlay merged state"*. `ValidateReviewScheduleSidecar` only checks per-row `requires`/`produces` against `statusByAction`; it never walks the merged execution to verify the row's `requires` matches the predecessor's `produces`. A `fix` row anchored after `implement` (status `taken`) requires `review_taken` and would silently merge. Runtime would block at apply time, not at load time. If T2.2 owns this rule explicitly, fine — otherwise it belongs in T2.1's loader.
+
+### IMPORTANT — CLI wiring test only proves resolution, not merge
+`tests/swim/test_t4_2_cli_wired.sh` exports `WAVEPLAN_SCHED_REVIEW` and writes an empty‑insertions sidecar but never asserts that any subcommand returns a merged frame. `tests/swim/test_t4_1_cli_scaffold.sh` only asserts `--review-schedule` appears in `--help` and tests negative resolution. Neither test catches the dead pass-through.
+
+### MINOR — `_resolve_review_schedule_path` issues a follow-up `_emit_json` after the diff check
+Lines 386–397 in `waveplan-cli`: after `_emit_json(..., 2)` for "review schedule must differ from --schedule", the function continues to the readability check and may emit a second JSON dict on stdout. `_emit_json` calls `sys.exit(code)`, so currently safe — but the structure invites a regression if `_emit_json` ever stops exiting. Add explicit `return` after each `_emit_json` call, or guard with `else`.
+
+### MINOR — `seq_hint` ties broken by lexical ID, not numeric
+`mergeExecutionWithReviewInsertions` (`safe_runner.go:331`) sorts ties via `rows[i].ID < rows[j].ID`. With schema pattern `^X[0-9]+$`, `X10` sorts before `X2`. Authors who rely on numeric ID order will see surprising merges when `seq_hint` collides. Either document "ties broken lexically — pad your IDs" or parse the numeric suffix.
+
+### MINOR — `loadSchedule` re-numbers `Seq` even when no insertions
+In the `len(insertions) == 0` branch the code still walks the slice and reassigns `Seq = i+1`. Harmless because base `Seq` already matches index+1 after `ValidateSchedule`, but it adds an allocation+pass for the common (no sidecar) case. Early-return the original slice unchanged.
+
+### MINOR — `waveps.yml` change is unrelated to T2.1
+`waveps.yml` swaps the active `log_dirs` entry to `docs/impl/wp_sched_review/logs`. Not part of the contract for T2.1; should not ship in this unit's commit (or should be split out).
+
+### MINOR — `contextsize` and `waveplan-ps/waveplan-ps` (built binaries) appear in working tree
+Built artifacts in `git status`. Not introduced by this diff but worth noting before commit.
+
+## Required fixes (ordered)
+
+1. **Wire `--review-schedule` end-to-end.** Add `flag.String("review-schedule", "", ...)` to `cmd/swim-next-resolve/main.go`, `cmd/swim-step/main.go`, `cmd/swim-run/main.go` (and `cmd/swim-journal` if relevant), pass into `swim.NextOptions.ReviewSchedulePath` / `swim.RunOptions.ReviewSchedulePath` / `swim.ApplyOptions.ReviewSchedulePath`. In `waveplan-cli`, replace `_ = _resolve_review_schedule_path(...)` with capture and append `--review-schedule <resolved>` to each `tool_args` list. Without this T2.1 has no observable effect.
+
+2. **Add an end-to-end merge assertion.** Extend `tests/swim/test_t4_2_cli_wired.sh` (or a new bash test) to write a non-empty sidecar, run `waveplan-cli swim run --dry-run --schedule … --review-schedule …`, and `jq -e` that the report's step_ids include sidecar rows in the spec-defined merged order.
+
+3. **Decide ownership of precondition-conflict fail-fast.** If T2.1 owns it (spec lists it under load-time failure), add a pass in `loadSchedule`/`ValidateReviewScheduleSidecar` that walks the merged execution and rejects rows whose `requires.task_status` ≠ predecessor's `produces.task_status`. If deferred to T2.2, capture that explicitly in the plan/spec so reviewers don't flag it again.
+
+4. **Tighten `_resolve_review_schedule_path` control flow** — explicit `return` after each `_emit_json`, or `elif` chain. Defensive against `sys.exit` being mocked or replaced.
+
+5. **Decide on tie-breaker semantics for `seq_hint`** — either document lexical-tiebreak with the requirement that authors zero-pad IDs, or sort by parsed numeric suffix.
+
+6. **Split unrelated changes** out of this unit's commit (`waveps.yml`, untracked binaries).
+
+## What looks correct
+
+- Schema file `docs/specs/swim-review-schedule-schema-v1.json` matches the spec's required fields and constrains `schema_version`, action enum, and id/step patterns.
+- `ValidateReviewScheduleSidecar` covers: schema, duplicate insertion ids, duplicate step_ids vs base, duplicate step_ids within sidecar, unknown anchors, action↔requires/produces consistency, empty argv, anchor cycles via DFS coloring.
+- Unit tests in `contracts_test.go` exercise each negative branch; runtime test in `review_schedule_runtime_test.go` proves `seq_hint` ordering, `id` lex tie-break, and chained sidecar anchors all merge into expected runtime order, plus `Run` dry-run honors merged-frame `until` step lookup.
+- The merged schedule is built as ephemeral in-memory state; base file is not rewritten — matches spec's "base immutable" rule.
+
+Bottom line: the in-process merge logic is solid and well-tested. The unit fails its title because the runtime frame consuming the merge is never handed the sidecar path. Fix #1 is the blocker; the rest are follow-ups.

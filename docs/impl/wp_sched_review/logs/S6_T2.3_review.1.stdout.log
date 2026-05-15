@@ -1,0 +1,44 @@
+Compiled review. Writing findings.
+
+## Review of T2.3 — Resolver and runner tests for merged review loops
+
+**Verdict: APPROVE with minor coverage suggestions.**
+
+The test work directly covers the spec contracts under `docs/specs/2026-05-14-swim-review-schedule-sidecar.md` for merged review loops. Logic checks out against the implementation in `resolver.go:71-85`, `run.go:139-178`, and `safe_runner.go:326-380`.
+
+### Findings (severity-ordered)
+
+#### Critical
+None.
+
+#### Important
+None.
+
+#### Minor / coverage suggestions
+
+1. **Tiebreak ordering on identical `seq_hint` not exercised.** `safe_runner.go:341-346` falls back to lexical `id` when `SeqHint` ties, but `review_schedule_runtime_test.go:10-97` only tests the `SeqHint` axis (1 vs 2). Add one insertion pair with the same `seq_hint` and verify deterministic ordering by `id`. Spec line: `docs/specs/2026-05-14-swim-review-schedule-sidecar.md:121`.
+
+2. **Wet-path blocking on `end_review`/`finish` not covered.** Block path is verified only via `runDry` (`review_schedule_runtime_test.go:230-340`). Worth a single wet-run case that walks through `Apply`/`ExecuteNextStepSafe` so the `appendBlockedResult` path (`safe_runner.go:119`) records a journal event with `Outcome: "blocked"` and the right `Reason`.
+
+3. **Other-task pending sidecar exemption not covered at runtime.** `resolver_test.go:175-192` asserts the resolver-level behavior, but the runtime-merge path is not asserted. A short test that merges a base schedule containing two tasks plus a sidecar row for task B and confirms task A's `end_review` is NOT blocked would close the spec gap (`pendingSidecarStepForTask` at `resolver.go:127-139`).
+
+4. **Reason payload only spot-checked.** Tests assert `pending_step_id=...` substring; they do not pin `pending_action=` or `task=` fields that the reason emits (`resolver.go:77-83`). If the format is a contract for downstream tooling, lock it tighter; if not, ignore.
+
+5. **`Source` field is `json:"-"`** (`contracts.go:63`). Tests that construct rows manually rely on direct Go assignment, and merge-path tests rely on `scheduleRowFromInsertion` (`safe_runner.go:382-394`). Coverage is fine, but the json tag means a saved-then-loaded merged schedule would lose the marker — not a T2.3 concern, but worth flagging if a future task ever persists the merged frame.
+
+### Spec/contract adherence — confirmed
+
+- Merge semantics: sidecar rows immediately after their anchor, `seq_hint` ordering, sidecar-anchored-to-sidecar (X3→X2, X4→X1). ✓
+- Resolver blocks `end_review` when same-task review-sidecar row pending. ✓
+- Resolver blocks `finish` when same-task review-sidecar row pending. ✓
+- Other-task pending sidecar does not block. ✓
+- Dry-run runtime surfaces `Stopped=blocked` / `Boundary=blocked` with `would_block` step. ✓
+- Wet-run reaches and applies merged sidecar rows in correct order (implement → review → fix_r1 → review_r2). ✓
+
+### Required fixes
+
+None to land. The three coverage gaps above are recommended additions, not blockers for T2.3.
+
+### Verification status
+
+Static review only — was not permitted to execute `go test ./internal/swim` for this turn. Recommend implementer run `go test ./internal/swim -run 'TestResolveNext|TestLoadSchedule_MergesReviewSidecarIntoRuntimeOrder|TestRun_(Dry|Wet)Run_(UsesMergedReviewScheduleRuntimeFrame|BlocksEndReviewWhilePendingSidecarRowsExist|BlocksFinishWhilePendingSidecarRowsExist)' -count=1` before claiming green.

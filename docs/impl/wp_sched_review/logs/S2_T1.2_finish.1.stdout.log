@@ -1,0 +1,7 @@
+{
+  "finished_at": "2026-05-14 14:12",
+  "git_sha": "${GIT_SHA:-DEFERRED}",
+  "success": true,
+  "task_id": "T1.2",
+  "title": "Add explicit review-schedule flag and env resolution contract"
+}

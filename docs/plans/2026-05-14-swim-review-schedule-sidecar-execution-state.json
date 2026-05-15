@@ -1,0 +1,78 @@
+{
+  "plan": "2026-05-14-swim-review-schedule-sidecar-execution-waves.json",
+  "taken": {},
+  "completed": {
+    "T1.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-14 13:55",
+      "review_entered_at": "2026-05-14 14:01",
+      "review_ended_at": "2026-05-14T21:03:49Z",
+      "reviewer": "sigma",
+      "finished_at": "2026-05-14T21:03:52Z"
+    },
+    "T1.2": {
+      "taken_by": "phi",
+      "started_at": "2026-05-14 14:03",
+      "review_entered_at": "2026-05-14 14:09",
+      "review_ended_at": "2026-05-14T21:12:42Z",
+      "reviewer": "sigma",
+      "finished_at": "2026-05-14T21:12:46Z"
+    },
+    "T1.3": {
+      "taken_by": "phi",
+      "started_at": "2026-05-14 14:12",
+      "review_entered_at": "2026-05-14 15:02",
+      "review_ended_at": "2026-05-14T22:06:42Z",
+      "reviewer": "sigma",
+      "finished_at": "2026-05-14T22:06:45Z"
+    },
+    "T2.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-14 15:06",
+      "review_entered_at": "2026-05-14 15:12",
+      "review_ended_at": "2026-05-14T22:17:07Z",
+      "reviewer": "sigma",
+      "finished_at": "2026-05-14T22:17:10Z"
+    },
+    "T2.2": {
+      "taken_by": "phi",
+      "started_at": "2026-05-14 15:17",
+      "review_entered_at": "2026-05-14 15:21",
+      "review_ended_at": "2026-05-14T22:25:40Z",
+      "reviewer": "sigma",
+      "finished_at": "2026-05-14T22:25:43Z"
+    },
+    "T2.3": {
+      "taken_by": "phi",
+      "started_at": "2026-05-14 15:25",
+      "review_entered_at": "2026-05-14 15:29",
+      "review_ended_at": "2026-05-14T22:33:16Z",
+      "reviewer": "sigma",
+      "finished_at": "2026-05-14T22:33:19Z"
+    },
+    "T3.1": {
+      "taken_by": "phi",
+      "started_at": "2026-05-14 15:33",
+      "review_entered_at": "2026-05-14 15:40",
+      "review_ended_at": "2026-05-14T22:44:28Z",
+      "reviewer": "sigma",
+      "finished_at": "2026-05-14T22:44:31Z"
+    },
+    "T3.2": {
+      "taken_by": "phi",
+      "started_at": "2026-05-14 15:44",
+      "review_entered_at": "2026-05-14 16:10",
+      "review_ended_at": "2026-05-15T03:12:15Z",
+      "reviewer": "sigma",
+      "finished_at": "2026-05-15T03:12:18Z"
+    },
+    "T3.3": {
+      "taken_by": "phi",
+      "started_at": "2026-05-14 20:12",
+      "review_entered_at": "2026-05-14 20:18",
+      "review_ended_at": "2026-05-15T03:27:30Z",
+      "reviewer": "sigma",
+      "finished_at": "2026-05-15T03:27:33Z"
+    }
+  }
+}

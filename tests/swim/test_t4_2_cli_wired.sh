@@ -7,6 +7,8 @@ CLI="$ROOT_DIR/waveplan-cli"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 export XDG_CONFIG_HOME="$TMP_DIR/xdg"
+export GOCACHE="$TMP_DIR/go-cache"
+export WAVEPLAN_SWIM_ARTIFACT_ROOT="$TMP_DIR/swim-artifacts"
 mkdir -p "$XDG_CONFIG_HOME/waveplan-mcp"
 
 cat >"$XDG_CONFIG_HOME/waveplan-mcp/waveagents.json" <<'JSON'
@@ -224,10 +226,10 @@ jq -e '.events[0].outcome == "failed"' "$TMP_DIR/unknown-journal-retry.json" >/d
   --until finish --dry-run >"$TMP_DIR/run.json"
 jq -e '.dry_run == true and (.steps | length == 4) and .steps[0].status == "would_apply"' "$TMP_DIR/run.json" >/dev/null
 
-cat >"$TMP_DIR/journal-tail.json" <<'JSON'
+cat >"$TMP_DIR/journal-tail.json" <<JSON
 {
   "schema_version": 1,
-  "schedule_path": "demo-schedule.json",
+  "schedule_path": "$ROOT_DIR/tests/swim/fixtures/expected-schedule.json",
   "cursor": 5,
   "events": [
     {"event_id":"E0001","step_id":"S1_T1.1_implement","seq":1,"task_id":"T1.1","action":"implement","attempt":1,"started_on":"2026-05-09T00:00:00Z","completed_on":"2026-05-09T00:00:01Z","outcome":"applied","state_before":{"task_status":"available"},"state_after":{"task_status":"taken"}},
@@ -239,7 +241,7 @@ cat >"$TMP_DIR/journal-tail.json" <<'JSON'
 }
 JSON
 
-"$CLI" swim journal --schedule "$TMP_DIR/apply-schedule.json" --journal "$TMP_DIR/journal-tail.json" --tail 3 >"$TMP_DIR/journal.json"
+"$CLI" swim journal --schedule "$ROOT_DIR/tests/swim/fixtures/expected-schedule.json" --journal "$TMP_DIR/journal-tail.json" --tail 3 >"$TMP_DIR/journal.json"
 jq -e '.cursor == 5 and (.events | length == 3) and .events[0].event_id == "E0003"' "$TMP_DIR/journal.json" >/dev/null
 
 "$CLI" swim validate --kind schedule --in "$ROOT_DIR/tests/swim/fixtures/expected-schedule.json" >"$TMP_DIR/validate.json"

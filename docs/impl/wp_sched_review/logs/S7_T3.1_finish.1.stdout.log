@@ -1,0 +1,7 @@
+{
+  "finished_at": "2026-05-14 15:44",
+  "git_sha": "${GIT_SHA:-DEFERRED}",
+  "success": true,
+  "task_id": "T3.1",
+  "title": "Add deterministic insert-fix-loop sidecar writer command"
+}

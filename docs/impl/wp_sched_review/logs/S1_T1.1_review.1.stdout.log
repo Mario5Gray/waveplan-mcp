@@ -1,0 +1,42 @@
+Review complete. Findings ordered by severity.
+
+## Findings
+
+### MEDIUM
+
+**F1 — `base_schedule_path` declared but never validated.**
+`internal/swim/contracts.go:107` declares `BaseSchedulePath`, schema requires it (`docs/specs/swim-review-schedule-schema-v1.json:7`), spec mandates "explicit only" sidecar location (`docs/specs/2026-05-14-swim-review-schedule-sidecar.md:18`), yet `ValidateReviewScheduleSidecar` (contracts.go:238) accepts the `base *Schedule` and never cross-checks the field. Sidecar pointing at a different base file is silently accepted. Either (a) compare `sidecar.BaseSchedulePath` to a base-path arg, or (b) add an explicit test-locked comment that path checking lives at the CLI loader (T1.2/T2.1). Today it is neither.
+
+### LOW
+
+**F2 — Missing test coverage for sidecar self-collision step_id.**
+`findSidecarStepIDDuplicate` (contracts.go:342) branch is unreached by tests. `TestValidateReviewScheduleSidecar_Cases` only exercises base-collision (contracts_test.go:312). Add case: mutate `Insertions[1].StepID = Insertions[0].StepID` -> expect `duplicate sidecar step_id`.
+
+**F3 — `source_event_id` regex is tighter than spec.**
+Schema pins `^E[0-9]{4,}$` (schema v1 line 109). Spec calls it "audit pointer to the triggering review event" with no shape constraint (spec line 106). If T3 writer (`insert-fix-loop`) uses any other id format, validation breaks. Decide: keep strict (and document) or relax to `minLength: 1`.
+
+**F4 — `seq_hint` collision behavior not locked by a test.**
+Spec rule "order by seq_hint, then lexical id" (spec line 121) tolerates ties. Validator correctly allows ties. Add a positive test with two rows sharing anchor+seq_hint to lock that semantic so a future tightening doesn't silently regress merge order in T2.
+
+### NIT / OUT-OF-SCOPE NOISE IN DIFF
+
+**N1 — `waveps.yml` carries a developer-local absolute path.**
+Diff replaces one absolute `/Users/darkbit1001/...` `log_dirs` with another (`docs/impl/wp_sched_review/logs`). Not part of T1.1 (contract+schema). Drop from this commit or move to a personal config branch.
+
+**N2 — `waveplan-ps/waveplan-ps` binary mutated.**
+Same byte-size, content shifted. Unclear why a built artifact ships with a contract-only impl unit. Strip unless it is intentionally tracked.
+
+**N3 — Schema `$id` URL points at `raw.githubusercontent.com/...` while title says v1.**
+Cosmetic; matches v2 pattern. No action.
+
+## Required Fixes Before Approval
+
+1. F1: add `base_schedule_path` semantic check OR add a one-line code comment + spec note pinning that to T1.2 CLI loader.
+2. F2: add `duplicate sidecar step_id` self-collision test case.
+3. F3: confirm `source_event_id` regex matches the planned T3 writer; relax or document.
+4. F4: add positive test for shared `seq_hint` across same anchor.
+5. N1, N2: revert `waveps.yml` log_dir change and `waveplan-ps/waveplan-ps` binary from this unit's commit.
+
+Strengths: schema invariants (action/requires/produces, duplicate id/step_id, anchor existence, DFS cycle) are implemented correctly. DFS self-anchor (`AfterStepID == ID`) and chained cycles both caught. Test table covers the main negative paths. Validator separation from CLI/env contract is properly scoped to T1.1.
+
+No write actions taken. Sigma — review only.

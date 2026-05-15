@@ -1,0 +1,35 @@
+Implemented `T3.3` with superpowers workflow discipline (`executing-plans` + verification-before-completion), focused on docs refresh and fixture-backed sidecar-loop verification.
+
+**File changes**
+- Updated SWIM docs to make sidecar usage explicit (`--review-schedule` + `insert-fix-loop`) and point to fixture-backed checks:
+  - [README.md](/Users/darkbit1001/workspace/waveplan-mcp/README.md)
+- Updated observer docs/config docs for review-sidecar inputs and env fallback:
+  - [waveplan-ps/README.md](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/README.md)
+  - [waveplan-ps-config-example.yaml](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-ps/docs/waveplan-ps-config-example.yaml)
+  - [waveps.yml](/Users/darkbit1001/workspace/waveplan-mcp/waveps.yml)
+- Added fixture bundle for deterministic review-loop verification:
+  - [review-loop-schedule.json](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/fixtures/review-loop-schedule.json)
+  - [review-loop-sidecar.json](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/fixtures/review-loop-sidecar.json)
+  - [review-loop-state.json](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/fixtures/review-loop-state.json)
+  - [review-loop-journal.json](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/fixtures/review-loop-journal.json)
+- Refactored/added fixture-backed verification scripts:
+  - [test_t7_3_review_schedule_passthrough.sh](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/test_t7_3_review_schedule_passthrough.sh)
+  - [test_t7_4_review_schedule_observer_fixture.sh](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/test_t7_4_review_schedule_observer_fixture.sh)
+
+**Verification commands + results**
+1. `bash tests/swim/test_t7_2_insert_fix_loop.sh && bash tests/swim/test_t7_3_review_schedule_passthrough.sh && bash tests/swim/test_t7_4_review_schedule_observer_fixture.sh`
+- `PASS: T7.2 insert-fix-loop`
+- `PASS: T7.3 review-schedule passthrough`
+- `PASS: T7.4 review-schedule observer fixture`
+
+2. `go test ./internal/swim && (cd waveplan-ps && go test ./...)`
+- `ok github.com/darkbit1001/Stability-Toys/waveplan-mcp/internal/swim`
+- `ok .../waveplan-ps/cmd/waveplan-ps`
+- `ok .../waveplan-ps/internal/config`
+- `ok .../waveplan-ps/internal/discovery`
+- `ok .../waveplan-ps/internal/model`
+- `ok .../waveplan-ps/internal/ui`
+- `ok .../waveplan-ps/internal/watch`
+- `ok .../waveplan-ps/tests/integration`
+
+No `pop`, `fin`, `start_review`, `end_review`, or execution-plan mutation actions were run.

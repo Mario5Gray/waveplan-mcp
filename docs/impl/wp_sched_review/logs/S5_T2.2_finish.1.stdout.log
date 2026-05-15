@@ -1,0 +1,7 @@
+{
+  "finished_at": "2026-05-14 15:25",
+  "git_sha": "${GIT_SHA:-DEFERRED}",
+  "success": true,
+  "task_id": "T2.2",
+  "title": "Block end_review and finish while pending sidecar rows exist"
+}

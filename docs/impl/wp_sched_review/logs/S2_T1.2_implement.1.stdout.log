@@ -1,0 +1,34 @@
+Implemented `T1.2` directly in-repo with superpowers-style test-first flow, without any waveplan write actions.
+
+**Concrete Changes**
+- Added explicit review sidecar path resolution contract in CLI:
+  - precedence: `--review-schedule` then `WAVEPLAN_SCHED_REVIEW`
+  - fail-fast when missing
+  - fail-fast when sidecar path equals `--schedule`
+  - [waveplan-cli](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-cli#L350)
+- Added `--review-schedule` flag to SWIM subcommands:
+  - `next`, `step`, `run`, `journal`
+  - [waveplan-cli](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-cli#L763)
+- Wired resolution checks into execution paths for those subcommands:
+  - [waveplan-cli](/Users/darkbit1001/workspace/waveplan-mcp/waveplan-cli#L892)
+- Extended CLI scaffold test coverage for:
+  - help surface includes `--review-schedule`
+  - deterministic collision error (`review schedule must differ from --schedule`)
+  - [test_t4_1_cli_scaffold.sh](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/test_t4_1_cli_scaffold.sh#L26)
+- Updated SWIM wired integration test setup for new contract + sandbox stability env:
+  - sets `WAVEPLAN_SCHED_REVIEW`, `GOCACHE`, `WAVEPLAN_SWIM_ARTIFACT_ROOT`
+  - [test_t4_2_cli_wired.sh](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/test_t4_2_cli_wired.sh#L9)
+- Updated installed-anydir test to provide `WAVEPLAN_SCHED_REVIEW`:
+  - [test_installed_anydir.sh](/Users/darkbit1001/workspace/waveplan-mcp/tests/swim/test_installed_anydir.sh#L30)
+
+**Verification Commands + Results**
+1. `bash tests/swim/test_t4_1_cli_scaffold.sh`  
+   Result: `PASS: T4.1 cli scaffold`
+2. `bash tests/swim/test_t4_2_cli_wired.sh`  
+   Result: `PASS: T4.2 cli wired`
+3. `python3 -m py_compile waveplan-cli`  
+   Result: success (exit 0)
+4. `./waveplan-cli swim next --schedule x.json`  
+   Result: deterministic contract error JSON with `missing review schedule: set --review-schedule or WAVEPLAN_SCHED_REVIEW` (exit 2)
+5. `bash tests/swim/test_installed_anydir.sh`  
+   Result: failed in this sandbox due blocked network while downloading Go modules (`proxy.golang.org` DNS/network unavailable).

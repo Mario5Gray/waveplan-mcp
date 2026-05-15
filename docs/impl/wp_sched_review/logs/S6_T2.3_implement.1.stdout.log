@@ -1,0 +1,21 @@
+Implemented `T2.3` test coverage for merged review loops, with no waveplan write actions.
+
+**File Changes**
+- Added resolver-side merged-loop blocking tests in [internal/swim/resolver_test.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/resolver_test.go:123):
+  - `TestResolveNext_BlocksEndReviewWhenPendingReviewSidecarRowExists`
+  - `TestResolveNext_BlocksFinishWhenPendingReviewSidecarRowExists`
+  - `TestResolveNext_DoesNotBlockOnOtherTaskPendingReviewSidecarRow`
+  - Also added `strings` import for reason assertions.
+- Added wet runner merged-loop test in [internal/swim/review_schedule_runtime_test.go](/Users/darkbit1001/workspace/waveplan-mcp/internal/swim/review_schedule_runtime_test.go:159):
+  - `TestRun_WetRun_UsesMergedReviewScheduleRuntimeFrame`
+  - Verifies runtime execution order includes sidecar steps (`implement -> review -> fix_r1 -> review_r2`) and stops on `until` at sidecar step.
+
+**Verification Commands + Results**
+- `go test ./internal/swim -run '...'`
+  - Failed first due sandbox cache permission (`.../Library/Caches/go-build... operation not permitted`).
+- `GOCACHE=/private/tmp/waveplan-go-build GOMODCACHE=/private/tmp/waveplan-go-mod go test ./internal/swim -run '...'`
+  - Failed due restricted network trying to fetch modules.
+- `GOCACHE=/private/tmp/waveplan-go-build go test ./internal/swim -run 'TestResolveNext_(BlocksEndReviewWhenPendingReviewSidecarRowExists|BlocksFinishWhenPendingReviewSidecarRowExists|DoesNotBlockOnOtherTaskPendingReviewSidecarRow)|TestRun_(WetRun_UsesMergedReviewScheduleRuntimeFrame|DryRun_UsesMergedReviewScheduleRuntimeFrame|DryRun_BlocksEndReviewWhilePendingSidecarRowsExist|DryRun_BlocksFinishWhilePendingSidecarRowsExist)|TestLoadSchedule_MergesReviewSidecarIntoRuntimeOrder'`
+  - `ok .../internal/swim`
+- `GOCACHE=/private/tmp/waveplan-go-build go test ./internal/swim`
+  - `ok .../internal/swim`
