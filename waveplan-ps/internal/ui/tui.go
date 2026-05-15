@@ -613,32 +613,41 @@ func journalEvents(journals []watch.LoadedJournal) []model.JournalEvent {
 
 // actorDisplayForUnit returns the active actor for a unit, annotated when review is active.
 func actorDisplayForUnit(state *model.StateFile, unitID string) string {
-	name, role := activeActorForUnit(state, unitID)
+	name, _, reviewer := activeActorForUnit(state, unitID)
 	if name == "" {
 		return ""
 	}
-	if role == "review" {
-		return name + " [review]"
-	}
-	return name
+
+	return name + "/" + reviewer
 }
 
 // activeActorForUnit returns the active agent and role for a unit.
-func activeActorForUnit(state *model.StateFile, unitID string) (string, string) {
+func activeActorForUnit(state *model.StateFile, unitID string) (string, string, string) {
+
 	if state == nil {
-		return "", ""
+		return "", "", ""
 	}
+
 	if entry, ok := state.Completed[unitID]; ok {
-		return entry.TakenBy, "implement"
+		if entry.Reviewer != "" {
+			return entry.TakenBy, "implement", entry.Reviewer
+		} else {
+			return entry.TakenBy, "implement", ""
+		}
+
 	}
+
 	entry, ok := state.Taken[unitID]
+
 	if !ok {
-		return "", ""
+		return "", "", ""
 	}
+
 	if entry.ReviewEnteredAt != "" && entry.ReviewEndedAt == "" && entry.Reviewer != "" {
-		return entry.Reviewer, "review"
+		return entry.TakenBy, "review", entry.Reviewer
 	}
-	return entry.TakenBy, "implement"
+
+	return entry.TakenBy, "implement", ""
 }
 
 func reviewerForUnit(state *model.StateFile, unitID string) string {
