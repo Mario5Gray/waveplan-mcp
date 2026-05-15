@@ -366,6 +366,9 @@ for row in schedule["execution"]:
         raise SystemExit(f"wp_invoke parity failed for {row['step_id']}")
 PY
 
+# The compatibility string is intentionally defined by shlex.join/split.
+# Runtime uses operation as the source of truth, not wp_invoke.
+
 go run ./cmd/swim-validate --kind schedule --in "$NEW_SCHEDULE" >/dev/null
 jq -e --arg p "$NEW_SCHEDULE" '.schedule_path == $p and .cursor == 2' "$NEW_JOURNAL" >/dev/null
 
@@ -514,7 +517,7 @@ schema_version = schedule.get("schema_version")
 if schema_version == 3:
     write_json(out_path, schedule)
     handle_journal_copy_if_requested(len(schedule.get("execution", [])))
-    return
+    sys.exit(0)
 if schema_version not in (1, 2, None):
     raise SystemExit(f"unsupported source schedule schema_version: {schema_version}")
 ```
@@ -620,6 +623,10 @@ if journal_path:
         journal_copy["schedule_path"] = out_path
         write_json(journal_out, journal_copy)
 ```
+
+`cursor == len(new_execution)` is valid and means the schedule is already fully
+consumed. The migrator should still allow it because this can be useful for
+archival consistency and for replacing old schedule artifacts with v3 artifacts.
 
 - [ ] **Step 4: Write JSON atomically enough for helper usage**
 
