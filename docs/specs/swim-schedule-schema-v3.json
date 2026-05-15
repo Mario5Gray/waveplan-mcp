@@ -81,6 +81,13 @@
       "properties": {
         "kind": {
           "const": "state_transition"
+        },
+        "review_note": {
+          "type": "string"
+        },
+        "git_sha": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false

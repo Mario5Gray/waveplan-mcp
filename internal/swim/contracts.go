@@ -90,14 +90,16 @@ type InvokeSpec struct {
 
 // OperationSpec is the typed execution contract for schema v3 schedule rows.
 type OperationSpec struct {
-	Kind     string `json:"kind"`
-	Target   string `json:"target,omitempty"`
-	Agent    string `json:"agent,omitempty"`
-	Reviewer string `json:"reviewer,omitempty"`
+	Kind       string `json:"kind"`
+	Target     string `json:"target,omitempty"`
+	Agent      string `json:"agent,omitempty"`
+	Reviewer   string `json:"reviewer,omitempty"`
+	ReviewNote string `json:"review_note,omitempty"`
+	GitSHA     string `json:"git_sha,omitempty"`
 }
 
 func (o OperationSpec) IsZero() bool {
-	return o.Kind == "" && o.Target == "" && o.Agent == "" && o.Reviewer == ""
+	return o.Kind == "" && o.Target == "" && o.Agent == "" && o.Reviewer == "" && o.ReviewNote == "" && o.GitSHA == ""
 }
 
 // Journal is the SWIM execution journal sidecar contract.
@@ -574,6 +576,16 @@ func validateInvokeAgainstOperation(row ScheduleRow) error {
 		if hasFlag(argv, "--target") || hasFlag(argv, "--agent") || hasFlag(argv, "--reviewer") {
 			return fmt.Errorf("invoke.argv contradicts operation: state_transition cannot carry dispatch flags")
 		}
+		if row.Action == "end_review" && row.Operation.ReviewNote != "" {
+			if value, ok := lookupFlagValue(argv, "--review-note"); !ok || value != row.Operation.ReviewNote {
+				return fmt.Errorf("invoke.argv contradicts operation: --review-note mismatch for %s", row.TaskID)
+			}
+		}
+		if row.Action == "finish" && row.Operation.GitSHA != "" {
+			if value, ok := lookupFlagValue(argv, "--git-sha"); !ok || value != row.Operation.GitSHA {
+				return fmt.Errorf("invoke.argv contradicts operation: --git-sha mismatch for %s", row.TaskID)
+			}
+		}
 	default:
 		return fmt.Errorf("invoke.argv contradicts operation: unsupported operation kind %q", row.Operation.Kind)
 	}
@@ -596,7 +608,12 @@ func BuildInvokeArgv(row ScheduleRow, planPath string) ([]string, error) {
 			argv = append(argv, "--reviewer", row.Operation.Reviewer)
 		}
 	case "state_transition":
-		// No extra flags.
+		if row.Action == "end_review" && row.Operation.ReviewNote != "" {
+			argv = append(argv, "--review-note", row.Operation.ReviewNote)
+		}
+		if row.Action == "finish" && row.Operation.GitSHA != "" {
+			argv = append(argv, "--git-sha", row.Operation.GitSHA)
+		}
 	default:
 		return nil, fmt.Errorf("unsupported operation kind: %s", row.Operation.Kind)
 	}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -568,4 +569,70 @@ func cloneReviewScheduleSidecar(in ReviewScheduleSidecar) ReviewScheduleSidecar 
 		out.Insertions[i].Invoke.Argv = append([]string(nil), in.Insertions[i].Invoke.Argv...)
 	}
 	return out
+}
+
+func TestBuildInvokeArgvV3RetainsReviewNoteAndGitSHA(t *testing.T) {
+	tests := []struct {
+		name string
+		row  ScheduleRow
+		want []string
+	}{
+		{
+			name: "end_review_review_note",
+			row: ScheduleRow{
+				StepID: "S1_T1.1_end_review",
+				TaskID: "T1.1",
+				Action: "end_review",
+				Operation: OperationSpec{
+					Kind:       "state_transition",
+					ReviewNote: "looks good",
+				},
+			},
+			want: []string{"wp-plan-step.sh", "--action", "end_review", "--plan", "/tmp/plan.json", "--task-id", "T1.1", "--review-note", "looks good"},
+		},
+		{
+			name: "finish_git_sha",
+			row: ScheduleRow{
+				StepID: "S1_T1.1_finish",
+				TaskID: "T1.1",
+				Action: "finish",
+				Operation: OperationSpec{
+					Kind:   "state_transition",
+					GitSHA: "DEFERRED",
+				},
+			},
+			want: []string{"wp-plan-step.sh", "--action", "finish", "--plan", "/tmp/plan.json", "--task-id", "T1.1", "--git-sha", "DEFERRED"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := BuildInvokeArgv(tt.row, "/tmp/plan.json")
+			if err != nil {
+				t.Fatalf("BuildInvokeArgv() error = %v", err)
+			}
+			if !reflect.DeepEqual(tt.want, got) {
+				t.Fatalf("BuildInvokeArgv() mismatch\nwant: %v\ngot:  %v", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestValidateScheduleV3AllowsLifecycleOperationParams(t *testing.T) {
+	raw := []byte(`{
+	  "schema_version": 3,
+	  "execution": [{
+	    "seq": 1,
+	    "step_id": "S1_T1.1_finish",
+	    "task_id": "T1.1",
+	    "action": "finish",
+	    "requires": {"task_status": "review_ended"},
+	    "produces": {"task_status": "completed"},
+	    "operation": {"kind": "state_transition", "git_sha": "DEFERRED"},
+	    "invoke": {"argv": ["wp-plan-step.sh", "--action", "finish", "--plan", "/tmp/plan.json", "--task-id", "T1.1", "--git-sha", "DEFERRED"]}
+	  }]
+	}`)
+	if err := ValidateSchedule(raw); err != nil {
+		t.Fatalf("ValidateSchedule() unexpected error: %v", err)
+	}
 }
