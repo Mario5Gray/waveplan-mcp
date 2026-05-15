@@ -1,0 +1,364 @@
+{
+  "schema_version": 1,
+  "schedule_path": "tests/swim/fixtures/expected-schedule.json",
+  "cursor": 0,
+  "last_event": {
+    "event_id": "E0016",
+    "step_id": "S1_T1.1_implement",
+    "seq": 1,
+    "task_id": "T1.1",
+    "action": "implement",
+    "attempt": 16,
+    "started_on": "2026-05-15T18:53:39Z",
+    "completed_on": "2026-05-15T18:53:45Z",
+    "outcome": "failed",
+    "state_before": {
+      "task_status": "available"
+    },
+    "state_after": {
+      "task_status": "available"
+    },
+    "exit_code": 1,
+    "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.16.stdout.log",
+    "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.16.stderr.log",
+    "reason": "exit status 1"
+  },
+  "events": [
+    {
+      "event_id": "E0001",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 1,
+      "started_on": "2026-05-15T11:47:46Z",
+      "completed_on": "2026-05-15T11:47:54Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.1.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.1.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0002",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 2,
+      "started_on": "2026-05-15T11:47:58Z",
+      "completed_on": "2026-05-15T11:48:05Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.2.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.2.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0003",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 3,
+      "started_on": "2026-05-15T18:33:27Z",
+      "completed_on": "2026-05-15T18:33:36Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.3.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.3.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0004",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 4,
+      "started_on": "2026-05-15T18:33:40Z",
+      "completed_on": "2026-05-15T18:33:47Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.4.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.4.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0005",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 5,
+      "started_on": "2026-05-15T18:37:41Z",
+      "completed_on": "2026-05-15T18:37:48Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.5.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.5.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0006",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 6,
+      "started_on": "2026-05-15T18:40:12Z",
+      "completed_on": "2026-05-15T18:40:19Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.6.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.6.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0007",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 7,
+      "started_on": "2026-05-15T18:41:07Z",
+      "completed_on": "2026-05-15T18:41:14Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.7.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.7.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0008",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 8,
+      "started_on": "2026-05-15T18:41:17Z",
+      "completed_on": "2026-05-15T18:41:24Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.8.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.8.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0009",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 9,
+      "started_on": "2026-05-15T18:41:28Z",
+      "completed_on": "2026-05-15T18:41:35Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.9.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.9.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0010",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 10,
+      "started_on": "2026-05-15T18:43:57Z",
+      "completed_on": "2026-05-15T18:44:03Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.10.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.10.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0011",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 11,
+      "started_on": "2026-05-15T18:44:20Z",
+      "completed_on": "2026-05-15T18:44:27Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.11.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.11.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0012",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 12,
+      "started_on": "2026-05-15T18:48:24Z",
+      "completed_on": "2026-05-15T18:48:32Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.12.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.12.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0013",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 13,
+      "started_on": "2026-05-15T18:49:17Z",
+      "completed_on": "2026-05-15T18:49:23Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.13.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.13.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0014",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 14,
+      "started_on": "2026-05-15T18:52:03Z",
+      "completed_on": "2026-05-15T18:52:10Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.14.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.14.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0015",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 15,
+      "started_on": "2026-05-15T18:53:29Z",
+      "completed_on": "2026-05-15T18:53:36Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.15.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.15.stderr.log",
+      "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0016",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 16,
+      "started_on": "2026-05-15T18:53:39Z",
+      "completed_on": "2026-05-15T18:53:45Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.16.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.16.stderr.log",
+      "reason": "exit status 1"
+    }
+  ]
+}

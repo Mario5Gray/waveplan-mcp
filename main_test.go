@@ -1571,3 +1571,971 @@ func TestHandleContextEstimate_InvalidBudget(t *testing.T) {
 		t.Fatal("expected error for invalid budget")
 	}
 }
+
+func TestCreateTools_SwimToolArgumentSurface(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	tools := srv.createTools()
+
+	toolMap := make(map[string]map[string]any)
+	for _, tool := range tools {
+		args := tool.Tool.InputSchema.Properties
+		toolMap[tool.Tool.Name] = args
+	}
+
+	// waveplan_swim_step should have: schedule, journal, state, seq, step_id, apply, ack_unknown, as, dry_run
+	stepArgs := toolMap["waveplan_swim_step"]
+	for _, arg := range []string{"schedule", "journal", "state", "seq", "step_id", "apply", "ack_unknown", "as", "dry_run"} {
+		if _, ok := stepArgs[arg]; !ok {
+			t.Errorf("waveplan_swim_step missing argument: %s", arg)
+		}
+	}
+
+	// waveplan_swim_run should have: schedule, journal, state, until, dry_run, max_steps, work_dir
+	runArgs := toolMap["waveplan_swim_run"]
+	for _, arg := range []string{"schedule", "journal", "state", "until", "dry_run", "max_steps", "work_dir"} {
+		if _, ok := runArgs[arg]; !ok {
+			t.Errorf("waveplan_swim_run missing argument: %s", arg)
+		}
+	}
+
+	// waveplan_swim_refine_run should have: refine, refine_journal, coarse_journal, state, dry_run, work_dir
+	refineRunArgs := toolMap["waveplan_swim_refine_run"]
+	for _, arg := range []string{"refine", "refine_journal", "coarse_journal", "state", "dry_run", "work_dir"} {
+		if _, ok := refineRunArgs[arg]; !ok {
+			t.Errorf("waveplan_swim_refine_run missing argument: %s", arg)
+		}
+	}
+}
+
+func TestHandleSwimStepWithState(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"state":    statePath,
+			"apply":    true,
+		}},
+	}
+	res, err := srv.handleSwimStep(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimStep with state: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	// Just verify the state parameter was accepted and a valid response was returned
+	if _, ok := got["status"]; !ok {
+		t.Fatal("expected status in response")
+	}
+}
+
+func TestHandleSwimRunWithWorkDir(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"journal":  filepath.Join(dir, "journal.json"),
+			"state":    statePath,
+			"until":    "finish",
+			"dry_run":  true,
+			"work_dir": dir,
+		}},
+	}
+	res, err := srv.handleSwimRun(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRun with work_dir: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["dry_run"] != true {
+		t.Fatalf("dry_run = %v, want true", got["dry_run"])
+	}
+}
+
+func TestHandleSwimCompile_OutParam(t *testing.T) {
+	dir := t.TempDir()
+	planPath := filepath.Join(dir, "plan.json")
+	if err := os.WriteFile(planPath, []byte(`{
+   "schema_version": 1,
+   "generated_on": "2026-05-05",
+   "plan": {"name": "swim-test"},
+   "doc_index": {},
+   "fp_index": {},
+   "tasks": {"T1": {"title": "Base task", "plan_line": 1, "doc_refs": []}},
+   "units": {"T1.1": {"task": "T1", "title": "Base unit", "kind": "impl", "wave": 1, "plan_line": 2, "depends_on": [], "doc_refs": [], "fp_refs": []}},
+   "waves": [{"wave": 1, "units": ["T1.1"]}]
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	agentsPath := filepath.Join(dir, "waveagents.json")
+	if err := os.WriteFile(agentsPath, []byte(`{"agents":[{"name":"phi","provider":"codex"}],"schedule":["phi"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outPath := filepath.Join(dir, "schedule.json")
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"plan":     planPath,
+			"agents":   agentsPath,
+			"out":      outPath,
+			"task_scope": "all",
+		}},
+	}
+	res, err := srv.handleSwimCompile(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimCompile with out: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["ok"] != true {
+		t.Fatalf("ok = %v, want true", got["ok"])
+	}
+	if got["output"] != outPath {
+		t.Fatalf("output = %v, want %s", got["output"], outPath)
+	}
+	// Verify the output file was created
+	if _, err := os.Stat(outPath); err != nil {
+		t.Fatalf("output file not created: %v", err)
+	}
+}
+
+func TestHandleSwimRefine_OutParam(t *testing.T) {
+	dir := t.TempDir()
+	coarsePath := filepath.Join(dir, "coarse.json")
+	coarse := `{
+   "schema_version": 1,
+   "generated_on": "2026-05-09",
+   "plan_version": 1,
+   "plan_generation": "2026-05-09T00:00:00Z",
+   "plan": {"id": "refine-out-test"},
+   "fp_index": {},
+   "doc_index": {},
+   "tasks": {"T1": {"title": "task one", "files": ["a.go","b.go"]}},
+   "units": {"T1.1": {"task": "T1", "title": "impl unit", "kind": "impl", "wave": 1, "plan_line": 1, "depends_on": [], "files": ["a.go","b.go"]}}
+}`
+	if err := os.WriteFile(coarsePath, []byte(coarse), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outPath := filepath.Join(dir, "refine.json")
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"plan":    coarsePath,
+			"targets": []any{"T1.1"},
+			"out":     outPath,
+		}},
+	}
+	res, err := srv.handleSwimRefine(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRefine with out: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["ok"] != true {
+		t.Fatalf("ok = %v, want true", got["ok"])
+	}
+	if got["output"] != outPath {
+		t.Fatalf("output = %v, want %s", got["output"], outPath)
+	}
+	// Verify the output file was created
+	body, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read refine output: %v", err)
+	}
+	refineOut := parseJSONMap(t, string(body))
+	if refineOut["schema_version"] != float64(1) {
+		t.Fatalf("refine schema_version = %v, want 1", refineOut["schema_version"])
+	}
+}
+
+func TestHandleSwimRefine_CustomProfile(t *testing.T) {
+	dir := t.TempDir()
+	coarsePath := filepath.Join(dir, "coarse.json")
+	coarse := `{
+   "schema_version": 1,
+   "generated_on": "2026-05-09",
+   "plan_version": 1,
+   "plan_generation": "2026-05-09T00:00:00Z",
+   "plan": {"id": "refine-profile-test"},
+   "fp_index": {},
+   "doc_index": {},
+   "tasks": {"T1": {"title": "task one", "files": ["a.go","b.go"]}},
+   "units": {"T1.1": {"task": "T1", "title": "impl unit", "kind": "impl", "wave": 1, "plan_line": 1, "depends_on": [], "files": ["a.go","b.go"]}}
+}`
+	if err := os.WriteFile(coarsePath, []byte(coarse), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"plan":    coarsePath,
+			"targets": []any{"T1.1"},
+			"profile": "v1",
+		}},
+	}
+	res, err := srv.handleSwimRefine(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRefine with profile: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["schema_version"] != float64(1) {
+		t.Fatalf("schema_version = %v, want 1", got["schema_version"])
+	}
+}
+
+func TestHandleSwimRefineRun_WithJournalParams(t *testing.T) {
+	dir := t.TempDir()
+	coarsePath := filepath.Join(dir, "coarse.json")
+	coarse := `{
+   "schema_version": 1,
+   "generated_on": "2026-05-09",
+   "plan_version": 1,
+   "plan_generation": "2026-05-09T00:00:00Z",
+   "plan": {"id": "refine-run-journal-test"},
+   "fp_index": {},
+   "doc_index": {},
+   "tasks": {"T1": {"title": "task one", "files": ["a.go","b.go"]}},
+   "units": {"T1.1": {"task": "T1", "title": "impl unit", "kind": "impl", "wave": 1, "plan_line": 1, "depends_on": [], "files": ["a.go","b.go"]}}
+}`
+	if err := os.WriteFile(coarsePath, []byte(coarse), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sidecar, err := swim.Refine(swim.RefineOptions{
+		CoarsePlanPath: coarsePath,
+		Profile:        swim.ProfileEightK,
+		Targets:        []string{"T1.1"},
+	})
+	if err != nil {
+		t.Fatalf("Refine: %v", err)
+	}
+	body, err := swim.MarshalSidecar(sidecar)
+	if err != nil {
+		t.Fatalf("MarshalSidecar: %v", err)
+	}
+	refinePath := filepath.Join(dir, "refine.json")
+	if err := os.WriteFile(refinePath, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "state.json")
+	state := `{"plan":"demo","taken":{"T1.1":{"taken_by":"phi","started_at":"2026-05-09 10:00"}},"completed":{}}`
+	if err := os.WriteFile(statePath, []byte(state), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refineJournal := filepath.Join(dir, "refine.journal.json")
+	coarseJournal := filepath.Join(dir, "coarse.journal.json")
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"refine":          refinePath,
+			"state":           statePath,
+			"refine_journal":  refineJournal,
+			"coarse_journal":  coarseJournal,
+			"dry_run":         true,
+			"work_dir":        dir,
+		}},
+	}
+	res, err := srv.handleSwimRefineRun(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRefineRun with journal params: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["dry_run"] != true {
+		t.Fatalf("dry_run = %v, want true", got["dry_run"])
+	}
+	steps := got["steps"].([]any)
+	if len(steps) == 0 {
+		t.Fatal("expected non-empty steps in dry-run report")
+	}
+}
+
+func TestHandleSwimStep_SeqMismatch(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"state":    statePath,
+			"seq":      999.0, // Mismatched seq
+		}},
+	}
+	res, err := srv.handleSwimStep(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimStep with seq mismatch: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["ok"] != false {
+		t.Fatalf("expected error response for seq mismatch, got ok=%v", got["ok"])
+	}
+}
+
+func TestHandleSwimStep_StepIdMismatch(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"state":    statePath,
+			"step_id":  "nonexistent_step_id", // Mismatched step_id
+		}},
+	}
+	res, err := srv.handleSwimStep(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimStep with step_id mismatch: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["ok"] != false {
+		t.Fatalf("expected error response for step_id mismatch, got ok=%v", got["ok"])
+	}
+}
+
+func TestHandleSwimRun_MaxSteps(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule":  filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"journal":   filepath.Join(dir, "journal.json"),
+			"state":     statePath,
+			"until":     "finish",
+			"dry_run":   true,
+			"max_steps": 2,
+		}},
+	}
+	res, err := srv.handleSwimRun(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRun with max_steps: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["dry_run"] != true {
+		t.Fatalf("dry_run = %v, want true", got["dry_run"])
+	}
+	steps := got["steps"].([]any)
+	if len(steps) != 2 {
+		t.Fatalf("steps len = %d, want 2 (max_steps limit)", len(steps))
+	}
+}
+
+func TestHandleSwimNext_ExplicitStatePath(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"journal":  filepath.Join(dir, "journal.json"),
+			"state":    statePath,
+		}},
+	}
+	res, err := srv.handleSwimNext(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimNext with explicit state: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["action"] != "ready" {
+		t.Fatalf("action = %v, want ready", got["action"])
+	}
+}
+
+func TestHandleSwimJournal_DefaultJournalPath(t *testing.T) {
+	dir := t.TempDir()
+	schedulePath := filepath.Join("tests", "swim", "fixtures", "expected-schedule.json")
+	journalPath := filepath.Join(dir, "expected-schedule.json.journal.json")
+	body := `{
+   "schema_version": 1,
+   "schedule_path": "expected-schedule.json",
+   "cursor": 2,
+   "events": [
+     {"event_id":"E0001","step_id":"S1_T1.1_implement","seq":1,"task_id":"T1.1","action":"implement","attempt":1,"started_on":"2026-05-09T00:00:00Z","completed_on":"2026-05-09T00:00:01Z","outcome":"applied","state_before":{"task_status":"available"},"state_after":{"task_status":"taken"}},
+     {"event_id":"E0002","step_id":"S1_T1.1_review","seq":2,"task_id":"T1.1","action":"review","attempt":1,"started_on":"2026-05-09T00:00:00Z","completed_on":"2026-05-09T00:00:01Z","outcome":"applied","state_before":{"task_status":"taken"},"state_after":{"task_status":"review_taken"}}
+   ]
+}`
+	if err := os.WriteFile(journalPath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": schedulePath,
+			"tail":     1.0,
+		}},
+	}
+	res, err := srv.handleSwimJournal(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimJournal with default journal: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	events := got["events"].([]any)
+	if len(events) != 1 {
+		t.Fatalf("events len = %d, want 1", len(events))
+	}
+}
+
+func TestHandleSwimCompile_WithBootstrapStateFalse(t *testing.T) {
+	dir := t.TempDir()
+	planPath := filepath.Join(dir, "plan.json")
+	if err := os.WriteFile(planPath, []byte(`{
+   "schema_version": 1,
+   "generated_on": "2026-05-05",
+   "plan": {"name": "swim-test"},
+   "doc_index": {},
+   "fp_index": {},
+   "tasks": {"T1": {"title": "Base task", "plan_line": 1, "doc_refs": []}},
+   "units": {"T1.1": {"task": "T1", "title": "Base unit", "kind": "impl", "wave": 1, "plan_line": 2, "depends_on": [], "doc_refs": [], "fp_refs": []}},
+   "waves": [{"wave": 1, "units": ["T1.1"]}]
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	agentsPath := filepath.Join(dir, "waveagents.json")
+	if err := os.WriteFile(agentsPath, []byte(`{"agents":[{"name":"phi","provider":"codex"}],"schedule":["phi"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outPath := filepath.Join(dir, "schedule.json")
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"plan":            planPath,
+			"agents":          agentsPath,
+			"out":             outPath,
+			"bootstrap_state": false,
+		}},
+	}
+	res, err := srv.handleSwimCompile(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimCompile with bootstrap_state=false: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["state_bootstrapped"] != false {
+		t.Fatalf("state_bootstrapped = %v, want false", got["state_bootstrapped"])
+	}
+}
+
+func TestHandleContextEstimate_WithBaseDir(t *testing.T) {
+	dir := t.TempDir()
+	testFile := filepath.Join(dir, "test.go")
+	if err := os.WriteFile(testFile, []byte("package main\nfunc Hello() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	candidate := `{
+		"id": "T1.1",
+		"title": "Test task",
+		"description": "Add a new feature",
+		"referenced_files": ["` + testFile + `"],
+		"referenced_sections": [],
+		"depends_on": [],
+		"source": "test"
+	}`
+
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"candidate": candidate,
+			"budget":    "1000:5000",
+			"base_dir":  dir,
+		}},
+	}
+
+	res, err := srv.handleContextEstimate(nil, req)
+	if err != nil {
+		t.Fatalf("handleContextEstimate with base_dir: %v", err)
+	}
+
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+
+	if _, ok := got["estimated_tokens"]; !ok {
+		t.Error("result missing estimated_tokens")
+	}
+	if got["budget_min"] != float64(1000) {
+		t.Errorf("budget_min = %v, want 1000", got["budget_min"])
+	}
+	if got["budget_max"] != float64(5000) {
+		t.Errorf("budget_max = %v, want 5000", got["budget_max"])
+	}
+}
+
+func TestHandleContextEstimate_EmptyBudgetParts(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"candidate": `{"id":"T1.1","title":"Test"}`,
+			"budget":    "1000", // Only one part, no colon
+		}},
+	}
+
+	res, err := srv.handleContextEstimate(nil, req)
+	if err != nil {
+		t.Fatalf("handleContextEstimate returned error: %v", err)
+	}
+
+	if !res.IsError {
+		t.Fatal("expected error for invalid budget format")
+	}
+}
+
+func TestCreateTools_AllToolNames(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	tools := srv.createTools()
+	names := map[string]bool{}
+	for _, tool := range tools {
+		names[tool.Tool.Name] = true
+	}
+
+	expectedTools := []string{
+		"waveplan_peek",
+		"waveplan_pop",
+		"waveplan_start_review",
+		"waveplan_start_fix",
+		"waveplan_end_review",
+		"waveplan_fin",
+		"waveplan_get",
+		"waveplan_deptree",
+		"waveplan_list_plans",
+		"waveplan_version",
+		"waveplan_swim_compile",
+		"waveplan_swim_next",
+		"waveplan_swim_step",
+		"waveplan_swim_run",
+		"waveplan_swim_journal",
+		"waveplan_swim_refine",
+		"waveplan_swim_refine_run",
+		"waveplan_context_estimate",
+	}
+
+	for _, want := range expectedTools {
+		if !names[want] {
+			t.Fatalf("missing tool %s", want)
+		}
+	}
+}
+
+func TestHandleSwimCompile_TaskScopeOpen(t *testing.T) {
+	dir := t.TempDir()
+	planPath := filepath.Join(dir, "plan.json")
+	if err := os.WriteFile(planPath, []byte(`{
+   "schema_version": 1,
+   "generated_on": "2026-05-05",
+   "plan": {"name": "swim-test"},
+   "doc_index": {},
+   "fp_index": {},
+   "tasks": {"T1": {"title": "Base task", "plan_line": 1, "doc_refs": []}},
+   "units": {"T1.1": {"task": "T1", "title": "Base unit", "kind": "impl", "wave": 1, "plan_line": 2, "depends_on": [], "doc_refs": [], "fp_refs": []}},
+   "waves": [{"wave": 1, "units": ["T1.1"]}]
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	agentsPath := filepath.Join(dir, "waveagents.json")
+	if err := os.WriteFile(agentsPath, []byte(`{"agents":[{"name":"phi","provider":"codex"}],"schedule":["phi"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"plan":       planPath,
+			"agents":     agentsPath,
+			"task_scope": "open",
+		}},
+	}
+	res, err := srv.handleSwimCompile(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimCompile with task_scope=open: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["task_scope"] != "open" {
+		t.Fatalf("task_scope = %v, want open", got["task_scope"])
+	}
+}
+
+func TestHandleContextEstimate_InvalidCandidateJSON(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"candidate": `{"id":"T1.1","title":"Test","referenced_files":`, // Invalid JSON (truncated)
+			"budget":    "64000:192000",
+		}},
+	}
+
+	res, err := srv.handleContextEstimate(nil, req)
+	if err != nil {
+		t.Fatalf("handleContextEstimate returned error: %v", err)
+	}
+
+	if !res.IsError {
+		t.Fatal("expected error for truncated candidate JSON")
+	}
+}
+
+func TestHandleSwimRefine_MultipleTargets(t *testing.T) {
+	dir := t.TempDir()
+	coarsePath := filepath.Join(dir, "coarse.json")
+	coarse := `{
+   "schema_version": 1,
+   "generated_on": "2026-05-09",
+   "plan_version": 1,
+   "plan_generation": "2026-05-09T00:00:00Z",
+   "plan": {"id": "refine-multi-target"},
+   "fp_index": {},
+   "doc_index": {},
+   "tasks": {"T1": {"title": "task one", "files": ["a.go","b.go","c.go"]}},
+   "units": {
+     "T1.1": {"task": "T1", "title": "impl unit 1", "kind": "impl", "wave": 1, "plan_line": 1, "depends_on": [], "files": ["a.go","b.go"]},
+     "T1.2": {"task": "T1", "title": "impl unit 2", "kind": "impl", "wave": 1, "plan_line": 2, "depends_on": [], "files": ["c.go"]}
+   }
+}`
+	if err := os.WriteFile(coarsePath, []byte(coarse), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"plan":    coarsePath,
+			"targets": []any{"T1.1", "T1.2"},
+		}},
+	}
+	res, err := srv.handleSwimRefine(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRefine with multiple targets: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	targets := got["targets"].([]any)
+	if len(targets) != 2 {
+		t.Fatalf("targets len = %d, want 2", len(targets))
+	}
+}
+
+func TestHandleSwimStep_WithoutApply(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"state":    statePath,
+			"apply":    false, // Explicitly not applying
+		}},
+	}
+	res, err := srv.handleSwimStep(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimStep without apply: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	// Without apply, should return the decision (not "applied" status)
+	if got["action"] == "applied" {
+		t.Fatal("should not return applied status when apply=false")
+	}
+}
+
+func TestHandleSwimRun_UntilSeq(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"journal":  filepath.Join(dir, "journal.json"),
+			"state":    statePath,
+			"until":    "seq:2",
+			"dry_run":  true,
+		}},
+	}
+	res, err := srv.handleSwimRun(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRun with until=seq:2: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["dry_run"] != true {
+		t.Fatalf("dry_run = %v, want true", got["dry_run"])
+	}
+}
+
+func TestHandleSwimRun_UntilStep(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"plan":"demo","taken":{},"completed":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+			"journal":  filepath.Join(dir, "journal.json"),
+			"state":    statePath,
+			"until":    "step:S1_T1.1_implement",
+			"dry_run":  true,
+		}},
+	}
+	res, err := srv.handleSwimRun(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRun with until=step:S1_T1.1_implement: %v", err)
+	}
+	got := parseJSONMap(t, res.Content[0].(mcp.TextContent).Text)
+	if got["dry_run"] != true {
+		t.Fatalf("dry_run = %v, want true", got["dry_run"])
+	}
+}
+
+func TestHandleSwimRefineRun_MissingState(t *testing.T) {
+	dir := t.TempDir()
+	coarsePath := filepath.Join(dir, "coarse.json")
+	coarse := `{
+   "schema_version": 1,
+   "generated_on": "2026-05-09",
+   "plan_version": 1,
+   "plan_generation": "2026-05-09T00:00:00Z",
+   "plan": {"id": "refine-run-missing-state"},
+   "fp_index": {},
+   "doc_index": {},
+   "tasks": {"T1": {"title": "task one", "files": ["a.go"]}},
+   "units": {"T1.1": {"task": "T1", "title": "impl unit", "kind": "impl", "wave": 1, "plan_line": 1, "depends_on": [], "files": ["a.go"]}}
+}`
+	if err := os.WriteFile(coarsePath, []byte(coarse), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sidecar, err := swim.Refine(swim.RefineOptions{
+		CoarsePlanPath: coarsePath,
+		Profile:        swim.ProfileEightK,
+		Targets:        []string{"T1.1"},
+	})
+	if err != nil {
+		t.Fatalf("Refine: %v", err)
+	}
+	body, err := swim.MarshalSidecar(sidecar)
+	if err != nil {
+		t.Fatalf("MarshalSidecar: %v", err)
+	}
+	refinePath := filepath.Join(dir, "refine.json")
+	if err := os.WriteFile(refinePath, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"refine":  refinePath,
+			"dry_run": false, // Not dry run, requires state
+		}},
+	}
+	res, err := srv.handleSwimRefineRun(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRefineRun without state: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for missing state parameter when not dry_run")
+	}
+}
+
+func TestHandleSwimStep_AckUnknown_MissingJournal(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"ack_unknown": "S1_T1.1_implement",
+			"as":          "waived",
+			// Missing journal
+		}},
+	}
+	res, err := srv.handleSwimStep(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimStep ack_unknown without journal: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for missing journal parameter")
+	}
+}
+
+func TestHandleSwimStep_AckUnknown_MissingAs(t *testing.T) {
+	dir := t.TempDir()
+	journalPath := filepath.Join(dir, "journal.json")
+	body := `{
+   "schema_version": 1,
+   "schedule_path": "demo-schedule.json",
+   "cursor": 0,
+   "events": [
+     {"event_id":"E0001","step_id":"S1_T1.1_implement","seq":1,"task_id":"T1.1","action":"implement","attempt":1,"started_on":"2026-05-09T00:00:00Z","completed_on":"2026-05-09T00:00:01Z","outcome":"unknown","state_before":{"task_status":"available"},"state_after":{"task_status":"taken"}}
+   ]
+}`
+	if err := os.WriteFile(journalPath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"journal":     journalPath,
+			"ack_unknown": "S1_T1.1_implement",
+			// Missing as
+		}},
+	}
+	res, err := srv.handleSwimStep(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimStep ack_unknown without as: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for missing as parameter")
+	}
+}
+
+func TestHandleSwimCompile_MissingPlan(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"agents": "/tmp/waveagents.json",
+		}},
+	}
+	res, err := srv.handleSwimCompile(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimCompile without plan: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for missing plan parameter")
+	}
+}
+
+func TestHandleSwimNext_MissingSchedule(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{}},
+	}
+	res, err := srv.handleSwimNext(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimNext without schedule: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for missing schedule parameter")
+	}
+}
+
+func TestHandleSwimRun_MissingSchedule(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"until": "finish",
+		}},
+	}
+	res, err := srv.handleSwimRun(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRun without schedule: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for missing schedule parameter")
+	}
+}
+
+func TestHandleSwimRun_MissingUntil(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"schedule": filepath.Join("tests", "swim", "fixtures", "expected-schedule.json"),
+		}},
+	}
+	res, err := srv.handleSwimRun(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRun without until: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for missing until parameter")
+	}
+}
+
+func TestHandleSwimJournal_MissingSchedule(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{}},
+	}
+	res, err := srv.handleSwimJournal(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimJournal without schedule: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for missing schedule parameter")
+	}
+}
+
+func TestHandleSwimRefine_MissingPlan(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"targets": []any{"T1.1"},
+		}},
+	}
+	res, err := srv.handleSwimRefine(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRefine without plan: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for missing plan parameter")
+	}
+}
+
+func TestHandleSwimRefine_MissingTargets(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"plan": "/tmp/coarse.json",
+		}},
+	}
+	res, err := srv.handleSwimRefine(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRefine without targets: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for missing targets parameter")
+	}
+}
+
+func TestHandleSwimRefineRun_MissingRefine(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"state": "/tmp/state.json",
+		}},
+	}
+	res, err := srv.handleSwimRefineRun(nil, req)
+	if err != nil {
+		t.Fatalf("handleSwimRefineRun without refine: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for missing refine parameter")
+	}
+}
+
+func TestHandleContextEstimate_InvalidBudgetMax(t *testing.T) {
+	srv := makeTestServer(t, testPlanJSON)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"candidate": `{"id":"T1.1","title":"Test"}`,
+			"budget":    "64000:invalid",
+		}},
+	}
+
+	res, err := srv.handleContextEstimate(nil, req)
+	if err != nil {
+		t.Fatalf("handleContextEstimate returned error: %v", err)
+	}
+
+	if !res.IsError {
+		t.Fatal("expected error for invalid budget max")
+	}
+}

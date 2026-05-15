@@ -332,6 +332,7 @@ func (s *WaveplanServer) createTools() []server.ServerTool {
 				mcp.WithBoolean("apply", mcp.Description("Apply the selected step")),
 				mcp.WithString("ack_unknown", mcp.Description("Acknowledge unknown step by ID")),
 				mcp.WithString("as", mcp.Description("Ack outcome: failed|waived")),
+				mcp.WithBoolean("dry_run", mcp.Description("Resolve without lock, invoke, or journal mutation")),
 			),
 			Handler: s.handleSwimStep,
 		},
@@ -344,6 +345,7 @@ func (s *WaveplanServer) createTools() []server.ServerTool {
 				mcp.WithString("until", mcp.Required(), mcp.Description("Stop condition: action, seq:N, or step:<id>")),
 				mcp.WithBoolean("dry_run", mcp.Description("Resolve without mutation")),
 				mcp.WithNumber("max_steps", mcp.Description("Maximum number of steps to process")),
+				mcp.WithString("work_dir", mcp.Description("Working directory passed to invoke")),
 			),
 			Handler: s.handleSwimRun,
 		},
@@ -1122,6 +1124,7 @@ func (s *WaveplanServer) handleSwimRun(ctx context.Context, request mcp.CallTool
 	if err != nil {
 		return swimErrorResult(3, err.Error()), nil
 	}
+	workDir, _ := optionalStringParam(request.Params.Arguments, "work_dir")
 	report, err := swim.Run(swim.RunOptions{
 		SchedulePath: schedule,
 		JournalPath:  journal,
@@ -1129,6 +1132,7 @@ func (s *WaveplanServer) handleSwimRun(ctx context.Context, request mcp.CallTool
 		Until:        until,
 		DryRun:       mcp.ParseBoolean(request, "dry_run", false),
 		MaxSteps:     mcp.ParseInt(request, "max_steps", 0),
+		WorkDir:      workDir,
 	})
 	if err != nil {
 		return swimErrorResult(3, err.Error()), nil
@@ -1364,11 +1368,15 @@ func swimJSONResult(v any) *mcp.CallToolResult {
 }
 
 func swimErrorResult(code int, message string) *mcp.CallToolResult {
-	return swimJSONResult(map[string]any{
+	data, _ := json.Marshal(map[string]any{
 		"ok":        false,
 		"exit_code": code,
 		"error":     message,
 	})
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{mcp.TextContent{Type: "text", Text: string(data)}},
+		IsError: true,
+	}
 }
 
 func swimRepoRoot() (string, error) {

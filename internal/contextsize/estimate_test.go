@@ -180,10 +180,10 @@ func TestEstimate_MixedExtensions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Go: 10000/3 = 3333, Markdown: 10000/4 = 2500, Unknown: 5000/3 = 1666
-	// Total: 3333 + 2500 + 1666 = 7499
-	if est.EstimatedTokens != 7499 {
-		t.Errorf("expected 7499 tokens, got %d", est.EstimatedTokens)
+	// Go: 10000/3 = 3333, Markdown: 10000/4 = 2500, Unknown: 0 (binary)
+	// Total: 3333 + 2500 + 0 = 5833
+	if est.EstimatedTokens != 5833 {
+		t.Errorf("expected 5833 tokens, got %d", est.EstimatedTokens)
 	}
 	if est.Confidence != "medium" {
 		t.Errorf("expected confidence 'medium' (unknown ext downgrade), got '%s'", est.Confidence)
