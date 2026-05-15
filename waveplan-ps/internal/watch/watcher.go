@@ -12,22 +12,24 @@ import (
 
 // Options identifies the files and directories read by one watcher poll.
 type Options struct {
-	PlanPaths    []string
-	StatePaths   []string
-	JournalPaths []string
-	NotePaths    []string
-	LogDirs      []string
-	Logs         []model.LogRef
+	PlanPaths           []string
+	StatePaths          []string
+	JournalPaths        []string
+	ReviewSchedulePaths []string
+	NotePaths           []string
+	LogDirs             []string
+	Logs                []model.LogRef
 }
 
 // Snapshot is one complete in-memory poll result.
 type Snapshot struct {
-	Plans    []LoadedPlan
-	States   []LoadedState
-	Journals []LoadedJournal
-	Notes    []LoadedNotes
-	Logs     []model.LogRef
-	LoadedAt time.Time
+	Plans           []LoadedPlan
+	States          []LoadedState
+	Journals        []LoadedJournal
+	ReviewSchedules []LoadedReviewSchedule
+	Notes           []LoadedNotes
+	Logs            []model.LogRef
+	LoadedAt        time.Time
 }
 
 // LoadedPlan preserves the source path for a loaded execution-waves plan.
@@ -46,6 +48,12 @@ type LoadedState struct {
 type LoadedJournal struct {
 	Path    string
 	Journal *model.Journal
+}
+
+// LoadedReviewSchedule preserves the source path for a loaded review schedule sidecar.
+type LoadedReviewSchedule struct {
+	Path           string
+	ReviewSchedule *model.ReviewScheduleFile
 }
 
 // LoadedNotes preserves the source path for a loaded txtstore notes file.
@@ -112,6 +120,16 @@ func PollOnce(options Options) (Snapshot, error) {
 			return Snapshot{}, fmt.Errorf("load journal %q: %w", path, err)
 		}
 		snapshot.Journals = append(snapshot.Journals, LoadedJournal{Path: path, Journal: journal})
+	}
+	for _, path := range options.ReviewSchedulePaths {
+		reviewSchedule, err := model.LoadReviewSchedule(path)
+		if err != nil {
+			return Snapshot{}, fmt.Errorf("load review schedule %q: %w", path, err)
+		}
+		snapshot.ReviewSchedules = append(snapshot.ReviewSchedules, LoadedReviewSchedule{
+			Path:           path,
+			ReviewSchedule: reviewSchedule,
+		})
 	}
 	for _, path := range options.NotePaths {
 		notes, err := model.LoadNotes(path)

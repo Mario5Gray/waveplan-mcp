@@ -22,11 +22,13 @@ func TestBuildWatchOptionsUsesExplicitPaths(t *testing.T) {
 	alphaPlan := filepath.Join(root, "2026-alpha-execution-waves.json")
 	alphaState := alphaPlan + ".state.json"
 	alphaJournal := filepath.Join(root, "2026-alpha-execution-journal.json")
+	alphaReview := filepath.Join(root, "2026-alpha-execution-review-schedule.json")
 
 	options, err := buildWatchOptions(config.Config{
-		PlanPaths:    []string{alphaPlan},
-		StatePaths:   []string{alphaState},
-		JournalPaths: []string{alphaJournal},
+		PlanPaths:           []string{alphaPlan},
+		StatePaths:          []string{alphaState},
+		JournalPaths:        []string{alphaJournal},
+		ReviewSchedulePaths: []string{alphaReview},
 	}, cliOptions{})
 	if err != nil {
 		t.Fatalf("buildWatchOptions() error = %v", err)
@@ -41,6 +43,9 @@ func TestBuildWatchOptionsUsesExplicitPaths(t *testing.T) {
 	if !reflect.DeepEqual(options.JournalPaths, []string{alphaJournal}) {
 		t.Fatalf("JournalPaths = %#v, want %#v", options.JournalPaths, []string{alphaJournal})
 	}
+	if !reflect.DeepEqual(options.ReviewSchedulePaths, []string{alphaReview}) {
+		t.Fatalf("ReviewSchedulePaths = %#v, want %#v", options.ReviewSchedulePaths, []string{alphaReview})
+	}
 }
 
 func TestBuildWatchOptionsFallsBackToWaveplanEnvVars(t *testing.T) {
@@ -48,10 +53,12 @@ func TestBuildWatchOptionsFallsBackToWaveplanEnvVars(t *testing.T) {
 	planPath := filepath.Join(root, "2026-selected-execution-waves.json")
 	statePath := filepath.Join(root, "2026-selected-execution-state.json")
 	journalPath := filepath.Join(root, "2026-selected-execution-journal.json")
+	reviewSchedulePath := filepath.Join(root, "2026-selected-execution-review-schedule.json")
 
 	t.Setenv("WAVEPLAN_PLAN", planPath)
 	t.Setenv("WAVEPLAN_STATE", statePath)
 	t.Setenv("WAVEPLAN_JOURNAL", journalPath)
+	t.Setenv("WAVEPLAN_SCHED_REVIEW", reviewSchedulePath)
 
 	options, err := buildWatchOptions(config.Config{}, cliOptions{})
 	if err != nil {
@@ -65,6 +72,9 @@ func TestBuildWatchOptionsFallsBackToWaveplanEnvVars(t *testing.T) {
 	}
 	if !reflect.DeepEqual(options.JournalPaths, []string{journalPath}) {
 		t.Fatalf("JournalPaths = %#v, want %#v", options.JournalPaths, []string{journalPath})
+	}
+	if !reflect.DeepEqual(options.ReviewSchedulePaths, []string{reviewSchedulePath}) {
+		t.Fatalf("ReviewSchedulePaths = %#v, want %#v", options.ReviewSchedulePaths, []string{reviewSchedulePath})
 	}
 }
 
@@ -93,6 +103,7 @@ func TestExecuteContextErrorsWhenNoObserverInputsConfigured(t *testing.T) {
 	t.Setenv("WAVEPLAN_PLAN", "")
 	t.Setenv("WAVEPLAN_STATE", "")
 	t.Setenv("WAVEPLAN_JOURNAL", "")
+	t.Setenv("WAVEPLAN_SCHED_REVIEW", "")
 
 	cmd := NewRootCommand()
 	var out bytes.Buffer

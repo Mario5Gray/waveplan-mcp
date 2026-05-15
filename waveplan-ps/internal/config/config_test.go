@@ -37,6 +37,8 @@ state_paths:
   - state/demo-execution-state.json
 journal_paths:
   - journals/demo-execution-journal.json
+review_schedule_paths:
+  - reviews/demo-execution-review-schedule.json
 note_paths:
   - notes/demo.md
 log_dirs:
@@ -49,6 +51,7 @@ log_dirs:
 	assertStrings(t, cfg.PlanPaths, []string{"plans/demo-execution-waves.json"})
 	assertStrings(t, cfg.StatePaths, []string{"state/demo-execution-state.json"})
 	assertStrings(t, cfg.JournalPaths, []string{"journals/demo-execution-journal.json"})
+	assertStrings(t, cfg.ReviewSchedulePaths, []string{"reviews/demo-execution-review-schedule.json"})
 	assertStrings(t, cfg.NotePaths, []string{"notes/demo.md"})
 	assertStrings(t, cfg.LogDirs, []string{"logs"})
 }
@@ -81,6 +84,8 @@ state_paths:
   - ../state/demo-execution-state.json
 journal_paths:
   - ../journals/demo-execution-journal.json
+review_schedule_paths:
+  - ../reviews/demo-execution-review-schedule.json
 note_paths:
   - ../notes/demo.md
 log_dirs:
@@ -95,6 +100,7 @@ log_dirs:
 	assertStrings(t, cfg.PlanPaths, []string{filepath.Join(root, "plans", "demo-execution-waves.json")})
 	assertStrings(t, cfg.StatePaths, []string{filepath.Join(root, "state", "demo-execution-state.json")})
 	assertStrings(t, cfg.JournalPaths, []string{filepath.Join(root, "journals", "demo-execution-journal.json")})
+	assertStrings(t, cfg.ReviewSchedulePaths, []string{filepath.Join(root, "reviews", "demo-execution-review-schedule.json")})
 	assertStrings(t, cfg.NotePaths, []string{filepath.Join(root, "notes", "demo.md")})
 	assertStrings(t, cfg.LogDirs, []string{filepath.Join(root, "logs")})
 }

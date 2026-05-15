@@ -19,19 +19,20 @@ import (
 const livePageName = "snapshot"
 
 type cliOptions struct {
-	configPath      string
-	once            bool
-	planPaths       []string
-	statePaths      []string
-	journalPaths    []string
-	notePaths       []string
-	logDirs         []string
-	interval        time.Duration
-	tailLimit       int
-	journalLimit    int
-	logTailLines    int
-	unitLimit       int
-	expandFirstWave bool
+	configPath          string
+	once                bool
+	planPaths           []string
+	statePaths          []string
+	journalPaths        []string
+	reviewSchedulePaths []string
+	notePaths           []string
+	logDirs             []string
+	interval            time.Duration
+	tailLimit           int
+	journalLimit        int
+	logTailLines        int
+	unitLimit           int
+	expandFirstWave     bool
 }
 
 type rootCommand struct {
@@ -132,6 +133,7 @@ func newFlagSet(opts *cliOptions, errOut io.Writer) *flag.FlagSet {
 	flags.Var((*stringArray)(&opts.planPaths), "plan", "execution-waves plan path (repeatable)")
 	flags.Var((*stringArray)(&opts.statePaths), "state", "waveplan state sidecar path (repeatable)")
 	flags.Var((*stringArray)(&opts.journalPaths), "journal", "SWIM journal sidecar path (repeatable)")
+	flags.Var((*stringArray)(&opts.reviewSchedulePaths), "review-schedule", "SWIM review schedule sidecar path (repeatable)")
 	flags.Var((*stringArray)(&opts.notePaths), "note", "txtstore note path (repeatable)")
 	flags.Var((*stringArray)(&opts.logDirs), "log-dir", "directory to recursively scan for SWIM logs")
 	flags.DurationVar(&opts.interval, "interval", time.Second, "live refresh interval")
@@ -147,16 +149,18 @@ func buildWatchOptions(cfg config.Config, opts cliOptions) (watch.Options, error
 	planPaths := appendPaths(cfg.PlanPaths, opts.planPaths)
 	statePaths := appendPaths(cfg.StatePaths, opts.statePaths)
 	journalPaths := appendPaths(cfg.JournalPaths, opts.journalPaths)
+	reviewSchedulePaths := appendPaths(cfg.ReviewSchedulePaths, opts.reviewSchedulePaths)
 	notePaths := appendPaths(cfg.NotePaths, opts.notePaths)
 	logDirs := appendPaths(cfg.LogDirs, opts.logDirs)
-	applyEnvFallbacks(&planPaths, &statePaths, &journalPaths)
+	applyEnvFallbacks(&planPaths, &statePaths, &journalPaths, &reviewSchedulePaths)
 
 	return watch.Options{
-		PlanPaths:    planPaths,
-		StatePaths:   statePaths,
-		JournalPaths: journalPaths,
-		NotePaths:    notePaths,
-		LogDirs:      logDirs,
+		PlanPaths:           planPaths,
+		StatePaths:          statePaths,
+		JournalPaths:        journalPaths,
+		ReviewSchedulePaths: reviewSchedulePaths,
+		NotePaths:           notePaths,
+		LogDirs:             logDirs,
 	}, nil
 }
 
@@ -164,9 +168,10 @@ func validateWatchOptions(options watch.Options) error {
 	if len(options.PlanPaths) == 0 &&
 		len(options.StatePaths) == 0 &&
 		len(options.JournalPaths) == 0 &&
+		len(options.ReviewSchedulePaths) == 0 &&
 		len(options.NotePaths) == 0 &&
 		len(options.LogDirs) == 0 {
-		return fmt.Errorf("no observer inputs configured; pass --config, explicit --plan/--state/--journal/--note flags, WAVEPLAN_PLAN/WAVEPLAN_STATE/WAVEPLAN_JOURNAL env vars, or --log-dir")
+		return fmt.Errorf("no observer inputs configured; pass --config, explicit --plan/--state/--journal/--review-schedule/--note flags, WAVEPLAN_PLAN/WAVEPLAN_STATE/WAVEPLAN_JOURNAL/WAVEPLAN_SCHED_REVIEW env vars, or --log-dir")
 	}
 	return nil
 }
@@ -195,11 +200,17 @@ func runLive(ctx context.Context, options watch.Options, renderOptions ui.Option
 			app.Stop()
 			return nil
 		case event.Key() == tcell.KeyTab && root != nil:
-			if app.GetFocus() == root.Table() {
+			focused := app.GetFocus() == root.Table()
+			root.SetTableFocus(focused)
+
+			if focused {
 				app.SetFocus(root.Details())
 			} else {
 				app.SetFocus(root.Table())
 			}
+			return nil
+		case event.Key() == tcell.KeyRune && event.Rune() == 'l' && root != nil:
+			root.CycleLogMode()
 			return nil
 		}
 		return event
@@ -236,7 +247,7 @@ func appendPaths(base, extra []string) []string {
 	return combined
 }
 
-func applyEnvFallbacks(planPaths, statePaths, journalPaths *[]string) {
+func applyEnvFallbacks(planPaths, statePaths, journalPaths, reviewSchedulePaths *[]string) {
 	if len(*planPaths) == 0 {
 		appendEnvPath(planPaths, "WAVEPLAN_PLAN")
 	}
@@ -245,6 +256,9 @@ func applyEnvFallbacks(planPaths, statePaths, journalPaths *[]string) {
 	}
 	if len(*journalPaths) == 0 {
 		appendEnvPath(journalPaths, "WAVEPLAN_JOURNAL")
+	}
+	if len(*reviewSchedulePaths) == 0 {
+		appendEnvPath(reviewSchedulePaths, "WAVEPLAN_SCHED_REVIEW")
 	}
 }
 

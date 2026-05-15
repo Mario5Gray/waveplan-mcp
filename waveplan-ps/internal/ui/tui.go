@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
+
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/model"
 	"github.com/darkbit1001/Stability-Toys/waveplan-mcp/waveplan-ps/internal/watch"
 	"github.com/rivo/tview"
@@ -29,13 +31,15 @@ const ruleText = "--------------------------------------------------------------
 // Root is the top-level tview primitive for one rendered snapshot.
 type Root struct {
 	*tview.Flex
-	text     string
-	table    *tview.Table
-	status   *tview.TextView
-	details  *tview.TextView
-	snapshot watch.Snapshot
-	options  Options
-	rowUnits []string // index 0 = header (empty), 1..n = unitID per data row
+	text            string
+	table           *tview.Table
+	status          *tview.TextView
+	details         *tview.TextView
+	snapshot        watch.Snapshot
+	options         Options
+	tableFocused    bool
+	rowUnits        []string // index 0 = header (empty), 1..n = unitID per data row
+	lastSelectedRow int      // track previous selection for cell recolor
 }
 
 // Text returns the same deterministic content used by snapshot mode.
@@ -70,6 +74,35 @@ func (r *Root) Status() *tview.TextView {
 	return r.status
 }
 
+// SetTableFocus updates the header highlighting to reflect which panel is active.
+func (r *Root) SetTableFocus(focused bool) {
+	if r == nil || r.table == nil {
+		return
+	}
+	r.tableFocused = focused
+	r.rowUnits = fillTable(r, r.table, r.snapshot, r.options, focused)
+	row, _ := r.table.GetSelection()
+
+	if focused {
+		r.status.SetTextColor(tcell.ColorDarkSlateGray)
+		r.status.SetBackgroundColor(tcell.ColorWheat)
+	} else {
+		r.status.SetBackgroundColor(tcell.ColorDarkSlateGray)
+		r.status.SetTextColor(tcell.ColorWheat)
+	}
+
+	r.updateViewsForRow(row)
+}
+
+// CycleLogMode advances the active lower-pane stream.
+func (r *Root) CycleLogMode() {
+	if r == nil || r.table == nil {
+		return
+	}
+	row, _ := r.table.GetSelection()
+	r.updateViewsForRow(row)
+}
+
 // BuildPrimitive renders a snapshot into a tview primitive suitable for live use.
 func BuildPrimitive(snapshot watch.Snapshot, options Options) tview.Primitive {
 	text := RenderText(snapshot, options)
@@ -78,7 +111,6 @@ func BuildPrimitive(snapshot watch.Snapshot, options Options) tview.Primitive {
 		SetSelectable(true, false).
 		SetFixed(1, 0).
 		SetEvaluateAllRows(true)
-	rowUnits := fillTable(table, snapshot, options)
 
 	status := newRuleView("")
 	details := tview.NewTextView().
@@ -98,21 +130,27 @@ func BuildPrimitive(snapshot watch.Snapshot, options Options) tview.Primitive {
 		AddItem(details, 0, 1, false)
 
 	root := &Root{
-		Flex:     flex,
-		text:     text,
-		table:    table,
-		status:   status,
-		details:  details,
-		snapshot: snapshot,
-		options:  options,
-		rowUnits: rowUnits,
+		Flex:         flex,
+		text:         text,
+		table:        table,
+		status:       status,
+		details:      details,
+		snapshot:     snapshot,
+		options:      options,
+		tableFocused: true,
 	}
+
+	// Now that root exists, fill the table
+	root.rowUnits = fillTable(root, table, snapshot, options, true)
+
+	root.Flex.ResizeItem(table, visibleTableRows(table.GetRowCount(), options), 0)
 
 	table.SetSelectionChangedFunc(func(row, _ int) {
 		if row <= 0 && table.GetRowCount() > 1 {
 			table.Select(1, 0)
 			return
 		}
+
 		root.updateViewsForRow(row)
 	})
 	root.selectInitialRow()
@@ -123,7 +161,7 @@ func BuildPrimitive(snapshot watch.Snapshot, options Options) tview.Primitive {
 // BuildTable renders plan units with lifecycle status, agent, last action, and log counts.
 func BuildTable(snapshot watch.Snapshot, options Options) *tview.Table {
 	table := tview.NewTable().SetBorders(false).SetSelectable(true, false)
-	fillTable(table, snapshot, options)
+	fillTable(nil, table, snapshot, options, false)
 	return table
 }
 
@@ -136,7 +174,7 @@ func (r *Root) Update(snapshot watch.Snapshot, options Options) {
 	r.text = RenderText(snapshot, options)
 
 	r.table.Clear()
-	r.rowUnits = fillTable(r.table, snapshot, options)
+	r.rowUnits = fillTable(r, r.table, snapshot, options, r.tableFocused)
 	r.Flex.ResizeItem(r.table, visibleTableRows(r.table.GetRowCount(), options), 0)
 
 	if r.table.GetRowCount() > 1 {
@@ -308,10 +346,20 @@ func (r *Root) renderUnitSummary(unitID string) string {
 	)
 }
 
-func fillTable(table *tview.Table, snapshot watch.Snapshot, options Options) []string {
+func fillTable(root *Root, table *tview.Table, snapshot watch.Snapshot, options Options, tableFocused bool) []string {
 	headers := []string{"wave", "unit", "status", "agent", "action", "logs", "title"}
+
 	for column, header := range headers {
-		table.SetCell(0, column, tview.NewTableCell(header).SetExpansion(1))
+		cell := tview.NewTableCell(header).SetExpansion(1)
+		if tableFocused && root.Table() != table {
+			cell.SetBackgroundColor(tcell.ColorDarkSlateGray)
+
+		} else {
+			// this actually renders on 1st render (affects top)
+			cell.SetBackgroundColor(tcell.ColorDarkSlateGray)
+		}
+
+		table.SetCell(0, column, cell)
 	}
 
 	lastActions := lastActionByTask(snapshot.Journals)
@@ -336,7 +384,7 @@ func fillTable(table *tview.Table, snapshot watch.Snapshot, options Options) []s
 				table.SetCell(row, 3, tview.NewTableCell(actorDisplayForUnit(state, unitID)))
 				table.SetCell(row, 4, tview.NewTableCell(lastActions[unitID]))
 				table.SetCell(row, 5, tview.NewTableCell(fmt.Sprintf("%d", logCount)))
-				table.SetCell(row, 6, tview.NewTableCell(unit.Title).SetExpansion(2))
+				table.SetCell(row, 6, tview.NewTableCell(unit.Title).SetTextColor(tcell.ColorBlue).SetExpansion(2))
 				rowUnits = append(rowUnits, unitID)
 				row++
 			}

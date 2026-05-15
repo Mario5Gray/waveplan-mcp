@@ -56,6 +56,34 @@ func TestRenderTextIncludesWaveStatusTailAndExactLogCounts(t *testing.T) {
 	}
 }
 
+func TestRenderTextIncludesReviewScheduleSectionWithoutPlans(t *testing.T) {
+	snapshot := watch.Snapshot{
+		LoadedAt: time.Date(2026, 5, 12, 15, 4, 5, 0, time.UTC),
+		ReviewSchedules: []watch.LoadedReviewSchedule{{
+			Path: "fixtures/demo-review-sidecar.json",
+			ReviewSchedule: &model.ReviewScheduleFile{
+				BaseSchedulePath: "fixtures/demo-schedule.json",
+				Insertions: []model.ReviewScheduleInsertion{
+					{ID: "X1", StepID: "S1_T1.1_fix_r1"},
+				},
+			},
+		}},
+	}
+
+	rendered := RenderText(snapshot, Options{})
+
+	for _, want := range []string{
+		"Loaded: 2026-05-12 15:04:05",
+		"No plans loaded",
+		"Review Schedules",
+		"demo-review-sidecar.json (insertions: 1, base: demo-schedule.json)",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("RenderText() missing %q in:\n%s", want, rendered)
+		}
+	}
+}
+
 func TestRenderTextShowsActiveLogWithAgentAndLines(t *testing.T) {
 	dir := t.TempDir()
 	logFile := filepath.Join(dir, "S3_T5.1_implement.1.stdout.log")
@@ -190,6 +218,87 @@ func TestBuildPrimitiveStatusStripShowsCurrentUnitStats(t *testing.T) {
 	}
 }
 
+func TestBuildPrimitiveCyclesLogModesAcrossStderrStdoutAndBoth(t *testing.T) {
+	dir := t.TempDir()
+	stdoutFile := filepath.Join(dir, "S2_T1.1_review.1.stdout.log")
+	stderrFile := filepath.Join(dir, "S2_T1.1_review.1.stderr.log")
+	if err := os.WriteFile(stdoutFile, []byte("stdout line one\nstdout line two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stderrFile, []byte("stderr line one\nstderr line two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := watch.Snapshot{
+		Plans: []watch.LoadedPlan{{
+			Path: "2026-demo-execution-waves.json",
+			Plan: &model.PlanFile{
+				Plan: model.PlanMetadata{ID: "demo", Title: "Demo"},
+				Units: map[string]model.Unit{
+					"T1.1": {Task: "T1", Title: "Adapter mapping", Wave: 1},
+				},
+				Waves: []model.Wave{{Wave: 1, Units: []string{"T1.1"}}},
+			},
+		}},
+		States: []watch.LoadedState{{
+			Path: "2026-demo-execution-state.json",
+			State: &model.StateFile{
+				Plan: "2026-demo-execution-waves.json",
+				Taken: map[string]model.TaskEntry{
+					"T1.1": {
+						TakenBy:  "phi",
+						Reviewer: "sigma",
+					},
+				},
+			},
+		}},
+		Journals: []watch.LoadedJournal{{
+			Path: "2026-demo-execution-journal.json",
+			Journal: &model.Journal{
+				Events: []model.JournalEvent{{
+					StepID:      "S2_T1.1_review",
+					TaskID:      "T1.1",
+					Action:      "review",
+					Attempt:     1,
+					StartedOn:   "2026-05-12T14:54:00Z",
+					Outcome:     "applied",
+					StateBefore: model.StatusWrapper{TaskStatus: model.StatusTaken},
+					StateAfter:  model.StatusWrapper{TaskStatus: model.StatusReviewTaken},
+					StdoutPath:  stdoutFile,
+					StderrPath:  stderrFile,
+				}},
+			},
+		}},
+		Logs: []model.LogRef{
+			{Path: stdoutFile, StepID: "S2_T1.1_review", Attempt: 1, Stream: model.LogStreamStdout},
+			{Path: stderrFile, StepID: "S2_T1.1_review", Attempt: 1, Stream: model.LogStreamStderr},
+		},
+	}
+
+	root := BuildPrimitive(snapshot, Options{LogTailLines: 2}).(*Root)
+
+	if got := root.Status().GetText(false); !strings.Contains(got, "stream stderr") {
+		t.Fatalf("default status strip missing stderr stream in %q", got)
+	}
+	if got := root.Details().GetText(false); !strings.Contains(got, "Log [STDERR]") || !strings.Contains(got, "stderr line two") {
+		t.Fatalf("default details missing stderr tail in:\n%s", got)
+	}
+
+	root.CycleLogMode()
+	if got := root.Status().GetText(false); !strings.Contains(got, "stream stdout") {
+		t.Fatalf("stdout status strip missing stream stdout in %q", got)
+	}
+	if got := root.Details().GetText(false); !strings.Contains(got, "Log [STDOUT]") || !strings.Contains(got, "stdout line two") {
+		t.Fatalf("stdout details missing stdout tail in:\n%s", got)
+	}
+
+	root.CycleLogMode()
+	got := root.Details().GetText(false)
+	if !strings.Contains(got, "Log [STDOUT]") || !strings.Contains(got, "Log [STDERR]") {
+		t.Fatalf("both-mode details missing both log sections in:\n%s", got)
+	}
+}
+
 func TestVisibleTableRowsCapsToTenDataRowsByDefault(t *testing.T) {
 	if got := visibleTableRows(25, Options{}); got != 11 {
 		t.Fatalf("visibleTableRows() = %d, want 11", got)
@@ -244,7 +353,7 @@ func TestBuildTableUsesSingleDiscoveredStateAndJournalFromExecutionBundle(t *tes
 		}},
 	}
 
-	table := BuildTable(snapshot, Options{})
+	table := BuildTable(nil, snapshot, Options{})
 	if got := table.GetCell(1, 2).Text; got != "completed" {
 		t.Fatalf("status cell = %q, want completed", got)
 	}
@@ -283,7 +392,7 @@ func TestBuildTableShowsReviewerWhenReviewIsActive(t *testing.T) {
 		}},
 	}
 
-	table := BuildTable(snapshot, Options{})
+	table := BuildTable(nil, snapshot, Options{})
 	if got := table.GetCell(1, 2).Text; got != "review_taken" {
 		t.Fatalf("status cell = %q, want review_taken", got)
 	}
@@ -326,7 +435,7 @@ func TestBuildTableMatchesCustomNamedStateByEmbeddedPlanName(t *testing.T) {
 		},
 	}
 
-	table := BuildTable(snapshot, Options{})
+	table := BuildTable(nil, snapshot, Options{})
 	if got := table.GetCell(1, 2).Text; got != "completed" {
 		t.Fatalf("status cell = %q, want completed", got)
 	}

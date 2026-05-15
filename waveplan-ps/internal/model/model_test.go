@@ -158,6 +158,42 @@ func TestLoadJournalDecodesEvents(t *testing.T) {
 	}
 }
 
+func TestLoadReviewScheduleDecodesInsertions(t *testing.T) {
+	path := writeTempFile(t, "review-schedule.json", `{
+  "schema_version": 1,
+  "base_schedule_path": "/tmp/schedule.json",
+  "insertions": [
+    {
+      "id": "X1",
+      "after_step_id": "S1_T1.1_review",
+      "step_id": "S1_T1.1_fix_r1",
+      "seq_hint": 1,
+      "task_id": "T1.1",
+      "action": "fix",
+      "requires": {"task_status": "review_taken"},
+      "produces": {"task_status": "taken"},
+      "reason": "review finding requires fix",
+      "source_event_id": "E0001"
+    }
+  ]
+}`)
+
+	reviewSchedule, err := LoadReviewSchedule(path)
+	if err != nil {
+		t.Fatalf("LoadReviewSchedule() error = %v", err)
+	}
+
+	if got := reviewSchedule.BaseSchedulePath; got != "/tmp/schedule.json" {
+		t.Fatalf("base schedule path = %q, want /tmp/schedule.json", got)
+	}
+	if got := reviewSchedule.Insertions[0].StepID; got != "S1_T1.1_fix_r1" {
+		t.Fatalf("insertion step = %q, want S1_T1.1_fix_r1", got)
+	}
+	if got := reviewSchedule.Insertions[0].SourceEventID; got != "E0001" {
+		t.Fatalf("source_event_id = %q, want E0001", got)
+	}
+}
+
 func TestParseLogPathExtractsStepAttemptAndStream(t *testing.T) {
 	logRef, err := ParseLogPath("/tmp/S12_T2.1_review_r2.3.stderr.log")
 	if err != nil {

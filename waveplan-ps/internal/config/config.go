@@ -11,12 +11,13 @@ import (
 
 // Config is the normalized waveplan-ps YAML configuration.
 type Config struct {
-	PlanPaths    []string      `yaml:"plan_paths"`
-	StatePaths   []string      `yaml:"state_paths"`
-	JournalPaths []string      `yaml:"journal_paths"`
-	NotePaths    []string      `yaml:"note_paths"`
-	LogDirs      []string      `yaml:"log_dirs"`
-	Display      DisplayConfig `yaml:"display"`
+	PlanPaths           []string      `yaml:"plan_paths"`
+	StatePaths          []string      `yaml:"state_paths"`
+	JournalPaths        []string      `yaml:"journal_paths"`
+	ReviewSchedulePaths []string      `yaml:"review_schedule_paths"`
+	NotePaths           []string      `yaml:"note_paths"`
+	LogDirs             []string      `yaml:"log_dirs"`
+	Display             DisplayConfig `yaml:"display"`
 }
 
 // DisplayConfig controls initial observer rendering behavior.
@@ -25,12 +26,13 @@ type DisplayConfig struct {
 }
 
 type rawConfig struct {
-	PlanPaths    []string         `yaml:"plan_paths"`
-	StatePaths   []string         `yaml:"state_paths"`
-	JournalPaths []string         `yaml:"journal_paths"`
-	NotePaths    []string         `yaml:"note_paths"`
-	LogDirs      []string         `yaml:"log_dirs"`
-	Display      rawDisplayConfig `yaml:"display"`
+	PlanPaths           []string         `yaml:"plan_paths"`
+	StatePaths          []string         `yaml:"state_paths"`
+	JournalPaths        []string         `yaml:"journal_paths"`
+	ReviewSchedulePaths []string         `yaml:"review_schedule_paths"`
+	NotePaths           []string         `yaml:"note_paths"`
+	LogDirs             []string         `yaml:"log_dirs"`
+	Display             rawDisplayConfig `yaml:"display"`
 
 	PlanDirs    []string `yaml:"plan_dirs"`
 	StateDirs   []string `yaml:"state_dirs"`
@@ -67,6 +69,7 @@ func Load(path string) (*Config, error) {
 	cfg.PlanPaths = resolvePaths(baseDir, cfg.PlanPaths)
 	cfg.StatePaths = resolvePaths(baseDir, cfg.StatePaths)
 	cfg.JournalPaths = resolvePaths(baseDir, cfg.JournalPaths)
+	cfg.ReviewSchedulePaths = resolvePaths(baseDir, cfg.ReviewSchedulePaths)
 	cfg.NotePaths = resolvePaths(baseDir, cfg.NotePaths)
 	cfg.LogDirs = resolvePaths(baseDir, cfg.LogDirs)
 	return cfg, nil
@@ -88,6 +91,7 @@ func Decode(r io.Reader) (*Config, error) {
 	cfg.PlanPaths = raw.PlanPaths
 	cfg.StatePaths = raw.StatePaths
 	cfg.JournalPaths = raw.JournalPaths
+	cfg.ReviewSchedulePaths = raw.ReviewSchedulePaths
 	cfg.NotePaths = raw.NotePaths
 	cfg.LogDirs = raw.LogDirs
 	if raw.Display.ExpandFirstWave != nil {

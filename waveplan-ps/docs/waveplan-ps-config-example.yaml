@@ -5,12 +5,17 @@
 #   --plan /path/to/*-execution-waves.json
 #   --state /path/to/*-execution-state.json
 #   --journal /path/to/*-execution-journal.json
+#   --review-schedule /path/to/*-execution-review-schedule.json
 #
 #   WAVEPLAN_PLAN
 #   WAVEPLAN_STATE
 #   WAVEPLAN_JOURNAL
+#   WAVEPLAN_SCHED_REVIEW
 #
 # log_dirs remain directory roots because SWIM emits many log files.
+
+review_schedule_paths:
+  - ../tests/swim/fixtures/review-loop-sidecar.json
 
 log_dirs:
   # Recursively loads SWIM step logs under this root.

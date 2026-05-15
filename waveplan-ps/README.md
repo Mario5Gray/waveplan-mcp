@@ -2,8 +2,8 @@
 
 `waveplan-ps` is a local observer for waveplan execution. It loads
 explicitly-specified execution-wave plans, waveplan state sidecars, SWIM
-journals, txtstore notes, and SWIM step logs, then renders a live terminal
-view or a deterministic one-shot text snapshot.
+journals, SWIM review-schedule sidecars, txtstore notes, and SWIM step logs,
+then renders a live terminal view or a deterministic one-shot text snapshot.
 
 ## Build
 
@@ -21,6 +21,7 @@ Render one text snapshot and exit:
   --plan ../docs/plans/2026-05-12-waveplan-ps-execution-waves.json \
   --state ../docs/plans/2026-05-12-waveplan-ps-execution-waves.json.state.json \
   --journal ../docs/plans/2026-05-12-waveplan-ps-execution-schedule.json.journal.json \
+  --review-schedule ../tests/swim/fixtures/review-loop-sidecar.json \
   --log-dir ../docs/plans/.waveplan
 ```
 
@@ -38,6 +39,7 @@ You can also supply the same explicit paths through environment variables:
 export WAVEPLAN_PLAN=/abs/path/to/plan-execution-waves.json
 export WAVEPLAN_STATE=/abs/path/to/plan-execution-state.json
 export WAVEPLAN_JOURNAL=/abs/path/to/plan-execution-journal.json
+export WAVEPLAN_SCHED_REVIEW=/abs/path/to/plan-execution-review-schedule.json
 ./waveplan-ps --config docs/waveplan-ps-config-example.yaml --interval 2s
 ```
 
@@ -50,6 +52,7 @@ export WAVEPLAN_JOURNAL=/abs/path/to/plan-execution-journal.json
 | `--plan` | empty | Execution-waves plan path. Repeatable. Falls back to `WAVEPLAN_PLAN` when omitted. |
 | `--state` | empty | Waveplan state sidecar path. Repeatable. Falls back to `WAVEPLAN_STATE` when omitted. |
 | `--journal` | empty | SWIM journal sidecar path. Repeatable. Falls back to `WAVEPLAN_JOURNAL` when omitted. |
+| `--review-schedule` | empty | SWIM review schedule sidecar path. Repeatable. Falls back to `WAVEPLAN_SCHED_REVIEW` when omitted. |
 | `--note` | empty | Markdown txtstore note path. Repeatable. |
 | `--log-dir` | empty | Directory root to recursively scan for SWIM log files. Repeatable. This is not a glob pattern. |
 | `--interval` | `1s` | Live refresh interval, parsed as a Go duration such as `500ms`, `2s`, or `1m`. |
@@ -59,10 +62,13 @@ export WAVEPLAN_JOURNAL=/abs/path/to/plan-execution-journal.json
 
 ## Config
 
-Plan/state/journal/note lists are explicit file paths. Only `log_dirs` remains
-directory-based because SWIM log discovery is fan-out over many step log files.
+Plan/state/journal/review-schedule/note lists are explicit file paths. Only
+`log_dirs` remains directory-based because SWIM log discovery is fan-out over
+many step log files.
 
 ```yaml
+review_schedule_paths:
+  - ../tests/swim/fixtures/review-loop-sidecar.json
 log_dirs:
   - ../docs/plans/.waveplan
 display:
@@ -74,10 +80,10 @@ in YAML when the first wave should start collapsed.
 
 ## Explicit Inputs
 
-`waveplan-ps` no longer scans directories for plans, state files, journals, or
-notes. Those are loaded only from explicit CLI flags, config path lists, or the
-`WAVEPLAN_PLAN`, `WAVEPLAN_STATE`, and `WAVEPLAN_JOURNAL` environment
-variables.
+`waveplan-ps` no longer scans directories for plans, state files, journals,
+review schedules, or notes. Those are loaded only from explicit CLI flags,
+config path lists, or the `WAVEPLAN_PLAN`, `WAVEPLAN_STATE`,
+`WAVEPLAN_JOURNAL`, and `WAVEPLAN_SCHED_REVIEW` environment variables.
 
 SWIM logs are still discovered under configured `log_dirs`. Valid SWIM log
 filenames are:

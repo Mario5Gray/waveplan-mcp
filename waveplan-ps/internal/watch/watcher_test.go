@@ -15,6 +15,7 @@ func TestPollOnceLoadsSnapshotFromExplicitPathsAndLogDirs(t *testing.T) {
 	planPath := filepath.Join(root, "2026-demo-execution-waves.json")
 	statePath := filepath.Join(root, "2026-demo-execution-waves.json.state.json")
 	journalPath := filepath.Join(root, "2026-demo-execution-schedule.json.journal.json")
+	reviewSchedulePath := filepath.Join(root, "2026-demo-execution-review-schedule.json")
 	notePath := filepath.Join(root, "notes.md")
 	logDir := filepath.Join(root, "logs")
 	logPath := filepath.Join(logDir, "S1_T1.1_implement.1.stdout.log")
@@ -22,15 +23,17 @@ func TestPollOnceLoadsSnapshotFromExplicitPathsAndLogDirs(t *testing.T) {
 	writeFile(t, planPath, planJSON("demo", "Initial title"))
 	writeFile(t, statePath, `{"plan":"2026-demo-execution-waves.json","taken":{"T1.1":{"taken_by":"phi","started_at":"2026-05-12 14:40"}},"completed":{}}`)
 	writeFile(t, journalPath, `{"schema_version":1,"schedule_path":"schedule.json","cursor":1,"events":[{"event_id":"E1","step_id":"S1_T1.1_implement","seq":1,"task_id":"T1.1","action":"implement","attempt":1,"started_on":"2026-05-12T21:40:00Z","state_before":{"task_status":"available"},"state_after":{"task_status":"taken"}}]}`)
+	writeFile(t, reviewSchedulePath, `{"schema_version":1,"base_schedule_path":"2026-demo-execution-schedule.json","insertions":[{"id":"X1","after_step_id":"S1_T1.1_review","step_id":"S1_T1.1_fix_r1","seq_hint":1,"task_id":"T1.1","action":"fix","requires":{"task_status":"review_taken"},"produces":{"task_status":"taken"},"reason":"review finding","source_event_id":"E0001"}]}`)
 	writeFile(t, notePath, "## T1.1 > Implementation\nLoaded note.\n")
 	writeFile(t, logPath, "stdout")
 
 	snapshot, err := PollOnce(Options{
-		PlanPaths:    []string{planPath},
-		StatePaths:   []string{statePath},
-		JournalPaths: []string{journalPath},
-		NotePaths:    []string{notePath},
-		LogDirs:      []string{logDir},
+		PlanPaths:           []string{planPath},
+		StatePaths:          []string{statePath},
+		JournalPaths:        []string{journalPath},
+		ReviewSchedulePaths: []string{reviewSchedulePath},
+		NotePaths:           []string{notePath},
+		LogDirs:             []string{logDir},
 	})
 	if err != nil {
 		t.Fatalf("PollOnce() error = %v", err)
@@ -47,6 +50,9 @@ func TestPollOnceLoadsSnapshotFromExplicitPathsAndLogDirs(t *testing.T) {
 	}
 	if got := snapshot.Journals[0].Journal.Events[0].StepID; got != "S1_T1.1_implement" {
 		t.Fatalf("journal step = %q", got)
+	}
+	if got := len(snapshot.ReviewSchedules[0].ReviewSchedule.Insertions); got != 1 {
+		t.Fatalf("review insertion count = %d, want 1", got)
 	}
 	if got := snapshot.Notes[0].Notes.Sections[0].Content; got != "Loaded note." {
 		t.Fatalf("note content = %q", got)
