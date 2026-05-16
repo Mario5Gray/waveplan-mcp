@@ -224,6 +224,24 @@ Portability overrides:
 - `WP_AGENT_DISPATCH_BIN`: path to `wp-agent-dispatch.sh`
 - `WP_PLAN_STEP_BIN`: path to `wp-plan-step.sh` for wrappers and emitted schedule rows
 
+### Migrating An In-Flight SWIM Schedule
+
+Use `wp-migrate-swim-schema.sh` when a schedule was already running before the
+v3 `operation` contract landed. The migrator preserves row identity and only
+rewrites the schedule invocation contract.
+
+```bash
+wp-migrate-swim-schema.sh \
+  --schedule "$WAVEPLAN_SCHED" \
+  --out "$WAVEPLAN_SCHED.v3.json" \
+  --journal "$WAVEPLAN_JOURNAL" \
+  --journal-out "$WAVEPLAN_JOURNAL.v3.json" \
+  --state "$WAVEPLAN_STATE"
+```
+
+State is read-only. Journal output is optional; use it only when the migrated
+schedule is written to a different path and `schedule_path` must be updated.
+
 ## SWIM
 
 SWIM ("Schedule, Work, Invoke, Mark") is the deterministic execution layer above

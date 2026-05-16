@@ -8,7 +8,7 @@ INSTALL_DIR  := $(HOME)/.local/bin
 CONFIG_DIR   := $(HOME)/.config/waveplan-mcp
 SHARE_DIR    := $(HOME)/.local/share/waveplan
 GIT_SHA      := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-HELPER_SCRIPTS := waveplan-cli wp-task-to-agent.sh wp-plan-to-agent.sh wp-emit-wave-execution.sh
+HELPER_SCRIPTS := waveplan-cli wp-task-to-agent.sh wp-plan-to-agent.sh wp-emit-wave-execution.sh wp-plan-step.sh wp-agent-dispatch.sh wp-migrate-swim-schema.sh
 
 LDFLAGS := -X main.gitSha=$(GIT_SHA)
 
