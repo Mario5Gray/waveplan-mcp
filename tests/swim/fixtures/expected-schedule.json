@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "execution": [
     {
       "seq": 1,
@@ -12,20 +12,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T1.1",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.1 --agent phi",
       "status": "available"
     },
     {
@@ -39,22 +46,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T1.1",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.1 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -68,11 +83,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -81,7 +99,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.1 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.1 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -95,11 +113,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -108,7 +129,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.1 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -122,20 +143,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T1.2",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.2 --agent phi",
       "status": "available"
     },
     {
@@ -149,22 +177,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T1.2",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.2 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -178,11 +214,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -191,7 +230,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.2 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.2 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -205,11 +244,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -218,7 +260,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.2 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.2 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -232,20 +274,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T1.3",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.3 --agent phi",
       "status": "available"
     },
     {
@@ -259,22 +308,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T1.3",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.3 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -288,11 +345,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -301,7 +361,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.3 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.3 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -315,11 +375,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -328,7 +391,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.3 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.3 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -342,20 +405,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T1.4",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.4 --agent phi",
       "status": "available"
     },
     {
@@ -369,22 +439,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T1.4",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.4 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -398,11 +476,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -411,7 +492,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.4 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.4 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -425,11 +506,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -438,7 +522,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.4 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.4 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -452,20 +536,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T1.5",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.5 --agent phi",
       "status": "available"
     },
     {
@@ -479,22 +570,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T1.5",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.5 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -508,11 +607,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -521,7 +623,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.5 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.5 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -535,11 +637,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -548,7 +653,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.5 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T1.5 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -562,20 +667,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T2.1",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.1 --agent phi",
       "status": "available"
     },
     {
@@ -589,22 +701,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T2.1",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.1 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -618,11 +738,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -631,7 +754,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.1 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.1 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -645,11 +768,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -658,7 +784,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.1 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -672,20 +798,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T2.2",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.2 --agent phi",
       "status": "available"
     },
     {
@@ -699,22 +832,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T2.2",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.2 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -728,11 +869,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -741,7 +885,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.2 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.2 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -755,11 +899,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -768,7 +915,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.2 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.2 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -782,20 +929,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T2.3",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.3 --agent phi",
       "status": "available"
     },
     {
@@ -809,22 +963,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T2.3",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.3 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -838,11 +1000,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -851,7 +1016,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.3 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.3 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -865,11 +1030,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -878,7 +1046,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.3 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.3 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -892,20 +1060,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T2.4",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.4 --agent phi",
       "status": "available"
     },
     {
@@ -919,22 +1094,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T2.4",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.4 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -948,11 +1131,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -961,7 +1147,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.4 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.4 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -975,11 +1161,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -988,7 +1177,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.4 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.4 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -1002,20 +1191,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T2.5",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.5 --agent phi",
       "status": "available"
     },
     {
@@ -1029,22 +1225,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T2.5",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.5 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -1058,11 +1262,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1071,7 +1278,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.5 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.5 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -1085,11 +1292,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1098,7 +1308,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.5 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T2.5 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -1112,20 +1322,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T3.1",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.1 --agent phi",
       "status": "available"
     },
     {
@@ -1139,22 +1356,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T3.1",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.1 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -1168,11 +1393,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1181,7 +1409,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.1 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.1 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -1195,11 +1423,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1208,7 +1439,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.1 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -1222,20 +1453,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T3.2",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.2 --agent phi",
       "status": "available"
     },
     {
@@ -1249,22 +1487,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T3.2",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.2 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -1278,11 +1524,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1291,7 +1540,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.2 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.2 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -1305,11 +1554,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1318,7 +1570,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.2 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.2 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -1332,20 +1584,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T3.3",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.3 --agent phi",
       "status": "available"
     },
     {
@@ -1359,22 +1618,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T3.3",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.3 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -1388,11 +1655,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1401,7 +1671,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.3 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.3 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -1415,11 +1685,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1428,7 +1701,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.3 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T3.3 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -1442,20 +1715,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T4.1",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.1 --agent phi",
       "status": "available"
     },
     {
@@ -1469,22 +1749,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T4.1",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.1 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -1498,11 +1786,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1511,7 +1802,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.1 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.1 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -1525,11 +1816,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1538,7 +1832,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.1 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -1552,20 +1846,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T4.2",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.2 --agent phi",
       "status": "available"
     },
     {
@@ -1579,22 +1880,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T4.2",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.2 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -1608,11 +1917,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1621,7 +1933,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.2 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.2 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -1635,11 +1947,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1648,7 +1963,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.2 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.2 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -1662,20 +1977,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T4.3",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.3 --agent phi",
       "status": "available"
     },
     {
@@ -1689,22 +2011,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T4.3",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.3 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -1718,11 +2048,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1731,7 +2064,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.3 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.3 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -1745,11 +2078,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1758,7 +2094,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.3 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T4.3 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -1772,20 +2108,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T5.1",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.1 --agent phi",
       "status": "available"
     },
     {
@@ -1799,22 +2142,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T5.1",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.1 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -1828,11 +2179,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1841,7 +2195,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.1 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.1 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -1855,11 +2209,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1868,7 +2225,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.1 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -1882,20 +2239,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T5.2",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.2 --agent phi",
       "status": "available"
     },
     {
@@ -1909,22 +2273,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T5.2",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.2 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -1938,11 +2310,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1951,7 +2326,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.2 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.2 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -1965,11 +2340,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -1978,7 +2356,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.2 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T5.2 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -1992,20 +2370,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T6.1",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.1 --agent phi",
       "status": "available"
     },
     {
@@ -2019,22 +2404,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T6.1",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.1 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -2048,11 +2441,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -2061,7 +2457,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.1 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.1 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -2075,11 +2471,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -2088,7 +2487,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.1 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -2102,20 +2501,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T6.2",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.2 --agent phi",
       "status": "available"
     },
     {
@@ -2129,22 +2535,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T6.2",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.2 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -2158,11 +2572,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -2171,7 +2588,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.2 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.2 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -2185,11 +2602,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -2198,7 +2618,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.2 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.2 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -2212,20 +2632,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T6.3",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.3 --agent phi",
       "status": "available"
     },
     {
@@ -2239,22 +2666,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T6.3",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.3 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -2268,11 +2703,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -2281,7 +2719,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.3 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.3 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -2295,11 +2733,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -2308,7 +2749,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.3 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.3 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -2322,20 +2763,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T6.4",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.4 --agent phi",
       "status": "available"
     },
     {
@@ -2349,22 +2797,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T6.4",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.4 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -2378,11 +2834,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -2391,7 +2850,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.4 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.4 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -2405,11 +2864,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -2418,7 +2880,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.4 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T6.4 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     },
     {
@@ -2432,20 +2894,27 @@
       "produces": {
         "task_status": "taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "codex",
+        "agent": "phi"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "implement",
           "--target",
           "codex",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T7.1",
           "--agent",
           "phi"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi",
+      "wp_invoke": "wp-plan-step.sh --action implement --target codex --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T7.1 --agent phi",
       "status": "available"
     },
     {
@@ -2459,22 +2928,30 @@
       "produces": {
         "task_status": "review_taken"
       },
+      "operation": {
+        "kind": "agent_dispatch",
+        "target": "claude",
+        "agent": "phi",
+        "reviewer": "sigma"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
+          "wp-plan-step.sh",
+          "--action",
           "review",
           "--target",
           "claude",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
+          "--task-id",
+          "T7.1",
           "--agent",
           "phi",
           "--reviewer",
           "sigma"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --agent phi --reviewer sigma",
+      "wp_invoke": "wp-plan-step.sh --action review --target claude --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T7.1 --agent phi --reviewer sigma",
       "status": "taken"
     },
     {
@@ -2488,11 +2965,14 @@
       "produces": {
         "task_status": "review_ended"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "review_end",
+          "wp-plan-step.sh",
+          "--action",
+          "end_review",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -2501,7 +2981,7 @@
           "${WP_COMMENT:-}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode review_end --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T7.1 --review-note '${WP_COMMENT:-}'",
+      "wp_invoke": "wp-plan-step.sh --action end_review --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T7.1 --review-note '${WP_COMMENT:-}'",
       "status": "taken"
     },
     {
@@ -2515,11 +2995,14 @@
       "produces": {
         "task_status": "completed"
       },
+      "operation": {
+        "kind": "state_transition"
+      },
       "invoke": {
         "argv": [
-          "wp-plan-to-agent.sh",
-          "--mode",
-          "fin",
+          "wp-plan-step.sh",
+          "--action",
+          "finish",
           "--plan",
           "docs/plans/2026-05-05-swim-execution-waves.json",
           "--task-id",
@@ -2528,7 +3011,7 @@
           "${GIT_SHA:-DEFERRED}"
         ]
       },
-      "wp_invoke": "wp-plan-to-agent.sh --mode fin --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T7.1 --git-sha '${GIT_SHA:-DEFERRED}'",
+      "wp_invoke": "wp-plan-step.sh --action finish --plan docs/plans/2026-05-05-swim-execution-waves.json --task-id T7.1 --git-sha '${GIT_SHA:-DEFERRED}'",
       "status": "completed"
     }
   ]

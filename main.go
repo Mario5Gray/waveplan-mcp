@@ -303,7 +303,7 @@ func (s *WaveplanServer) createTools() []server.ServerTool {
 		},
 		{
 			Tool: mcp.NewTool("waveplan_swim_compile",
-				mcp.WithDescription("Compile a SWIM execution schedule from a plan and waveagents file"),
+				mcp.WithDescription("Compile a SWIM v3 execution schedule from a plan and waveagents file"),
 				mcp.WithString("plan", mcp.Required(), mcp.Description("Input plan JSON path")),
 				mcp.WithString("agents", mcp.Description("Input waveagents JSON path (default: ~/.config/waveplan-mcp/waveagents.json)")),
 				mcp.WithString("out", mcp.Description("Optional output schedule JSON path")),
@@ -370,7 +370,7 @@ func (s *WaveplanServer) createTools() []server.ServerTool {
 				),
 				mcp.WithString("profile", mcp.Description("Refinement profile (v1: 8k only)")),
 				mcp.WithString("out", mcp.Description("Optional output refine JSON path")),
-				mcp.WithString("invoker", mcp.Description("Invoker script path used in emitted invoke.argv")),
+				mcp.WithString("invoker", mcp.Description("Invoker script path used in emitted invoke.argv (default: wp-plan-step.sh)")),
 			),
 			Handler: s.handleSwimRefine,
 		},

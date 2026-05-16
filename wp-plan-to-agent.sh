@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WAVEPLAN_CLI_BIN="${WAVEPLAN_CLI_BIN:-}"
-WP_TASK_TO_AGENT_BIN="${WP_TASK_TO_AGENT_BIN:-}"
+WP_PLAN_STEP_BIN="${WP_PLAN_STEP_BIN:-}"
 
 usage() {
   cat <<'USAGE'
@@ -14,13 +14,8 @@ Usage:
   wp-plan-to-agent.sh --mode fin --plan <plan.json> --task-id <Tn.m> [--git-sha <sha|DEFERRED>] [--dry-run]
 
 Description:
-  Unified wrapper for plan/task workflow actions.
-  - implement/review delegate to wp-task-to-agent.sh
-  - review_end/fin call waveplan-cli write actions directly
-
-Environment:
-  WP_TASK_TO_AGENT_BIN    Path to wp-task-to-agent.sh (default: PATH, then sibling file)
-  WAVEPLAN_CLI_BIN        Path to waveplan-cli (default: PATH, then sibling file)
+  Compatibility wrapper that resolves a task_id from the old mode-based API and
+  then delegates to wp-plan-step.sh.
 USAGE
 }
 
@@ -64,36 +59,37 @@ resolve_runtime_plan() {
   return 1
 }
 
+resolve_plan_step_bin() {
+  if [[ -n "$WP_PLAN_STEP_BIN" ]]; then
+    printf '%s\n' "$WP_PLAN_STEP_BIN"
+    return 0
+  fi
+  if command -v wp-plan-step.sh >/dev/null 2>&1; then
+    command -v wp-plan-step.sh
+    return 0
+  fi
+  if [[ -x "$SCRIPT_DIR/wp-plan-step.sh" ]]; then
+    printf '%s\n' "$SCRIPT_DIR/wp-plan-step.sh"
+    return 0
+  fi
+  return 1
+}
+
 if [[ -z "$MODE" || -z "$PLAN" ]]; then
   echo "Missing required args: --mode and --plan" >&2
   usage
   exit 2
 fi
 
-if ! RESOLVED_PLAN="$(resolve_runtime_plan "$PLAN")"; then
+if ! PLAN="$(resolve_runtime_plan "$PLAN")"; then
   echo "Plan file not found: $PLAN" >&2
-  if [[ -n "${WAVEPLAN_PLAN:-}" ]]; then
-    echo "WAVEPLAN_PLAN fallback also missing: $WAVEPLAN_PLAN" >&2
-  fi
   exit 2
 fi
-PLAN="$RESOLVED_PLAN"
 
-if [[ -z "$WP_TASK_TO_AGENT_BIN" ]]; then
-  if command -v wp-task-to-agent.sh >/dev/null 2>&1; then
-    WP_TASK_TO_AGENT_BIN="$(command -v wp-task-to-agent.sh)"
-  elif [[ -x "$SCRIPT_DIR/wp-task-to-agent.sh" ]]; then
-    WP_TASK_TO_AGENT_BIN="$SCRIPT_DIR/wp-task-to-agent.sh"
-  elif [[ -f "$SCRIPT_DIR/wp-task-to-agent.sh" ]]; then
-    WP_TASK_TO_AGENT_BIN="$SCRIPT_DIR/wp-task-to-agent.sh"
-  fi
-fi
-
-if [[ -n "$WP_TASK_TO_AGENT_BIN" && ! -f "$WP_TASK_TO_AGENT_BIN" ]]; then
-  if command -v "$WP_TASK_TO_AGENT_BIN" >/dev/null 2>&1; then
-    WP_TASK_TO_AGENT_BIN="$(command -v "$WP_TASK_TO_AGENT_BIN")"
-  fi
-fi
+PLAN_STEP_BIN="$(resolve_plan_step_bin)" || {
+  echo "wp-plan-step.sh not found. Set WP_PLAN_STEP_BIN or install in PATH." >&2
+  exit 2
+}
 
 if [[ "$MODE" == "implement" || "$MODE" == "review" ]]; then
   if [[ -z "$TARGET" || -z "$AGENT" ]]; then
@@ -101,75 +97,107 @@ if [[ "$MODE" == "implement" || "$MODE" == "review" ]]; then
     exit 2
   fi
 
-  if [[ -z "$WP_TASK_TO_AGENT_BIN" || ! -f "$WP_TASK_TO_AGENT_BIN" ]]; then
-    echo "wp-task-to-agent.sh not found. Set WP_TASK_TO_AGENT_BIN or install in PATH." >&2
+  if [[ -z "$WAVEPLAN_CLI_BIN" ]]; then
+    if command -v waveplan-cli >/dev/null 2>&1; then
+      WAVEPLAN_CLI_BIN="$(command -v waveplan-cli)"
+    elif [[ -x "$SCRIPT_DIR/waveplan-cli" ]]; then
+      WAVEPLAN_CLI_BIN="$SCRIPT_DIR/waveplan-cli"
+    elif [[ -f "$SCRIPT_DIR/waveplan-cli" ]]; then
+      WAVEPLAN_CLI_BIN="$SCRIPT_DIR/waveplan-cli"
+    fi
+  fi
+
+  if [[ -n "$WAVEPLAN_CLI_BIN" && ! -f "$WAVEPLAN_CLI_BIN" ]]; then
+    if command -v "$WAVEPLAN_CLI_BIN" >/dev/null 2>&1; then
+      WAVEPLAN_CLI_BIN="$(command -v "$WAVEPLAN_CLI_BIN")"
+    fi
+  fi
+
+  if [[ -z "$WAVEPLAN_CLI_BIN" || ! -f "$WAVEPLAN_CLI_BIN" ]]; then
+    echo "waveplan-cli not found. Set WAVEPLAN_CLI_BIN or install waveplan-cli in PATH." >&2
     exit 2
   fi
 
-  args=("$WP_TASK_TO_AGENT_BIN" "--target" "$TARGET" "--plan" "$PLAN" "--agent" "$AGENT" "--mode" "$MODE")
-  if [[ "$MODE" == "review" ]]; then
-    if [[ -n "$REVIEWER" ]]; then
-      args+=("--reviewer" "$REVIEWER")
+  waveplan_cli() {
+    python3 "$WAVEPLAN_CLI_BIN" "$@"
+  }
+
+  json_has_error() {
+    local payload="$1"
+    python3 -c 'import json,sys
+try:
+  obj=json.loads(sys.argv[1])
+except Exception:
+  sys.exit(1)
+sys.exit(0 if isinstance(obj, dict) and obj.get("error") else 1)
+' "$payload"
+  }
+
+  if [[ "$MODE" == "implement" ]]; then
+    PEEK_JSON="$(waveplan_cli --plan "$PLAN" peek)"
+    if json_has_error "$PEEK_JSON"; then
+      echo "waveplan peek returned error payload:" >&2
+      echo "$PEEK_JSON" >&2
+      exit 1
+    fi
+    TASK_ID="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1] or "{}").get("task_id",""))' "$PEEK_JSON")"
+    if [[ -z "$TASK_ID" ]]; then
+      echo "waveplan peek did not return a task_id" >&2
+      exit 1
+    fi
+  else
+    AGENT_TASKS_JSON="$(waveplan_cli --plan "$PLAN" get "$AGENT")"
+    if json_has_error "$AGENT_TASKS_JSON"; then
+      echo "waveplan get returned error payload:" >&2
+      echo "$AGENT_TASKS_JSON" >&2
+      exit 1
+    fi
+    TASK_ID="$(python3 -c 'import json,sys
+obj=json.loads(sys.argv[1] or "{}")
+taken=[t for t in obj.get("tasks", []) if t.get("status")=="taken"]
+if not taken:
+  print("")
+  sys.exit(0)
+taken.sort(key=lambda t: ((t.get("started_at") or ""), (t.get("task_id") or "")), reverse=True)
+print(taken[0].get("task_id",""))
+' "$AGENT_TASKS_JSON")"
+    if [[ -z "$TASK_ID" ]]; then
+      echo "No currently taken task found for agent '$AGENT'" >&2
+      exit 1
     fi
   fi
-  if [[ "$DRY_RUN" == "1" ]]; then
-    args+=("--dry-run")
-  fi
-
-  exec "${args[@]}"
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 not found" >&2
-  exit 2
-fi
+case "$MODE" in
+  implement) ACTION="implement" ;;
+  review) ACTION="review" ;;
+  review_end) ACTION="end_review" ;;
+  fin) ACTION="finish" ;;
+  *)
+    echo "Invalid --mode: $MODE" >&2
+    usage
+    exit 2
+    ;;
+esac
 
-if [[ -z "$WAVEPLAN_CLI_BIN" ]]; then
-  if command -v waveplan-cli >/dev/null 2>&1; then
-    WAVEPLAN_CLI_BIN="$(command -v waveplan-cli)"
-  elif [[ -x "$SCRIPT_DIR/waveplan-cli" ]]; then
-    WAVEPLAN_CLI_BIN="$SCRIPT_DIR/waveplan-cli"
-  elif [[ -f "$SCRIPT_DIR/waveplan-cli" ]]; then
-    WAVEPLAN_CLI_BIN="$SCRIPT_DIR/waveplan-cli"
-  fi
+ARGS=("$PLAN_STEP_BIN" "--action" "$ACTION" "--plan" "$PLAN" "--task-id" "$TASK_ID")
+if [[ -n "$TARGET" ]]; then
+  ARGS+=("--target" "$TARGET")
 fi
-
-if [[ -n "$WAVEPLAN_CLI_BIN" && ! -f "$WAVEPLAN_CLI_BIN" ]]; then
-  if command -v "$WAVEPLAN_CLI_BIN" >/dev/null 2>&1; then
-    WAVEPLAN_CLI_BIN="$(command -v "$WAVEPLAN_CLI_BIN")"
-  fi
+if [[ -n "$AGENT" ]]; then
+  ARGS+=("--agent" "$AGENT")
 fi
-
-if [[ -z "$WAVEPLAN_CLI_BIN" || ! -f "$WAVEPLAN_CLI_BIN" ]]; then
-  echo "waveplan-cli not found. Set WAVEPLAN_CLI_BIN or install waveplan-cli in PATH." >&2
-  exit 2
+if [[ -n "$REVIEWER" ]]; then
+  ARGS+=("--reviewer" "$REVIEWER")
 fi
-
-if [[ -z "$TASK_ID" ]]; then
-  echo "Mode $MODE requires --task-id" >&2
-  exit 2
+if [[ -n "$REVIEW_NOTE" ]]; then
+  ARGS+=("--review-note" "$REVIEW_NOTE")
 fi
-
-if [[ "$MODE" == "review_end" ]]; then
-  cmd=("python3" "$WAVEPLAN_CLI_BIN" "--plan" "$PLAN" "end_review" "$TASK_ID")
-  if [[ -n "$REVIEW_NOTE" ]]; then
-    cmd+=("$REVIEW_NOTE")
-  fi
-elif [[ "$MODE" == "fin" ]]; then
-  cmd=("python3" "$WAVEPLAN_CLI_BIN" "--plan" "$PLAN" "fin" "$TASK_ID")
-  if [[ -n "$GIT_SHA" ]]; then
-    cmd+=("$GIT_SHA")
-  fi
-else
-  echo "Invalid --mode: $MODE" >&2
-  usage
-  exit 2
+if [[ -n "$GIT_SHA" ]]; then
+  ARGS+=("--git-sha" "$GIT_SHA")
 fi
-
 if [[ "$DRY_RUN" == "1" ]]; then
-  printf '%q ' "${cmd[@]}"
-  printf '\n'
-  exit 0
+  ARGS+=("--dry-run")
 fi
 
-"${cmd[@]}"
+exec "${ARGS[@]}"
