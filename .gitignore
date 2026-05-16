@@ -10,6 +10,7 @@ waveplan-mcp
 .fp/
 .claude/
 .tmp/
+.worktrees/
 FP_CLAUDE.md
 complete-plans/
 
@@ -37,3 +38,4 @@ contextsize
 logs
 Makefile.lsp
 check-types.sh
+waveplan-ps/waveplan-ps
