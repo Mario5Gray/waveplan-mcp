@@ -58,7 +58,7 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 # Phase 1: Python transforms schedule and writes to a temp file.
-# It also writes journal-out if requested, but does NOT write the schedule output file.
+# Journal validation runs here; journal-out is written in Phase 4 after validation.
 TMP_MIGRATED=$(mktemp)
 trap 'rm -f "$TMP_MIGRATED"' EXIT
 
@@ -91,12 +91,17 @@ def write_json(path, payload):
         f.write("\n")
     os.replace(tmp, target)
 
-def handle_journal_copy_if_requested(execution_len):
+schema_version = schedule.get("schema_version")
+if schema_version not in (1, 2, 3, None):
+    raise SystemExit(f"unsupported source schedule schema_version: {schema_version}")
+
+def validate_journal():
     if not journal_path:
         return
     with open(journal_path, encoding="utf-8") as f:
         journal = json.load(f)
     cursor = int(journal.get("cursor", 0))
+    execution_len = len(schedule.get("execution", []))
     if cursor < 0 or cursor > execution_len:
         raise SystemExit(f"journal cursor {cursor} exceeds migrated execution length {execution_len}")
     unknown = [
@@ -106,21 +111,13 @@ def handle_journal_copy_if_requested(execution_len):
     if unknown:
         first = unknown[0]
         raise SystemExit(f"journal has pending unknown event: {first.get('event_id')} {first.get('step_id')}")
-    if journal_out:
-        journal_copy = dict(journal)
-        journal_copy["schedule_path"] = out_path
-        write_json(journal_out, journal_copy)
 
-schema_version = schedule.get("schema_version")
 if schema_version == 3:
-    # Write to temp file for validation, then copy to out_path after validation.
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(schedule, f, indent=2)
         f.write("\n")
-    handle_journal_copy_if_requested(len(schedule.get("execution", [])))
+    validate_journal()
     sys.exit(0)
-if schema_version not in (1, 2, None):
-    raise SystemExit(f"unsupported source schedule schema_version: {schema_version}")
 
 def argv_for(row):
     invoke = row.get("invoke") or {}
@@ -241,16 +238,18 @@ if [[ $_PY_EXIT -ne 0 ]]; then
 fi
 
 # Phase 2: Validate the migrated JSON before writing to disk.
-if ! (cd "$SCRIPT_DIR" && go run ./cmd/swim-validate --kind schedule --in "$TMP_MIGRATED" >/dev/null 2>&1); then
-  # Fallback for installed script: use swim-validate from PATH.
-  if command -v swim-validate >/dev/null 2>&1; then
-    if ! swim-validate --kind schedule --in "$TMP_MIGRATED" >/dev/null 2>&1; then
-      echo "ERROR: migrated schedule failed v3 validation" >&2
-      exit 1
-    fi
-  else
-    echo "WARNING: swim-validate not found; skipping migrated schedule validation" >&2
+_VALIDATED=false
+if (cd "$SCRIPT_DIR" && go run ./cmd/swim-validate --kind schedule --in "$TMP_MIGRATED" >/dev/null 2>&1); then
+  _VALIDATED=true
+elif command -v swim-validate >/dev/null 2>&1; then
+  if swim-validate --kind schedule --in "$TMP_MIGRATED" >/dev/null 2>&1; then
+    _VALIDATED=true
   fi
+fi
+
+if [[ "$_VALIDATED" != "true" ]]; then
+  echo "ERROR: no validator available and migrated schedule failed validation" >&2
+  exit 1
 fi
 
 # Phase 3: Validation passed — write the output file.
