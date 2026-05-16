@@ -224,9 +224,9 @@ if state_path:
     with open(state_path, encoding="utf-8") as f:
         json.load(f)
 
-# Journal checks are deferred until after validation succeeds.
-if journal_path:
-    print(f"JOURNAL_CHECK:{journal_path}:{journal_out or ''}", file=sys.stderr)
+# Validate journal before exiting to prevent output written in Phase 3
+# from surviving a Phase 4 journal validation failure.
+validate_journal()
 sys.exit(0)
 PYEOF
 _PY_EXIT=$?
@@ -255,7 +255,7 @@ fi
 # Phase 3: Validation passed — write the output file.
 cp "$TMP_MIGRATED" "$OUT"
 
-# Phase 4: Journal operations (only after successful validation + write).
+# Phase 4: Journal-out write (validation already done in Phase 1).
 if [[ -n "$JOURNAL" ]]; then
   python3 - "$JOURNAL" "$JOURNAL_OUT" "$OUT" <<'PYEOF2'
 import json
@@ -267,24 +267,12 @@ journal_path = sys.argv[1]
 journal_out = sys.argv[2] if sys.argv[2] else None
 out_path = sys.argv[3]
 
-with open(journal_path, encoding="utf-8") as f:
-    journal = json.load(f)
-cursor = int(journal.get("cursor", 0))
-execution_len = len(json.load(open(out_path, encoding="utf-8"))["execution"])
-if cursor < 0 or cursor > execution_len:
-    raise SystemExit(f"journal cursor {cursor} exceeds migrated execution length {execution_len}")
-unknown = [
-    e for e in journal.get("events", [])
-    if isinstance(e, dict) and e.get("outcome") == "unknown" and cursor < int(e.get("seq", 0))
-]
-if unknown:
-    first = unknown[0]
-    raise SystemExit(f"journal has pending unknown event: {first.get('event_id')} {first.get('step_id')}")
 if journal_out:
     target = Path(journal_out)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(f".{target.name}.tmp")
     with open(tmp, "w", encoding="utf-8") as f:
+        journal = json.load(open(journal_path, encoding="utf-8"))
         journal["schedule_path"] = out_path
         json.dump(journal, f, indent=2)
         f.write("\n")

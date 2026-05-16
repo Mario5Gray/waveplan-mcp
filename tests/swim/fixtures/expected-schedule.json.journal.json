@@ -3,14 +3,14 @@
   "schedule_path": "tests/swim/fixtures/expected-schedule.json",
   "cursor": 0,
   "last_event": {
-    "event_id": "E0016",
+    "event_id": "E0017",
     "step_id": "S1_T1.1_implement",
     "seq": 1,
     "task_id": "T1.1",
     "action": "implement",
-    "attempt": 16,
-    "started_on": "2026-05-15T18:53:39Z",
-    "completed_on": "2026-05-15T18:53:45Z",
+    "attempt": 17,
+    "started_on": "2026-05-16T07:08:46Z",
+    "completed_on": "2026-05-16T07:08:46Z",
     "outcome": "failed",
     "state_before": {
       "task_status": "available"
@@ -19,9 +19,9 @@
       "task_status": "available"
     },
     "exit_code": 1,
-    "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.16.stdout.log",
-    "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.16.stderr.log",
-    "reason": "exit status 1"
+    "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.17.stdout.log",
+    "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.17.stderr.log",
+    "reason": "exec: \"wp-plan-step.sh\": executable file not found in $PATH"
   },
   "events": [
     {
@@ -359,6 +359,27 @@
       "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.16.stdout.log",
       "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.16.stderr.log",
       "reason": "exit status 1"
+    },
+    {
+      "event_id": "E0017",
+      "step_id": "S1_T1.1_implement",
+      "seq": 1,
+      "task_id": "T1.1",
+      "action": "implement",
+      "attempt": 17,
+      "started_on": "2026-05-16T07:08:46Z",
+      "completed_on": "2026-05-16T07:08:46Z",
+      "outcome": "failed",
+      "state_before": {
+        "task_status": "available"
+      },
+      "state_after": {
+        "task_status": "available"
+      },
+      "exit_code": 1,
+      "stdout_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.17.stdout.log",
+      "stderr_path": ".waveplan/swim/expected-schedule/logs/S1_T1.1_implement.17.stderr.log",
+      "reason": "exec: \"wp-plan-step.sh\": executable file not found in $PATH"
     }
   ]
 }

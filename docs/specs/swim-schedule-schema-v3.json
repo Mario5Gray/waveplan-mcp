@@ -109,8 +109,6 @@
         "step_id",
         "task_id",
         "action",
-        "requires",
-        "produces",
         "operation",
         "invoke"
       ],

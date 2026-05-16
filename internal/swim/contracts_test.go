@@ -93,6 +93,7 @@ func TestValidateSchedule_Cases(t *testing.T) {
 		{
 			name: "requires/produces mismatch",
 			mutate: func(t *testing.T, m map[string]any) {
+				m["schema_version"] = 2
 				row0 := mustRow(t, m, 0)
 				requires, ok := row0["requires"].(map[string]any)
 				if !ok {

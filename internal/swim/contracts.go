@@ -319,15 +319,17 @@ func ValidateSchedule(data []byte) error {
 		if !ok {
 			return fmt.Errorf("invalid action: %q", row.Action)
 		}
-		if row.Requires.TaskStatus != expected.requires || row.Produces.TaskStatus != expected.produces {
-			return fmt.Errorf(
-				"requires/produces mismatch for action %s: requires=%s produces=%s want requires=%s produces=%s",
-				row.Action,
-				row.Requires.TaskStatus,
-				row.Produces.TaskStatus,
-				expected.requires,
-				expected.produces,
-			)
+		if sched.SchemaVersion < 3 {
+			if row.Requires.TaskStatus != expected.requires || row.Produces.TaskStatus != expected.produces {
+				return fmt.Errorf(
+					"requires/produces mismatch for action %s: requires=%s produces=%s want requires=%s produces=%s",
+					row.Action,
+					row.Requires.TaskStatus,
+					row.Produces.TaskStatus,
+					expected.requires,
+					expected.produces,
+				)
+			}
 		}
 		if sched.SchemaVersion >= 3 {
 			if err := validateOperationForAction(row); err != nil {
