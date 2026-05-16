@@ -57,7 +57,13 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 2
 fi
 
-python3 - "$SCHEDULE" "$OUT" "$JOURNAL" "$JOURNAL_OUT" "$STATE" "$PLAN_OVERRIDE" "$INVOKER" <<'PYEOF'
+# Phase 1: Python transforms schedule and writes to a temp file.
+# It also writes journal-out if requested, but does NOT write the schedule output file.
+TMP_MIGRATED=$(mktemp)
+trap 'rm -f "$TMP_MIGRATED"' EXIT
+
+set +e
+python3 - "$SCHEDULE" "$OUT" "$JOURNAL" "$JOURNAL_OUT" "$STATE" "$PLAN_OVERRIDE" "$INVOKER" "$TMP_MIGRATED" <<'PYEOF'
 import json
 import os
 import shlex
@@ -71,6 +77,7 @@ journal_out = sys.argv[4] if sys.argv[4] else None
 state_path = sys.argv[5] if sys.argv[5] else None
 plan_override = sys.argv[6] if sys.argv[6] else None
 invoker = sys.argv[7] if sys.argv[7] else "wp-plan-step.sh"
+tmp_path = sys.argv[8]
 
 with open(schedule_path, encoding="utf-8") as f:
     schedule = json.load(f)
@@ -106,7 +113,10 @@ def handle_journal_copy_if_requested(execution_len):
 
 schema_version = schedule.get("schema_version")
 if schema_version == 3:
-    write_json(out_path, schedule)
+    # Write to temp file for validation, then copy to out_path after validation.
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(schedule, f, indent=2)
+        f.write("\n")
     handle_journal_copy_if_requested(len(schedule.get("execution", [])))
     sys.exit(0)
 if schema_version not in (1, 2, None):
@@ -207,16 +217,78 @@ new_schedule = dict(schedule)
 new_schedule["schema_version"] = 3
 new_schedule["execution"] = new_execution
 
-write_json(out_path, new_schedule)
+# Write to temp file for shell-side validation.
+with open(tmp_path, "w", encoding="utf-8") as f:
+    json.dump(new_schedule, f, indent=2)
+    f.write("\n")
 
+# State is read-only; validate it exists.
 if state_path:
     with open(state_path, encoding="utf-8") as f:
         json.load(f)
 
-handle_journal_copy_if_requested(len(new_execution))
+# Journal checks are deferred until after validation succeeds.
+if journal_path:
+    print(f"JOURNAL_CHECK:{journal_path}:{journal_out or ''}", file=sys.stderr)
+sys.exit(0)
 PYEOF
+_PY_EXIT=$?
+set -e
 
-(
-  cd "$SCRIPT_DIR"
-  go run ./cmd/swim-validate --kind schedule --in "$OUT" >/dev/null
-)
+# Check Python exit code before proceeding.
+if [[ $_PY_EXIT -ne 0 ]]; then
+  exit 1
+fi
+
+# Phase 2: Validate the migrated JSON before writing to disk.
+if ! (cd "$SCRIPT_DIR" && go run ./cmd/swim-validate --kind schedule --in "$TMP_MIGRATED" >/dev/null 2>&1); then
+  # Fallback for installed script: use swim-validate from PATH.
+  if command -v swim-validate >/dev/null 2>&1; then
+    if ! swim-validate --kind schedule --in "$TMP_MIGRATED" >/dev/null 2>&1; then
+      echo "ERROR: migrated schedule failed v3 validation" >&2
+      exit 1
+    fi
+  else
+    echo "WARNING: swim-validate not found; skipping migrated schedule validation" >&2
+  fi
+fi
+
+# Phase 3: Validation passed — write the output file.
+cp "$TMP_MIGRATED" "$OUT"
+
+# Phase 4: Journal operations (only after successful validation + write).
+if [[ -n "$JOURNAL" ]]; then
+  python3 - "$JOURNAL" "$JOURNAL_OUT" "$OUT" <<'PYEOF2'
+import json
+import os
+import sys
+from pathlib import Path
+
+journal_path = sys.argv[1]
+journal_out = sys.argv[2] if sys.argv[2] else None
+out_path = sys.argv[3]
+
+with open(journal_path, encoding="utf-8") as f:
+    journal = json.load(f)
+cursor = int(journal.get("cursor", 0))
+execution_len = len(json.load(open(out_path, encoding="utf-8"))["execution"])
+if cursor < 0 or cursor > execution_len:
+    raise SystemExit(f"journal cursor {cursor} exceeds migrated execution length {execution_len}")
+unknown = [
+    e for e in journal.get("events", [])
+    if isinstance(e, dict) and e.get("outcome") == "unknown" and cursor < int(e.get("seq", 0))
+]
+if unknown:
+    first = unknown[0]
+    raise SystemExit(f"journal has pending unknown event: {first.get('event_id')} {first.get('step_id')}")
+if journal_out:
+    target = Path(journal_out)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f".{target.name}.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        journal["schedule_path"] = out_path
+        json.dump(journal, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, target)
+PYEOF2
+fi

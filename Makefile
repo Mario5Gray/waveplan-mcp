@@ -63,7 +63,7 @@ install-config:
 
 install-specs:
 	@mkdir -p $(SHARE_DIR)/specs
-	@for schema in docs/specs/swim-schedule-schema-v2.json docs/specs/swim-journal-schema-v1.json; do \
+	@for schema in docs/specs/swim-schedule-schema-v2.json docs/specs/swim-schedule-schema-v3.json docs/specs/swim-journal-schema-v1.json docs/specs/swim-review-schedule-schema-v1.json docs/specs/swim-review-schedule-schema-v2.json; do \
 		install -m 644 "$$schema" "$(SHARE_DIR)/specs/$$(basename "$$schema")"; \
 		echo "Installed $$(basename "$$schema") to $(SHARE_DIR)/specs/"; \
 	done
